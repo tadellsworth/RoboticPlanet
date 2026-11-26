@@ -285,14 +285,15 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   everywhere else (`T_CHASM` that no road, bridge or Sky bridge crosses): armies cross by Viaduct or Ropeway where the gaps
   are short (3½ to 6 tiles), and otherwise fly (Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers, Missiles).
   Argos's ground and rules (the biome is forced to Lunar: no Murmur, no weather), no dust storm, more oil than any other map.
-  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring (the
-  rest won at 20, 35 and 45 minutes), against 8 of 8 on Sky islands run the same way. The long ones are the fight over the middle rock
-  (both sides land a span there by minute 8) and then a span a stone at a time; the rival's economy there matches Standard's (more Cement,
-  Alloy and Fuel at 15 minutes).
+  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring
+  before the rival flew (the rest won at 20, 35 and 45 minutes), 8 of 8 on Sky islands. The Viaduct chain was measured to join the two home
+  asteroids by minute 10, so the games stalled at the Viaduct (both armies meet there; the spans get shot down), not for want of a crossing.
+  The rival now also flies bands of warbots over in Cargo Planes (README, the AI: *The rival's aircraft*): 2 of 8 undecided.
   Open: **drifting rocks** (the owner likes the idea as a later one: the asteroids stay put today, only the backdrop moves;
   a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
-  home asteroid each round a rich middle one: only two now); the rival builds **no Airships or aircraft** and crosses by
-  Viaduct only (as on Sky islands); whether the Ring needs a **mission** (none yet).
+  home asteroid each round a rich middle one: only two now); the rival flies Cargo Planes but builds **no Airships or Mooring Masts**
+  and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
+  a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
   Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
   reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or
@@ -2362,6 +2363,15 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   the AI could pull more from forts far from the front.
   Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
   between it and the enemy can send its last warbot.
+  Nov 26 2026: the rival now flies bands over in Cargo Planes (`aiAir`; README, the AI), and it did not help here: 8 of 8
+  still undecided at 45 minutes (Normal, Balanced both, 4 seeds each of Medium and Large; a Herald or a Salvager against a Steward
+  too, 4 games). Every tile of an enemy mesa is within reach of a gun or a Mortar Pit from about minute 20 (checked: 308 tiles,
+  none free even with no margin; Mortar Pits reach 11 to 12), so a band has nowhere to land out of fire, and what the
+  armies build there (36 and 30 warbots by 30 minutes on seed 12) cannot take a mesa behind that many guns. On seed 11
+  both armies sat at 6 warbots for half an hour: Ore runs out on the home mesa (one Mine) and Alloy and Chips with it.
+  Open: the AI bombing the Mortar Pits and guns first (aiBomber does, one bomber, one bomb a minute), Howitzers (aiSiege) from the
+  mesa it holds, Drop Outposts and Workers on the ore mesas (an economy by air). (A Herald flew in one and three bands in two games
+  and decided neither.)
 - **Bombing a Viaduct's deck** (Nov 2026). A bomb on the deck counts against the span: 14 off the end nearer it, or
   off the other end if that one's weaker, so two bombs anywhere on a deck bring it down (bombs on each end tower still
   leave both at 10). Open: should a deck be a target for warbots' Attack and the Army panel too (today they go for an
@@ -2802,19 +2812,23 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
    objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
 
-**Stage 1, open questions for the owner (Nov 26 2026):**
+**Stage 1, the owner's decisions (Nov 26 2026; done):**
+- **Stone supply: keep the split.** Raising's Stone comes by Hauler where a road reaches the work, otherwise from
+  storage as it comes in (a Wall's way); filling's always comes from storage (no Hauler drives onto water).
+- **Fill shallows reaches 6 tiles from the original shore** (`TERRA.reach`): a water tile can be filled only if an
+  originally dry tile (land as the map was made) lies within 6 tiles (8-way steps; `tfInReach`). `S.tfTiles` records
+  what each changed tile was before the Graders first changed it (1 dry, 2 water), so new land never moves the shore and
+  a save keeps it; nothing new is hashed. Land bridges to near islands still work; the preview crosses out tiles beyond
+  ("Too far out to sea"). (The Dam's drained lake bed counts as shore once drained: the one place the coast moves
+  without a Grader.)
+- **Graders run on batteries like Workers.** Kept; How to play tells players to build a Fuel Station near a long job.
+- **Lowering yields less than raising costs**, so terraforming is no better a Quarry: Lower yields 2 Stone a level
+  (`TERRA.dug`; raising still costs 4), Dig channel 3 (was 6); the times stay, about 5 Stone a minute a Grader.
+
+**Stage 1, still open:**
 - Rivals don't terraform yet (the owner's call). They cope with what a player does (their routes, sites and Ports follow
   the new ground), but they don't answer a moat or a land bridge on purpose. Teaching them is the next step once the
   numbers settle.
-- Numbers to tune by play (`TERRA` in `js/defs.js`): a level of earth is 4 Stone and 24 s of a Grader's work; Fill 8
-  Stone and 40 s; Dig yields 6 Stone in 36 s. Lowering is a slow Quarry (about 10 Stone a minute a Grader) and that is
-  meant: it shouldn't beat a Quarry on a rock face.
-- Stone for raising comes by Hauler where a road reaches; filling out on the water, and any job no road reaches, is
-  paid from storage as it comes in (a Wall's way), because no Hauler can drive onto water. Is that the split you want,
-  or should all of it come from storage?
-- Fill shallows takes any water beside land (the map has no deep and shallow water of its own); a ford or a tidal
-  flat counts as such too (tidal flats are refused). Should open sea far from shore be off limits beyond some depth
-  (`shoreDist`)?
 - Dug ground is plain water (robots can't wade it), so a moat stops walkers; a ford-like "wadeable" dig could be a
   later option.
 - Later stages stay as listed: blasting cliffs, landslides, flooding; then soil, resources, earthworks, big projects.

@@ -1,7 +1,8 @@
 // Headless checks for Terraforming, stage 1 (TERRA; tfJob, tfPlace, graderDispatch, completeEarthwork in js/sim.js):
 // each tool (Raise, Lower, Flatten, Fill shallows, Dig channel) done by a Grader; what it costs and yields in Stone;
 // the refusals (a rival's land, under a building, under a road, Workers never taking the job); robots' routes after a
-// raise, a lower and a flatten; a land bridge a robot walks over to an island; a dug canal joining two lakes so a ship
+// raise, a lower and a flatten; a land bridge a robot walks over to an island; Fill shallows stopping TERRA.reach tiles
+// out from the original shore on open sea; a dug canal joining two lakes so a ship
 // sails between them; a save loaded mid-job playing on exactly as the game it came from; and the same plan played
 // twice coming out the same. Run: node tools/terraform-test.js
 const fs = require('node:fs');
@@ -51,17 +52,17 @@ const tools = run(c1, `
   let workerTook = false;
   until(() => { if (workers()) workerTook = true; return !sites(); }, 300);
   const raised = S.elev[a], s1 = stone();
-  // Lower the same tile back: 4 Stone comes out as crates, which Haulers carry to storage.
+  // Lower the same tile back: 2 Stone (TERRA.dug) comes out as crates, which Haulers carry to storage.
   const r2 = applyOrder(0, 'terraform', ['lower', [a]]);
   until(() => !sites(), 300);
   const lowered = S.elev[a];
   const crate = (S.loot || []).reduce((n, l) => n + (l.goods.stone || 0), 0);
-  until(() => stone() >= s1 + 4, 300);
+  until(() => stone() >= s1 + 2, 300);
   const s2 = stone();
   return { r, owed, e, raised, lowered, s0, s1, s2, crate, workerTook, r2, grader: g.type, made: S.players[0].stats.tfup, low: S.players[0].stats.tfdown };
 `);
 check('Raise: a Grader raises a tile a level; it costs 4 Stone (TERRA.stone), brought to it', tools.r.placed === 1 && tools.owed.stone === 4 && tools.raised === tools.e + 1 && tools.s0 - tools.s1 >= 4, tools);
-check('Lower: the tile goes back down a level and yields 4 Stone as crates, carried to storage', tools.r2.placed === 1 && tools.lowered === tools.e && tools.crate === 4 && tools.s2 - tools.s1 === 4, tools);
+check('Lower: the tile goes back down a level and yields 2 Stone (TERRA.dug, half what raising costs) as crates, carried to storage', tools.r2.placed === 1 && tools.lowered === tools.e && tools.crate === 2 && tools.s2 - tools.s1 === 2, tools);
 check('Workers never take an Earthworks job: only the Grader does', !tools.workerTook && tools.made === 1 && tools.low === 1, tools);
 
 const flat = run(mk(), `
@@ -126,6 +127,38 @@ const bridge = run(c4, `
 check('Fill shallows: six tiles of water out from the shore become land at the shore\'s level, 8 Stone each from storage', bridge.before.apart && !bridge.before.path && bridge.r.placed === 6 && bridge.land.every(Boolean) && bridge.cost === 6 * 8, bridge);
 check('a land bridge: a Worker walks across it to the island', bridge.joined && bridge.ok && bridge.at[0] === 37 && bridge.at[1] === 51, bridge);
 
+// ---- open sea: Fill shallows reaches TERRA.reach tiles from the shore as the map was made, and no further (Islands, seed 7)
+const sea = run(mk(), `
+  ${colony('Islands', 7)}
+  const L2 = getE(S.players[0].lander), hz = S.zone[tIdx(L2.x, L2.y + 2)];
+  // A line straight out to sea from our shore with no other land near it: ten tiles of open water, the seventh on out of reach.
+  let line = null;
+  for (let t = 0; t < S.W * S.H && !line; t++) {
+    if (S.zone[t] !== hz || !walkable(t) || S.terrain[t] !== T_GROUND) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ts = []; for (let k = 1; k <= 10 && inMap(i + di * k, j + dj * k); k++) ts.push(tIdx(i + di * k, j + dj * k));
+      if (ts.length === 10 && ts.every((u) => S.terrain[u] === T_WATER && !(S.tidal && S.tidal[u]) && !tfWhere(0, u, new Map(ts.map((v) => [v, { k: 'fill', to: 0 }])))) && ts.findIndex((u) => !tfInReach(u)) === TERRA.reach) { line = { t, ts }; break; }
+    }
+  }
+  if (!line) return { line: null };
+  const n = line.ts.findIndex((u) => !tfInReach(u)), dist = n + 1;
+  addBot(0, 'grader', line.t % S.W, (line.t / S.W) | 0); addBot(0, 'grader', line.t % S.W, (line.t / S.W) | 0);
+  const r = applyOrder(0, 'terraform', ['fill', line.ts]);
+  until(() => !sites(), 900);
+  const made = line.ts.slice(0, n).every((u) => S.terrain[u] === T_GROUND);
+  // Out from the new land, the next tile is still too far from the shore the map was made with.
+  const again = tfJob(0, 'fill', line.ts[n], 0).why || '';
+  const r2 = applyOrder(0, 'terraform', ['fill', [line.ts[n]]]);
+  // Saved and loaded, the game still knows where the shore was (S.tfTiles: the filled tiles were water).
+  const json = serializeGame();
+  deserializeGame(json);
+  const loaded = tfJob(0, 'fill', line.ts[n], 0).why || '', was = line.ts.slice(0, n).map((u) => S.tfTiles[u]);
+  return { line: line.t, n, dist, placed: r.placed, why: r.why, made, again, placed2: r2.placed, loaded, was };
+`);
+check('open sea: a fill dragged out to sea stops at TERRA.reach tiles from the original shore, the rest refused with the reason', sea.line !== null && sea.n === 6 && sea.placed === 6 && sea.made && /Too far out to sea: fill reaches 6 tiles from the original shore/.test(sea.why), sea);
+check('open sea: new land doesn\'t move the shore: the next tile out is still refused once the fill is done, and after a save and load', /Too far out to sea/.test(sea.again) && sea.placed2 === 0 && /Too far out to sea/.test(sea.loaded) && sea.was.every((v) => v === 2), sea);
+
 // ---- a canal joining two lakes (Lakes, seed 23: two tiles of land at (33, 56) and (33, 57) between them), a ship sails through
 const canal = run(mk(), `
   ${colony('Lakes', 23)}
@@ -144,10 +177,10 @@ const canal = run(mk(), `
   const sail = applyOrder(0, 'sail', [f.id, 33, 58]);
   until(() => Math.floor(f.y) >= 58, 120);
   const sailed = [Math.floor(f.x), Math.floor(f.y)];
-  until(() => stone() >= s0 + 12, 300);
+  until(() => stone() >= s0 + 6, 300);
   return { before, r, joined, water: S.terrain[t] === T_WATER && S.terrain[t2] === T_WATER, route, yield: stone() - s0, big: net.size[net.comp[a]] >= SEA_MIN, cant, sail, sailed };
 `);
-check('Dig channel: the two tiles of land between two lakes become water, 6 Stone each (TERRA.dig)', canal.before && canal.r.placed === 2 && canal.water && canal.yield === 12, canal);
+check('Dig channel: the two tiles of land between two lakes become water, 3 Stone each (TERRA.dig)', canal.before && canal.r.placed === 2 && canal.water && canal.yield === 6, canal);
 check('a dug canal: the two lakes are one body of water, and a Ferry that couldn\'t reach the second lake sails through to it', canal.joined && canal.route && canal.big && !!canal.cant && canal.sail === '' && canal.sailed[1] >= 58, canal);
 
 // ---- a moat: a dug tile cuts a strip of land off; robots on it step off, routes over it change

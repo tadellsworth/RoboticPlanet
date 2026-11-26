@@ -553,13 +553,15 @@ const NAVAL_ON = true; // ships and Ports on naval maps (false switches them off
 /*
  * Terraforming, stage 1 (Build → Terraform; a Grader does the work, see tfPlace and completeEarthwork in sim.js).
  * One job per tile. Raise or lower it a level (a flatten moves it as many levels as it takes to reach its target):
- * `time` seconds of a Grader's work for each level of earth moved, `stone` Stone each level (raising costs it, lowering
- * yields it). Fill shallows (water beside land becomes land, level with the lowest ground beside it): `fill` Stone,
- * `fillTime` s. Dig a channel (land at the waterline beside water becomes water): yields `dig` Stone, `digTime` s.
- * Levels go from 0 to `top`. A plan takes `most` tiles at once. Yields come out as crates on the spot (Haulers take
- * them to storage); costs come by Hauler where a road reaches, else straight from storage as the work goes (a Wall's way).
+ * `time` seconds of a Grader's work for each level of earth moved; raising costs `stone` Stone a level, lowering yields
+ * `dug` (less than it costs, so a Grader is no better a Quarry: about 5 Stone a minute). Fill shallows (water beside land
+ * becomes land, level with the lowest ground beside it): `fill` Stone, `fillTime` s, and only within `reach` tiles of the
+ * shore as the map was made (tfInReach: no causeways across open sea). Dig a channel (land at the waterline beside water
+ * becomes water): yields `dig` Stone, `digTime` s. Levels go from 0 to `top`. A plan takes `most` tiles at once. Yields
+ * come out as crates on the spot (Haulers take them to storage). Raising's Stone comes by Hauler where a road reaches
+ * the work, else straight from storage as the work goes (a Wall's way); filling's always comes from storage.
  */
-const TERRA = { time: 24, stone: 4, fill: 8, fillTime: 40, dig: 6, digTime: 36, top: 4, most: 48 };
+const TERRA = { time: 24, stone: 4, dug: 2, fill: 8, fillTime: 40, reach: 6, dig: 3, digTime: 36, top: 4, most: 48 };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };

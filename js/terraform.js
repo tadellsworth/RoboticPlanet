@@ -18,7 +18,7 @@ const TF_TOOLS_UI = {
   raise: { card: 'Up a level.', key: 'r', name: 'Raise', glyph: '▲', how: 'Raise a tile a level. Drag over tiles.' },
   lower: { card: 'Down a level: Stone out.', key: 'l', name: 'Lower', glyph: '▼', how: 'Lower a tile a level (the earth comes out as Stone). Drag over tiles.' },
   flatten: { card: 'An area to one level.', key: 'f', name: 'Flatten', glyph: '▬', how: 'Drag a rectangle: every tile in it goes to the level of the tile you started on.' },
-  fill: { card: 'Water beside land to land.', key: 'h', name: 'Fill shallows', glyph: '◢', how: 'Water beside land becomes land. Drag out from the shore for a land bridge.' },
+  fill: { card: 'Water beside land to land.', key: 'h', name: 'Fill shallows', glyph: '◢', how: `Water beside land becomes land, up to ${TERRA.reach} tiles from the original shore. Drag out from the shore for a land bridge.` },
   dig: { card: 'Land beside water to water.', key: 'c', name: 'Dig channel', glyph: '≈', how: 'Land beside water becomes water: moats, and canals for ships. Drag in from the shore.' },
 };
 
