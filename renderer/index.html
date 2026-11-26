@@ -9,7 +9,7 @@ const p = new URLSearchParams(location.search);
 try {
   const mod = await import('./b/' + p.get('b') + '.js?v=' + Date.now());
   L.init(mod.config || {});
-  mod.default(L);
+  await mod.default(L); // (a scene may be async: one that loads textures)
   L.finish(mod);
 } catch (e) { window.result = { error: String(e && e.stack || e) }; }
 </script>

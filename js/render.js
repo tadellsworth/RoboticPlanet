@@ -5940,7 +5940,7 @@ function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); if (u.trade) drawTradeFlag(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); if (u.trade) drawTradeFlag(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
-  if (BOTS[u.type].grader) { drawGrader(ctx, u, sx, sy, s); botBars(ctx, u, sx, sy, s); return; } // (placeholder art: js/terraform.js)
+  if (BOTS[u.type].grader) { drawGrader(ctx, u, sx, sy, s); botBars(ctx, u, sx, sy, s); return; } // (its rendered art, the earth at its blade: js/terraform.js)
   const color = PLAYER_COLORS[u.owner];
   // A Rocket Truck with its rack raised (deploying or firing) shows its launcher up and legs out.
   const own = (BOTS[u.type].siege && (u.deployT > ROCKET.deploy * 0.4 || u.salvo) && artFor('rocket-up', u.owner)) || driveFrame(u) || artFor(u.type, u.owner); // (dug in: spades down, barrel up)
@@ -7188,6 +7188,7 @@ function render(dtReal) {
   if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
   if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
+  if (typeof tfGround === 'function') tfGround(ctx, ox, oy, z, inView); // (the ground of Earthworks being dug and filled, fresh soil, track marks: js/terraform.js)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)

@@ -133,6 +133,16 @@ const ART_MANIFEST = {
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
   ...driveSet('bulwark'), ...driveSet('torch'), ...driveSet('skirmisher'), ...driveSet('arccaster'), ...driveSet('railgunner'),
+  // The Grader (ART_GUIDE Batch 35, the owner's concept A "Dozer"): driving with the blade raised (its driveSet), at
+  // work with it down (grader-work), the heap of earth ahead of the blade at three sizes (team-neutral, drawn under the
+  // sprite), and the terraforming effect sheets: clods and dust off the blade (a loop, facing right), earth splashing
+  // into water, silt plumes (variants). Drawn by js/terraform.js.
+  ...driveSet('grader'),
+  ...(() => { const o = {}; for (const t of [0, 1]) for (let f = 0; f < 4; f++) o[`grader-work@${t}-f${f}`] = { src: `bots/grader-work@${t}-f${f}.webp`, shadow: true }; return o; })(),
+  'grader-load-1': 'bots/grader-load-1.webp', 'grader-load-2': 'bots/grader-load-2.webp', 'grader-load-3': 'bots/grader-load-3.webp',
+  'fx-grader-clods': { src: 'effects/fx-grader-clods.webp', frames: 8, cols: 4, slice: true },
+  'fx-grader-splash': { src: 'effects/fx-grader-splash.webp', frames: 8, cols: 4, slice: true },
+  'fx-mud-plume': { src: 'effects/fx-mud-plume.webp', frames: 3, cols: 3 },
   ground: 'tiles/ground.webp',
   // (Fiber's Stalks have no art: each is a clump of Lantern Cane drawn in code for its stage, js/reedcane.js; and Oil
   // none either: a seep is a puddle of crude made in code from its tiles, js/seep.js.)

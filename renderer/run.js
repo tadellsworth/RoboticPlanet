@@ -6,10 +6,11 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const ROOT = __dirname;
 const [outDir, ...jobs] = process.argv.slice(2);
 fs.mkdirSync(outDir, { recursive: true });
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png' };
 const server = http.createServer((req, res) => {
-  const p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
-  if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
+  // (/art/… is the game's own art folder, for scenes that use its ground and water textures: b/rob_grader.js)
+  const u = decodeURIComponent(req.url.split('?')[0]), base = u.startsWith('/art/') ? path.join(ROOT, '..') : ROOT, p = path.join(base, u);
+  if (!p.startsWith(base) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(p)] || 'application/octet-stream' }); fs.createReadStream(p).pipe(res);
 });
 server.listen(0, async () => {

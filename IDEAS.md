@@ -156,6 +156,10 @@ to the approved design, with new textures and sprites). In order:
 9. **The robots' work animations** (welding, paving, drilling, scything): small tool sprites.
 10. **The menu planet** (shares the globe's new look: its face already has the globe's colours; its shading, lights and clouds still to do), **the minimap** and **the interface** (panels, buttons, icons).
 
+Also done this way: **the Grader and the Earthworks** (BUILT Nov 26 2026: concept A, "Dozer"; ART_GUIDE Batch 35),
+rendered with `renderer/`, their ground and the plans' overlays drawn in code to the canvas. Canvas:
+https://claude.ai/artifact/HDT4AcWrYxcKd7Wvn1NTjU
+
 ## The Walking Factory (built Nov 23 2026: open questions for the owner)
 
 The owner's pitch (approved): "a huge old Accord mobile factory, a dormant machine, crawling slowly around a loop through
@@ -2814,8 +2818,10 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
 - Dug ground is plain water (robots can't wade it), so a moat stops walkers; a ford-like "wadeable" dig could be a
   later option.
 - Later stages stay as listed: blasting cliffs, landslides, flooding; then soil, resources, earthworks, big projects.
-- The Grader's look and its animations, and the earthworks' ground art, go through Claude Design (ART_GUIDE,
-  "Terraforming"); what's in the game is a placeholder.
+- DONE (Nov 26 2026): the Grader's look and its animations, and the earthworks' ground art, went through Claude
+  Design; the owner picked concept A, "Dozer", now rendered and installed with the ground effects and the plans'
+  overlays (ART_GUIDE Batch 35). Open: should a raised tile show its new cliff face while it is being raised (the
+  bake only repaints it when the job is done)?
 
 ## To do: Argos on the main menu (owner, Nov 26)
 

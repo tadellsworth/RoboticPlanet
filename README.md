@@ -818,7 +818,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   site limit. Only **Graders** (`BOTS.grader`: a Foundry robot, 3 rounds of parts, 0.6 of a Worker's speed) build them:
   `siteReady` says no to Workers, so no Worker step, the Workforce rows or Call a builder touch them; `graderDispatch`
   (from `dispatch`) sends each free Grader to the nearest one it can stand beside (`tfReady`, `tfApproach`), and
-  `doBuild` works it (`graderWork`: it faces the tile and throws dust). Numbers: a level of earth is `TERRA.stone` (4)
+  `doBuild` works it (`graderWork`: it faces the tile and throws dust). On the map (looks only, `js/terraform.js`):
+  each site in the road plans' language (`tfPlanTile`: a dashed amber outline, faint red for a rival's, the job's
+  glyph, a sparser orange dash and a Stone pip while `tfReady` says no, a grey bar and a rising tint as `b.progress`
+  grows), the ground being worked drawn with the ground before the time-of-day grading (`tfGround`), and the Grader's
+  rendered frames by `graderPose` (idle, driving, cutting, pushing, filling, finishing; ART_GUIDE Batch 35). Numbers: a level of earth is `TERRA.stone` (4)
   Stone and `TERRA.time` (24) s; Fill costs `TERRA.fill` (8) Stone, 40 s; Dig yields `TERRA.dig` (6) Stone, 36 s.
   Costs come by Hauler where a road reaches; a Fill site, and any site `dispatch` finds unlinked, is paid from storage
   as the goods come in (`fromStore`, as a Wall). Yields are crates of Stone (`addLoot`, its owner's priority) where the
@@ -3976,7 +3980,12 @@ has no art at all: it is a puddle of crude made in code from its tiles (`js/seep
 seep with a white rim light, sheen and droplets, baked with the ground and gleaming faintly at night; it recedes from a
 pump as it is pumped and breaks into pools) (ART_GUIDE Batch 20). The crash sites aircraft leave when they're shot down are rendered too: the broken,
 burnt airframes of the Cargo Plane, the Vulcan Bomber and the Airship (`wreck-cargoplane`, `wreck-bomber`,
-`wreck-airship`, every time of day, from `renderer/b/wreck.js`; ART_GUIDE Batch 19).
+`wreck-airship`, every time of day, from `renderer/b/wreck.js`; ART_GUIDE Batch 19). The **Grader** is the owner's
+concept A, "Dozer" (`renderer/b/rob_grader.js`, ART_GUIDE Batch 35): driving frames with its blade raised and work
+frames with it down for both teams at every time of day, the earth heaped ahead of its blade at three sizes, brake,
+dust and headlight overlays, and effect sheets for clods and dust off the blade, splashes and silt plumes; the ground
+of the Earthworks (cuts, spoil and fill heaps, tongues of new land, trenches, fresh soil in each biome's earth, track
+marks) and the plans' outlines and marks are drawn in code (`js/terraform.js`).
 Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/` (its source: `icons/icon.svg`). Anything without an image falls back to placeholder art drawn in code, so new art can be
