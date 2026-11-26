@@ -85,8 +85,8 @@ function initUI() {
     // Hover (mouse) or tap (touch) shows the good's name and what it's for.
     el.onpointerenter = (e) => { if (e.pointerType === 'mouse') showGoodTip(g, el, 0); };
     el.onpointerleave = (e) => { if (e.pointerType === 'mouse') hideGoodTip(); };
-    // Tap (or click) opens the goods panel on this good: stock, rates, makers, users and shortfalls.
-    el.onclick = () => { hideGoodTip(); sfx('click'); if (UI.sheetKind === 'goods' && UI.goodSel === g) closeSheet(); else { setMode('normal'); openGoodsSheet(g); } };
+    // Tap (or click) opens the Economy panel on this good: stock, rates, its chain, makers, users and problems (js/economy.js).
+    el.onclick = () => { hideGoodTip(); sfx('click'); if (UI.sheetKind === 'econ' && UI.ecTab === 'good' && UI.ecGood === g) closeSheet(); else openEconomy('good', g); };
     goods.appendChild(el);
     UI.goodEls[g] = el;
   }
@@ -289,7 +289,8 @@ function initUI() {
   $('m-missions').onclick = () => { sfx('click'); openMissions(); };
   $('ms-close').onclick = () => { sfx('click'); if (UI.msSel != null) { UI.msSel = null; renderMissions(); } else $('screen-missions').hidden = true; };
   $('o-statsbtn').onclick = () => { sfx('click'); openStats(); };
-  $('p-stats').onclick = () => { sfx('click'); openStats(); };
+  // (in a game: the Economy panel's History tab, the game paused to plan; observing, or once it's over, the Statistics screen)
+  $('p-stats').onclick = () => { sfx('click'); statsHere(); };
   $('st-close').onclick = () => { sfx('click'); $('screen-stats').hidden = true; };
 
   // HUD tools
@@ -2777,10 +2778,10 @@ const MAP_KEYS = [
     selectBots(armyIds(ME), false);
     if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info');
   } },
-  { keys: ['i'], group: 'panels', label: 'Statistics', run: () => { if ($('screen-stats').hidden) openStats(); } },
+  { keys: ['i'], group: 'panels', label: 'Statistics: the Economy panel\'s History', run: () => { if (UI.sheetKind === 'econ' && UI.ecTab === 'hist') closeSheet(); else if ($('screen-stats').hidden) statsHere(); } },
   { keys: ['u'], group: 'panels', label: 'Your robots', run: () => { $('pop').click(); } },
-  { keys: ['y'], group: 'panels', label: 'Toggle Goods', run: () => {
-    if (UI.sheetKind === 'goods') closeSheet(); else { setMode('normal'); openGoodsSheet(UI.goodSel || 'cement'); }
+  { keys: ['y'], group: 'panels', label: 'Toggle Economy: your goods, their chains and bottlenecks', run: () => {
+    if (UI.sheetKind === 'econ') closeSheet(); else openEconomy();
   } },
   { keys: ['j'], group: 'camera', label: 'Jump to the latest alert (again: the one before)', run: () => jumpAlert() },
   { keys: ['['], group: 'game', label: 'Slow down', run: () => { stepSpeed(-1); } },
@@ -4647,6 +4648,16 @@ function showMissionOver() {
 
 /* ------------------------------------------------------------------ statistics screen */
 
+/**
+ * Statistics from the pause menu or I: in your own game the Economy panel on History (from the pause menu, paused to
+ * plan, so the panel can be used; in multiplayer the game runs on), otherwise (observing) the Statistics screen.
+ */
+function statsHere() {
+  if (!UI.inGame || !S || !S.players[ME] || UI.watch || S.winner >= 0) { openStats(); return; }
+  if (!$('screen-pause').hidden && !planPause()) $('p-resume').click();
+  openEconomy('hist');
+}
+
 function openStats() {
   UI.stats = UI.stats || { good: 'alloy', type: null };
   UI.stats.econ = UI.stats.econ || 'output';
@@ -4655,7 +4666,8 @@ function openStats() {
   renderStats();
 }
 
-function renderStats() {
+/** The statistics, into `into` (the Economy panel's History tab), or the Statistics screen. */
+function renderStats(into) {
   const H = S.hist || newHistory(S.players.length);
   const versus = S.mode !== 'colony';
   const P = S.players[ME], st = P.stats;
@@ -4689,7 +4701,7 @@ function renderStats() {
   const milSer = () => ser((h) => pad(MIL[UI.stats.mil].fn(h)));
   const landSer = ser((h) => h.land || []);
   const goodSer = ser((h) => (h.goods && h.goods[UI.stats.good]) || []);
-  $('st-body').innerHTML = `
+  (into || $('st-body')).innerHTML = `
     <div class="stat-tiles">${tiles.map(([k, v]) => `<div class="stat-tile"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
     <div class="chart-block"><h3>Bots</h3><p class="sub">Every bot you own, workers and warbots together. Drag across a chart to read it.</p>${chartLegend(botsSer)}<canvas class="chart" id="ch-bots"></canvas></div>
     <div class="chart-block"><h3>Land claimed</h3><p class="sub">Share of the land bots can reach.</p>${chartLegend(landSer)}<canvas class="chart" id="ch-land"></canvas></div>
@@ -7826,7 +7838,7 @@ function foldLong(root) {
 function sheetColsOff() { $('sheet').classList.remove('cols2', 'cols3', 'cols4'); document.body.classList.remove('sheet-wide', 'sheet-wide3'); }
 function sheetCols() {
   const s = $('sheet'), body = $('sheet-body');
-  if (s.hidden || !isWide() || UI.sheetKind === 'build' || UI.sheetKind === 'wf' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
+  if (s.hidden || !isWide() || UI.sheetKind === 'build' || UI.sheetKind === 'wf' || UI.sheetKind === 'econ' || s.classList.contains('cols2') || s.classList.contains('cols3')) return;
   const long = body.scrollHeight / Math.max(1, body.clientHeight);
   if (body.scrollHeight - body.clientHeight <= 1) return; // (it fits: one column)
   let three = long > 1.6 && innerWidth >= 1400; // (two columns wouldn't hold it, with room to spare: three, from 1400 px wide)
@@ -7847,7 +7859,7 @@ function sheetCols() {
  * construction); none for a panel without a title.
  */
 const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots', wf: 'Command · Workforce',
-  goods: 'Command · Stores', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
+  econ: 'Command · Economy', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
   move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral' };
 function sheetEyebrow(kind, id) {
   const head = $('sheet-body').querySelector('.sheet-title'), h3 = head && head.querySelector('h3');
@@ -7876,7 +7888,7 @@ function sheetEyebrow(kind, id) {
  * map and what the panel is about stay in view above it; full; or just its title strip. The grab handle at the
  * top is dragged between them (further down closes the panel) or tapped to switch between half and full.
  */
-const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1, goals: 1, wf: 1 }; // lists and charts open at full height: nothing on the map to watch
+const SHEET_TALL = { build: 1, econ: 1, pop: 1, msgs: 1, goals: 1, wf: 1 }; // lists and charts open at full height: nothing on the map to watch
 
 function setSheetSize(size) {
   const s = $('sheet');
@@ -7967,7 +7979,7 @@ function closeSheet() {
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
   sheetColsOff();
-  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-build-all', 'sheet-wf');
+  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-build-all', 'sheet-wf', 'sheet-econ');
   delete document.body.dataset.sheet;
   UI.sheetKind = null;
   UI.sheetFor = 0;
@@ -9606,97 +9618,6 @@ function oilAround(i, j) {
   return n;
 }
 
-/*
- * The goods panel: for each good, how much you have, how fast it's made and used, what makes and
- * uses it, and what's waiting for it. Tap a goods counter to open it; tap another good to switch.
- */
-function openGoodsSheet(g) {
-  UI.goodSel = g;
-  const shown = GOODS.filter((k) => !UI.goodEls[k].hidden);
-  openSheet('goods', 0, `<div class="sheet-title"><div><h3>Goods</h3></div></div>
-    <div class="pick-row goods-pick" id="gs-pick">${shown.map((k) => `<button data-g="${k}"><i class="gi ${k}"></i>${GOOD[k].name}</button>`).join('')}</div>
-    <div id="gs-body"></div>`);
-  for (const btn of $('gs-pick').children) btn.onclick = () => { UI.goodSel = btn.dataset.g; sfx('click'); refreshGoodsSheet(true); };
-  refreshGoodsSheet(true);
-}
-
-function refreshGoodsSheet(full) {
-  const g = UI.goodSel, p = ME;
-  for (const btn of $('gs-pick').children) btn.classList.toggle('on', btn.dataset.g === g);
-  if (full) $('gs-pick').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  const rate = goodRates(p)[g], net = rate.made - rate.used;
-  let stored = 0, waiting = 0;
-  for (const b of S.buildings) {
-    if (b.dead || b.owner !== p || !b.built) continue;
-    const def = BDEFS[b.type];
-    if (def.store) stored += b.stock[g] || 0;
-    else if (def.out && def.out[g]) waiting += b.stock[g] || 0;
-  }
-  const total = goodTotal(p, g);
-  // Who makes it, who uses it.
-  const makers = {}, users = {};
-  for (const b of S.buildings) {
-    if (b.dead || b.owner !== p) continue;
-    const def = BDEFS[b.type];
-    const makes = (def.make && def.make[g]) || (def.gather && gatherTypes(b.type).some((r) => RES[r].good === g)) || (def.farm && g === 'fuel');
-    if (makes) {
-      const m = makers[b.type] = makers[b.type] || { n: 0, working: 0, stopped: 0 };
-      m.n++;
-      if (b.built && b.working) m.working++;
-      else if (b.built && /^Stopped/.test(b.status || '')) m.stopped++;
-    }
-    const uses = (def.inp && def.inp[g]) || (def.charger && def.charger.fuel && g === 'fuel') || (def.repair && g === 'alloy') ||
-      (def.ammo === g) || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.missile && g === 'warhead');
-    if (uses && b.built) { const u = users[b.type] = users[b.type] || { n: 0 }; u.n++; }
-  }
-  // What's waiting for it right now.
-  let wantN = 0, wantB = 0, sites = 0;
-  for (const b of S.buildings) {
-    if (b.dead || b.owner !== p) continue;
-    for (const [k, n] of needsOf(b)) {
-      if (k !== g || n <= 0) continue;
-      if ((b.stock[g] || 0) > 0 && b.built) continue; // stocked up, just topping up
-      wantN += n; wantB++;
-      if (!b.built) sites++;
-    }
-  }
-  const fmt = (v) => (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
-  const runOut = net < -0.05 && total > 0 ? total / -net : Infinity;
-  const short = wantB > 0 && total <= 0;
-  const status = short ? `<div class="gs-alert bad"><b>Shortfall:</b> ${wantB} building${wantB === 1 ? '' : 's'}${sites ? ` (${sites} construction site${sites === 1 ? '' : 's'})` : ''} waiting for ${GOOD[g].name}, and none in stock.${goodShortWhy(g)}</div>`
-    : runOut < 5 ? `<div class="gs-alert warn"><b>Running low:</b> at this rate you run out in about ${Math.max(1, Math.round(runOut))} minute${Math.round(runOut) === 1 ? '' : 's'}.</div>`
-      : net > 0.05 ? '<div class="gs-alert good">Growing: you make more than you use.</div>' : '';
-  const list = (o, label) => Object.keys(o).length
-    ? Object.keys(o).map((t) => `<span class="gtag">${o[t].n} ${o[t].n === 1 ? BDEFS[t].name : BDEFS[t].name + (BDEFS[t].name.endsWith('s') ? '' : 's')}${o[t].working !== undefined ? ` <small>${o[t].working} working${o[t].stopped ? `, ${o[t].stopped} at limit` : ''}</small>` : ''}</span>`).join('')
-    : `<span class="hint">${label}</span>`;
-  const extraUse = g === 'cement' ? ' Also construction and roads.' : (BDEFS.depot.cost[g] || ['fiber', 'alloy', 'chip', 'stone'].includes(g)) ? ' Also construction.' : '';
-  // The figures are rewritten when they change; the chart's canvas stays put (a drag across it reads it) and is
-  // redrawn only for another good or a new sample.
-  if (full || !$('gs-info')) $('gs-body').innerHTML = `<div id="gs-why"></div><div id="gs-info"></div><div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
-    <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
-  const info = `<p class="desc">${GOOD[g].desc}</p>${status}
-    <div class="gs-stats">
-      <div><b>${fmt(total)}</b><span>on hand</span></div>
-      <div><b class="up">+${fmt(rate.made)}</b><span>made / min</span></div>
-      <div><b class="down">−${fmt(rate.used)}</b><span>used / min</span></div>
-      <div><b class="${net > 0.05 ? 'up' : net < -0.05 ? 'down' : ''}">${net >= 0 ? '+' : '−'}${fmt(Math.abs(net))}</b><span>net / min</span></div>
-    </div>
-    <div class="kv"><span>In storage</span><span>${stored}</span></div>
-    <div class="kv"><span>Waiting for pickup at buildings</span><span>${waiting}</span></div>
-    <div class="kv"><span>Wanted right now</span><span>${wantN ? `${wantN} by ${wantB} building${wantB === 1 ? '' : 's'}` : 'Nothing waiting'}</span></div>
-    <div class="section-label">Made by</div><div class="goodlist">${list(makers, g === 'cement' || g === 'alloy' ? 'Nothing yet.' : 'Nothing makes it yet.')}</div>
-    <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}`;
-  // What is holding the colony up (js/insight.js), above the figures: rewritten only when it changes.
-  const why = goodsWhyHTML(g), we = $('gs-why');
-  if (we.dataset.html !== why) { we.dataset.html = why; we.innerHTML = why; whyWire(we); }
-  const box = $('gs-info'), cv = $('gs-chart');
-  if (box.dataset.html !== info) { box.dataset.html = info; box.innerHTML = info; whyWire(box); }
-  const H = S.hist, key = g + ':' + (H ? H.t.length + ':' + (H.t[H.t.length - 1] || 0) : '');
-  if (cv.dataset.key === key) return;
-  cv.dataset.key = key;
-  if (H && H.t.length > 1 && H.p[0].goods && H.p[0].goods[g]) lineChart(cv, { xs: H.t, series: [{ name: GOOD[g].name, color: GOOD[g].color, values: H.p[0].goods[g] }] });
-}
-
 /** Your robots by type: how many, and what they're doing. Opened from the population chip. */
 /* ------------------------------------------------------------------ the Army panel (Q) and its Air tab */
 
@@ -10074,7 +9995,7 @@ function refreshSheet() {
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
   if (UI.sheetKind === 'agroup') { refreshAgSheet(); if (isWide()) foldLong($('sheet-body')); return; }
   if (UI.sheetKind === 'ally') { refreshAllySheet(); return; }
-  if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
+  if (UI.sheetKind === 'econ') { refreshEconomy(); return; } // (the Economy panel: js/economy.js)
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
   if (UI.sheetKind === 'bld') {
     const b = getE(UI.sheetFor);

@@ -14,7 +14,7 @@
  *
  * The colony's shortage (insightColony): the good the colony has gone longest without while something waited for it
  * (P.dry, kept by the simulation: see logTick in js/sim.js), with its cause. Its chip in the goods bar is ringed and
- * the Goods panel leads with it. Worked out once a second at most.
+ * the Economy panel's Bottlenecks lead with it (js/economy.js). Worked out once a second at most.
  *
  * The post-game report (gameReport) on the end screen: the moments that mattered (S.log, written by the simulation),
  * where goods were lost (P.stats), and one tip for next time, chosen from what happened.
@@ -366,22 +366,6 @@ function colonyNow() {
     .sort((a, c) => (BDEFS[c.type].bots ? 1 : 0) - (BDEFS[a.type].bots ? 1 : 0))[0] || getE(P.lander);
   const c = cons ? goodWhy(g, cons, 0, new Set([g]), 'it') : null;
   return { g, starved, at: c && c.at, build: c && c.build, text: `No ${goodN(g, 2)} for ${insDur(dur)}` + (c && !c.have ? `: ${c.text}.` : '.') };
-}
-
-/** The line at the top of the Goods panel: what is holding the colony up (see insightColony), or ''. */
-function goodsWhyHTML() {
-  const r = insightColony();
-  return r ? `<div class="gs-alert bad why-line"><b>Holding the colony up:</b> ${insEsc(r.text)}${whyButtons(r, 0)}</div>` : '';
-}
-
-/** The Goods panel's shortfall on good g (shown), why: ' Why: …' with its buttons, or '' (or when the line above says it). */
-function goodShortWhy(g) {
-  const W = WHY.good || (WHY.good = { s: null, t: -1, g: '', h: '' });
-  if (W.s === S && W.g === g && Math.abs(S.time - W.t) < 1) return W.h;
-  W.s = S; W.g = g; W.t = S.time;
-  const r = insightColony();
-  const cons = getE(S.players[ME].lander), c = r && r.g === g ? null : cons ? goodWhy(g, cons, 0, new Set([g]), 'it') : null;
-  return (W.h = c && !c.have && !c.ok ? ` Why: ${insEsc(c.text)}.${whyButtons(c, 0)}` : '');
 }
 
 /* ------------------------------------------------------------------ the post-game report */

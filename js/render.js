@@ -7262,6 +7262,7 @@ function render(dtReal) {
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined' && UI.inGame) sampleGoodsFlow(); // (always, so the map has the last minute when it's turned on)
   if (R.goodsMap && R.mode === 'road') drawGoodsFlow(ctx, ox, oy, z, v0, v1);
+  if (typeof ecMapOn === 'function' && ecMapOn()) ecDrawFlow(ctx, ox, oy, z, v0, v1); // (the Economy panel open: the goods on the move, js/economy.js)
   if (R.routePreview) {
     // The road a building's "Lay road" button would pave.
     ctx.strokeStyle = '#ffd166';
@@ -7572,6 +7573,7 @@ function render(dtReal) {
   drawMissiles(ctx, ox, oy, z);
   drawLavaBombs(ctx, ox, oy, z);
   if (R.workerView || (typeof wfMapOn === 'function' && wfMapOn())) drawWorkerView(ctx, ox, oy, z); // (and while the Workforce panel is open: js/workforce.js)
+  if (typeof ecMapOn === 'function' && ecMapOn()) ecDrawStates(ctx, ox, oy, z); // (the Economy panel open: each building's state, js/economy.js)
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.mur && S.mur.husks) drawHarrowDeathFx(ctx, ox, oy, z); // (a Harrow's death: its shards, the dust of its fall, its core bursting)

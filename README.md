@@ -1654,9 +1654,30 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   or tap is remembered as a stroke, so **Undo** turns them back (`draftUndo`, op `dir`); a drag that starts off your
   roads moves the map instead (`roadPaintStarts`), so a habitual pan doesn't turn every road it crosses. One-way loops
   keep busy routes flowing; going the wrong way up a one-way road is allowed but crawls.
-- **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
-  which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
-  top of the panel.
+- **The Economy panel** (`js/economy.js`; tap a good in the top bar, or Y; I and the pause menu's Statistics open it on
+  History, from the pause menu paused to plan; it replaced the Goods panel and, in a game, the Statistics screen). Display
+  only (`ecData`, worked out at most twice a second; a seeded game hashes the same with it open). Three tabs:
+  **This good** (a picker of the goods in play): on hand now and a line of the last 10 minutes (`S.hist`),
+  made and used a minute (`goodRates`: the last two minutes), the net with *empty in m:ss*; its chain both ways
+  (`ecChainSet`: up to the raw goods, down to where it ends) as a small diagram; **Made by** / **Used by**, every
+  building with its state (`ecState`: working, waiting for an input, output full, unstaffed, no road, stopped, from its
+  status, `stallWhy` and `wantsStaff`), problems first, a page at a time, tap to go there; and its top problems.
+  **Whole economy**: every good a node (stock, made and used a minute; red when something waits and you have none,
+  amber when it runs out within 5 minutes) in columns by how far it is from the raw goods, links from each input to
+  its output for each kind of factory you have and on to four ends (Building sites, Robots, Upkeep, Guns), width by the
+  estimated flow a minute (the output's made rate times the recipe, shared among its makers; the ends get what's left
+  of the used rate), red where a consumer waits for that good; beside it the **Bottlenecks** (`ecProblems`, worst first,
+  the colony's shortage from `insightColony` leading): buildings waiting for a good, with `goodWhy`'s cause and a chain
+  (`ecChain`: *Chips short ← Chip Fab waits ← Crystal short ← 2 Crystal Taps unstaffed*), makers with their output full
+  (`outWhy`), makers with no road, a good used faster than it's made and out within 8 minutes, makers of a short good
+  unstaffed. **History**: the Statistics graphs (`renderStats(into)`), three across. **Quick actions**, only beside the
+  problem they fix and only when they'd apply: Make more Haulers (`foundryOrder` 3 Haulers, where Haulers are too few or
+  all busy and a Foundry is under the robot limit), Prioritise this (`wfOrder`: the row of the first unstaffed maker
+  down the chain to the top of the ladder, Manual), Build a maker (Build, with it picked to place). While it's open the
+  map draws the goods carried over the last minute (`R.gf`, the Goods flow map's counts) as lines along the roads with a
+  dash running along, in each good's colour, and a ring on each building that makes or uses goods in its state's colour
+  (`ecDrawFlow`, `ecDrawStates`); on This good only that good's. On a desktop it sits to the right and never scrolls
+  (the lists page; Bottlenecks drop their last lines into *and N more* while it would: `ecFit`).
 - **Why idle? (the bottleneck finder, `js/insight.js`):** a factory that isn't making anything (the Bot Foundry first,
   the Smelter, every factory with a recipe) shows **Why idle?** under its status (`whyIdle`, `refreshWhy`), worked out
   for the open panel only, once a second. It follows the missing input back down the chain and stops at the first real
@@ -1671,8 +1692,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   stays while the panel is open, and a factory's progress bar stays, empty, while it waits. A Bot Foundry waiting on
   Chips used to move its buttons up to 120 px several times a minute. **The colony's shortage**
   (`insightColony`, once a second): the good gone longest without while something waits for it (`P.dry`, below), the
-  Foundry's first; its counter in the top bar is ringed red (`.res-chip.starved`) and the Goods panel leads with it
-  and its cause (`goodsWhyHTML`). Display only: it never asks the danger map unless it is current (`insGuns`), so it
+  Foundry's first; its counter in the top bar is ringed red (`.res-chip.starved`) and the Economy panel's
+  Bottlenecks lead with it. Display only: it never asks the danger map unless it is current (`insGuns`), so it
   can't change when the simulation works it out.
 - **Post-game report (`gameReport`, on the end screen, `#o-report`; missions too):** the moments that mattered
   (`reportMoments`, the dozen weightiest, in order): your first robot and first defence, the first attack each way,
@@ -1713,7 +1734,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
-- **Statistics:** the pause menu and the end-of-game screen show graphs over time of bots, land, goods, **Economy size**
+- **Statistics:** (the Economy panel's History tab in a game; its own screen at the end and in Observer mode) graphs over time of bots, land, goods, **Economy size**
   (Output: goods made a minute, from the running total `made`; Buildings: finished non-military buildings, `econ`;
   Workers and vehicles, `civ`) and, with war on, **Military size** (Army, `war`; Defences: forts and guns, `def`),
   every colony a line (`recordHistory`), then how busy each kind of building was over the game; each building's panel
@@ -1973,7 +1994,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   5 s to the one before, round the list, with a line in the middle of the screen (`qolFlash`) naming it.
 - **Goods a minute and warnings** (`qolHudTick`, with the HUD every quarter second): `playerGoods` sampled once a game
   second over the last 60 s gives each good's net change a minute, shown after its count on a wide screen (hidden on a
-  phone, where a tap opens the Goods panel and its rates) and in the counter's tooltip. A good whose producers' output
+  phone, where a tap opens the Economy panel and its rates) and in the counter's tooltip. A good whose producers' output
   stores (`def.out`, storage aside) hold 90% or more of what they can for 20 s gets an amber ring and a message with Go
   (at most every 3 minutes a good; it clears below 75%). At 90% of the robot limit the robot counter turns amber with
   the count against the limit, with a message at 90% and another at the limit.
@@ -3677,7 +3698,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
-  **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
+  **H** base, **I** statistics (Economy: History), **U** robots, **Y** Economy, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
   recycles it), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
@@ -4146,6 +4167,7 @@ js/qol.js                 interface helpers: camera spots, recent alerts (J), go
 js/polish.js              interface helpers: reach rings, health bars switch, +N popups, panel ?, Idle (,), Surrender, Rematch
 js/polish3.js             the Daily Planet, multiplayer chat, Ready and colours in the lobby, who's reconnecting
 js/charts.js              line and bar charts for the statistics screen
+js/economy.js             the Economy panel: each good, the whole supply chain, bottlenecks, History; its map overlay
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)

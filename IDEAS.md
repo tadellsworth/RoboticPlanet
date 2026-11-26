@@ -3,6 +3,27 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## The Economy panel (built Nov 26 2026: calls made, open questions for the owner)
+
+Built from the owner's ask: goods flow, like the Workforce panel, replacing the Goods panel. Calls made:
+- **Y** (Goods' old key) toggles it and a tap on any good opens it on that good; **I** and the pause menu's Statistics
+  open History. Shift+E was taken (Express), and Y already meant "goods". From the pause menu it pauses to plan so the
+  panel can be used; the end screen and Observer mode keep the old Statistics screen (there's no colony to act on).
+- **Rates are the last two minutes** (`goodRates`, the same as the old Goods panel); the flow along a link is an
+  estimate from the recipes (made rate × recipe, shared among that good's makers), not a counter: nothing new was
+  added to the simulation or the save.
+- **The Bottleneck causes are Why idle?'s** (`goodWhy`, `outWhy`), so their words match a building's own panel.
+  On the owner's Nov 24 saves the top finding was *the Command Base that no road joins to it*: parts of that colony's
+  roads aren't joined, so Smelters and Chip Fabs on one network wait while Alloy and Crystal sit at the Command Base.
+  Make more Haulers is shown only where Haulers are too few or all busy, never for a split road network.
+- **Prioritise this** makes the ladder Manual (that's how wfOrder works); its toast says Workforce changes it back.
+
+Open questions:
+- Should a split road network get its own quick action (show the gap, or open Route to between the two)?
+- Per-building throughput (goods a minute each) would make the link widths exact; it needs a counter in the sim and
+  the save. Worth it?
+- The History tab's buildings list scrolls in its own box on a short screen; fine, or page it?
+
 ## The Workforce panel and priority ladder (built Nov 25 2026: calls made, open questions for the owner)
 
 Built from the owner's late-game complaint (can't tell what Workers are doing; they're not in the factories wanted).
