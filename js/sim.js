@@ -1285,7 +1285,11 @@ function goTo(u, x, y, arrivalComps) {
   // Freight Trains keep to the track.
   if (BOTS[u.type].rail) {
     const p = railRoute(u, x, y, arrivalComps);
-    if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    if (!p) {
+      if (DANGER.guns[u.owner]?.length && railRoute(u, x, y, arrivalComps, null)) noSafeRoute(u, goal);
+      else routeFailed(u, goal);
+      return false;
+    }
     exitBuilding(u);
     u.path = p; u.pi = 0; u.idleT = 0; u.goal = goal; u.trackVer = S.railVer || 0;
     return true;
@@ -1631,7 +1635,7 @@ function routeCheck(u) {
   return true;
 }
 
-/** A Freight Train rechecks its remaining track before driving over a removed tile. */
+/** A Freight Train rechecks its remaining track when track is removed or an enemy gun covers its route. */
 function trainRouteCheck(u) {
   const ver = S.railVer || 0;
   if (u.trackVer === ver) return true;
@@ -1644,7 +1648,8 @@ function trainRouteCheck(u) {
     if (!S.rail[t] || (prev !== t && (k > u.pi || S.rail[prev]) && !railNbrs(prev).includes(t))) { valid = false; break; }
     prev = t;
   }
-  if (valid) return true;
+  const hot = hotStep(dangerMap(u.owner), here, u.path, u.pi) >= 0;
+  if (valid && !hot) return true;
   // If the track was taken up under the locomotive, roll back to the rail tile it just left.
   if (!S.rail[here] && S.rail[from] && dist2(here % S.W, (here / S.W) | 0, from % S.W, (from / S.W) | 0) <= 1) {
     u.x = (from % S.W) + 0.5; u.y = ((from / S.W) | 0) + 0.5;
@@ -1654,8 +1659,8 @@ function trainRouteCheck(u) {
   const src = task?.type === 'haul' && task.phase === 'toSrc' && getE(task.src);
   const dst = src && getE(task.dst);
   if (src && dst ? haulGoPickup(u, src, dst) : goTo(u, goal % S.W, (goal / S.W) | 0)) return true;
-  cancelTask(u, true);
-  u.path = null;
+  if (hot) haltUnsafe(u);
+  else { cancelTask(u, true); u.path = null; }
   return false;
 }
 
@@ -2102,6 +2107,7 @@ function dispatch(p) {
   // For 'haul', `src` is where the goods are: a hauler must be able to reach it by road.
   // With good `g`: Crude and Fuel (liquids) go by Tanker, whatever the role asked for (never by train),
   // or by Hauler, one at a time, when no Tanker can get to `src`. Tankers carry nothing else.
+  const pickupTimes = new Map(); // (one estimate per carrier, origin and pickup platforms in this dispatch pass)
   const take = (x, y, role, src, g, dst, preview = false) => {
     let best = -1, bd = Infinity;
     const liq = isLiquid(g), tank = liq && src && tankerReach(src, dst);
@@ -2112,6 +2118,7 @@ function dispatch(p) {
     const zs = hauling ? null : jobZones(x, y);
     const site = role === 'build' ? getE(S.bAt[goal]) : null;
     const ramp = site && BDEFS[site.type].ramp ? site : null;
+    const carriers = hauling && src ? [] : null;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
       if (u.failUntil > S.time && (u.failGoal === goal || (hauling && dst && u.failGoal === tIdx(dst.x, dst.y)))) continue;
@@ -2134,6 +2141,7 @@ function dispatch(p) {
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
       // Only send a bot with enough charge (a truck, Fuel) for the trip there and back (unless there's nowhere to top up).
       if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && canTopUp(u)) continue;
+      if (carriers) { carriers.push(k); continue; }
       // A Ramp can be built on either side. Rank eligible builders by the safe walk to a work tile.
       let score = d;
       if (ramp) {
@@ -2142,6 +2150,14 @@ function dispatch(p) {
         score = sq(at.steps);
       }
       if (score < bd) { bd = score; best = k; }
+    }
+    if (carriers?.length === 1) best = carriers[0];
+    else if (carriers) for (const k of carriers) {
+      const u = idle[k], bt = BOTS[u.type], comps = dst && (bt.rail || bt.sea) ? haulPickupComps(u, src, dst) : undefined;
+      const key = u.id + ':' + src.id + ':' + (comps || []).join(',');
+      if (!pickupTimes.has(key)) pickupTimes.set(key, cargoPickupTime(u, src, comps));
+      const eta = pickupTimes.get(key);
+      if (eta < bd) { bd = eta; best = k; }
     }
     if (best < 0) return null;
     return preview ? idle[best] : idle.splice(best, 1)[0];
@@ -3280,6 +3296,14 @@ function staffPriority(b) {
  */
 function assignHaul(u, src, dst, g, n, extra) {
   if (!u || !src || !dst || src === dst || src.dead || dst.dead || src.owner !== u.owner || dst.owner !== u.owner) return false;
+  // Check the delivery leg before the train reserves goods it cannot carry safely.
+  if (BOTS[u.type].rail) {
+    const fromPickup = { ...u, inside: src.id };
+    if (!railRoute(fromPickup, dst.x, dst.y)) {
+      if (DANGER.guns[u.owner]?.length && railRoute(fromPickup, dst.x, dst.y, undefined, null)) noSafeRoute(u, tIdx(dst.x, dst.y));
+      return false;
+    }
+  }
   cancelTask(u);
   n = Math.min(Math.floor(n || 1), carryOf(u, g), Math.floor((src.stock[g] || 0) - (src.res[g] || 0)), Math.floor(tankRoom(dst)));
   if (n < 1 || !haulGoPickup(u, src, dst)) return false;
@@ -3328,6 +3352,39 @@ function haulGoPickup(u, src, dst) {
   if (!bt.rail && !bt.sea) return goTo(u, src.x, src.y);
   const comps = haulPickupComps(u, src, dst);
   return comps.length > 0 && goTo(u, src.x, src.y, comps);
+}
+
+/**
+ * Estimated time to the pickup, using the planned route and the vehicle's speed. Live queues and boarding waits
+ * vary, so this is a comparison of the trips themselves. A preview leaves unit and building assignments alone.
+ */
+function cargoPickupTime(u, src, comps) {
+  const bt = BOTS[u.type], sx = Math.floor(u.x), sy = Math.floor(u.y), opts = routeOpts(u);
+  const path = bt.rail ? railRoute(u, src.x, src.y, comps) : bt.sea ? seaRoute(u, src.x, src.y, comps) :
+    safeRoute(u, sx, sy, src.x, src.y, findPath(sx, sy, src.x, src.y, u.owner, opts), false);
+  if (!path) return Infinity;
+  let x = u.x, y = u.y, time = 0;
+  const speed = bt.speed * batFactor(u) * speedMul(u);
+  for (const t of path) {
+    const tx = t % S.W + 0.5, ty = ((t / S.W) | 0) + 0.5;
+    const dx = tx - x, dy = ty - y;
+    let pace = 1;
+    if (!bt.rail && !bt.sea) {
+      if (S.road[t]) {
+        const p = S.pave[t] || 1, r = S.road[t];
+        const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
+        pace = wrong ? ONEWAY_WRONG : p === 3 ? expressSpeed(bt, S.wear[t]) : p === 2 ? asphaltSpeed(S.wear[t]) : PAVE[p].speed;
+        if (bt.truck && p < 2) pace *= bt.train ? TRAIN_ROAD : TRUCK_ROAD;
+      } else if (!S.bAt[t]) {
+        pace = bt.roadOnly ? HAULER_STRANDED : bt.offroad ? OFFROAD_SLOW : 1;
+        if (S.ramp[t]) pace *= SLOPE_SPEED;
+        else if (S.res[t]) pace *= 0.75;
+      }
+    }
+    time += dhypot(dx, dy) / (speed * pace);
+    x = tx; y = ty;
+  }
+  return time;
 }
 
 /** Everything bot u has aboard: [[good, n], ...] (its main load first, then a mixed load's other goods). */
@@ -6549,7 +6606,7 @@ function hotStep(m, start, path, from) {
   return -1;
 }
 /** Goods carrier u's route p from (sx, sy) to (x, y): p, the way round any enemy gun it runs into, or null if there's none (noSafeRoute). */
-function safeRoute(u, sx, sy, x, y, p) {
+function safeRoute(u, sx, sy, x, y, p, report = true) {
   if (!p || !p.length || !safeHaul(u)) return p;
   const m = dangerMap(u.owner);
   if (hotStep(m, tIdx(sx, sy), p, 0) < 0) return p;
@@ -6557,7 +6614,7 @@ function safeRoute(u, sx, sy, x, y, p) {
   o.safe = m;
   const q = findPath(sx, sy, x, y, u.owner, o);
   if (q) return q;
-  noSafeRoute(u, tIdx(x, y));
+  if (report) noSafeRoute(u, tIdx(x, y));
   return null;
 }
 /**
@@ -6567,7 +6624,11 @@ function safeRoute(u, sx, sy, x, y, p) {
 function noSafeRoute(u, goal) {
   u.failGoal = goal; u.failUntil = S.time + NOSAFE_WAIT;
   const b = S.bAt[goal] ? getE(S.bAt[goal]) : null, P = S.players[u.owner];
-  if (b && b.owner === u.owner) { b.noSafe = S.time; b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT); }
+  if (b && b.owner === u.owner) {
+    b.noSafe = S.time;
+    // Covered track can stop the train without closing the same station to road freight.
+    if (!BOTS[u.type].rail) b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT);
+  }
   if (isMe(u.owner) && P && S.time - (P.safeMsgAt ?? -999) > 45) {
     P.safeMsgAt = S.time;
     const what = b && b.owner === u.owner ? ` to your ${BDEFS[b.type].name}${b.built ? '' : ' site'}` : '';
@@ -6781,8 +6842,12 @@ function dangerSweep() {
   }
   // Goods carriers on their way whose route ahead now runs into an enemy gun: they look at it again (routeCheck).
   for (const u of S.bots) {
-    if (u.dead || !u.path || u.inside || u.pi >= u.path.length || !safeHaul(u)) continue;
-    if (hotStep(dangerMap(u.owner), tIdx(Math.floor(u.x), Math.floor(u.y)), u.path, u.pi) >= 0) u.rv = -1;
+    if (u.dead || !u.path || u.inside || u.pi >= u.path.length) continue;
+    const rail = BOTS[u.type].rail;
+    if (!rail && !safeHaul(u)) continue;
+    if (hotStep(dangerMap(u.owner), tIdx(Math.floor(u.x), Math.floor(u.y)), u.path, u.pi) < 0) continue;
+    if (rail) u.trackVer = -1;
+    else u.rv = -1;
   }
 }
 

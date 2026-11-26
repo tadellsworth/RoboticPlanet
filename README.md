@@ -1625,7 +1625,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `routeCheck` plans again, round it, or stops it where it is and drops the job (`haltUnsafe`: a load aboard stays,
   for `stashCarry`). The danger map is the cached one (per player, every 15 ticks), never rebuilt per search. Enemy
   warbots stay a cost and `foeSweep`'s turning back; how far robots keep from one is its real reach now (`foeReach`:
-  a Railgunner's 5 tiles + 1.7, not `FOE_SHY` for all).
+  a Railgunner's 5 tiles + 1.7, not `FOE_SHY` for all). Freight Trains also avoid covered track (`railRoute`), replan if guns cover a queued route, and release the delivery reservation while keeping cargo aboard if no safe detour exists.
+- **Cargo pickups:** after the usual capacity and network checks, dispatch compares estimated travel times when multiple carriers are eligible. The estimate uses their routes and travel speeds, including road surface and direction. It is reused for that carrier and pickup for the current dispatch pass. It does not predict traffic queues or boarding waits.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
   not orders with `hurry`) move at the slowest one's speed: each faster one's task carries `pace`, the share of its own

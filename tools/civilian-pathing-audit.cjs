@@ -58,10 +58,49 @@ runInNewContext(source + `
     reset();
     for (let x = 5; x <= 30; x++) setRail(tIdx(x, 20), true, 0);
     const train = addBot(0, 'freight', 5, 20);
+    const src = addBuilding(0, 'station', 5, 21, true), dst = addBuilding(0, 'station', 30, 21, true);
+    src.stock.alloy = 10;
+    assert.ok(assignHaul(train, src, dst, 'alloy', 5));
+    train.carry = 'alloy'; train.carryN = 5; train.task.phase = 'toDst';
+    src.res.alloy = 0; src.stock.alloy = 5;
+    assert.ok(goTo(train, dst.x, dst.y));
     armGun();
-    const route = railRoute(train, 30, 20);
-    assert.ok(route?.some((t) => gunCovers(0, t)));
-    console.log('Audit limitation: Freight Train routing can plot a route through turret coverage.');
+    assert.ok(railRoute(train, dst.x, dst.y, undefined, null).some((t) => gunCovers(0, t)));
+    assert.equal(railRoute(train, dst.x, dst.y), null);
+    dangerSweep();
+    assert.equal(trainRouteCheck(train), false);
+    assert.equal(train.task, null);
+    assert.equal(train.path, null);
+    assert.equal(train.carryN, 5);
+    assert.equal(dst.inc.alloy || 0, 0);
+    assert.equal(assignHaul(train, src, dst, 'alloy', 3), false);
+    assert.equal(src.res.alloy || 0, 0);
+    assert.ok(!(dst.unreachUntil > S.time), 'blocked rail does not close station to road freight');
+    for (let x = 5; x <= 30; x++) setRail(tIdx(x, 12), true, 0);
+    for (let y = 12; y < 20; y++) { setRail(tIdx(5, y), true, 0); setRail(tIdx(30, y), true, 0); }
+    train.failUntil = 0;
+    assert.ok(goTo(train, dst.x, dst.y));
+    assert.ok(train.path.every((t) => !gunCovers(0, t)));
+    console.log('A loaded train stops and keeps its cargo, then accepts a safe track detour.');
+  }
+  {
+    reset();
+    for (let y = 10; y <= 25; y++) road(10, y);
+    for (let y = 10; y <= 30; y++) road(15, y);
+    for (let x = 10; x <= 15; x++) road(x, 10);
+    const src = addBuilding(0, 'lander', 16, 25, true), dst = addBuilding(0, 'depot', 16, 30, true);
+    S.players[0].lander = src.id;
+    src.stock.alloy = 30;
+    dst.keep = { alloy: 2 };
+    const near = addBot(0, 'hauler', 10, 25), far = addBot(0, 'hauler', 15, 17);
+    const eta = [near, far].map((u) => cargoPickupTime(u, src));
+    assert.ok(dist(near.x, near.y, src.x + 0.5, src.y + 0.5) < dist(far.x, far.y, src.x + 0.5, src.y + 0.5));
+    assert.ok(eta[0] > 3 * eta[1], JSON.stringify(eta));
+    dispatch(0);
+    assert.equal(far.task?.src, src.id);
+    assert.equal(far.task?.dst, dst.id);
+    assert.ok(near.task?.type !== 'haul');
+    console.log('Dispatch selects the quicker pickup: ' + eta.map((t) => t.toFixed(1)).join(' vs ') + ' estimated seconds.');
   }
   {
     reset();
