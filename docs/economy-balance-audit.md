@@ -1,6 +1,6 @@
 # Economy balance audit
 
-November 26, 2026. First pass on the resource bottleneck and recovery checks in [IDEAS](../IDEAS.md#economy-balance-audit-to-do). The remaining three audits and the road-link recovery scenario are on the to-do list.
+November 26, 2026. First pass on the resource bottleneck and recovery checks in [IDEAS](../IDEAS.md#economy-balance-audit-to-do); a second pass the same day covers the Ore pickup stalls, a road link cut, investment payback, the Mass Driver against Maglev, doctrines and snowballing, Long haul game lengths and the pickup estimate's cost (from [Why Ore pickups stall](#why-ore-pickups-stall) on).
 
 ## Resource bottlenecks
 
@@ -56,3 +56,110 @@ Long haul seed 21, Medium Versus, Normal, both Balanced, on `7c7930a`. Both colo
 | Chips | 7 min | 7 min | 20 | 25 |
 
 Fuel appeared one sample earlier for Colony 1. Alloy and Chips first appeared at the same checkpoints, and each colony led in at least one good by minute 12. This spot check covers one seed, with opening route costs and other starts still to audit. Replay with `TERRAFALL_ECONOMY_TRACE=1 node tools/late-attack-audit.js 'Long haul' 21 2 12 7c7930a`.
+
+## Why Ore pickups stall
+
+`TERRAFALL_PICKUP_TRACE=1` (added to `tools/late-attack-audit.js`) records every time a goods carrier or worker gives up a trip for safety, the building it was going to, and what it gave way to. A building's "unreachable" cooldown (`b.unreachUntil`) is set in exactly two places: `noSafeRoute` (no way round an enemy gun, 10 s) and `takeCover` (enemy warbots or the Murmur near the way ahead, 5 s).
+
+Standard seed 25, 38-minute cap, Normal, Balanced:
+
+| Revision | Result | Trips given up | To the Murmur | To enemy warbots | To guns |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `d9bf339` (the Ammo drought) | Undecided at 38 | 1,154 | 1,005 | 149 | 0 |
+| `81f7823` (main before this pass) | Colony 1 at 17.32 | 400 | 292 | 108 | 0 |
+
+On `d9bf339`, trips to Mines were given up 239 times, most in two bursts (minutes 22–23 and 30–34). Colony 1's Mine at (8, 31), the one the first pass found in the unreachable state at minutes 31–34, accounts for 102 Hauler turn-backs on the way to it, every one from Murmur Scuttlers 6–11 tiles off its route (never at the Mine itself, never a gun). Each turn-back put the Mine on its 5-second cooldown, and the next Hauler sent turned back the same way. So the Ore stall was the Murmur roaming by the Haulers' road, not freight eligibility, the road network or the route estimate. `takeCover` works as designed (keep 6 tiles from a creature); the cost is that nobody clears the creatures off a supply road. Left for the owner: should a rival send a few warbots to a Mine whose Haulers keep turning back from the Murmur (the AI only strikes nests, `aiMurmur`), and should a Hauler that turns back from the same building several times in a row wait longer before another is sent?
+
+## Losing a key road link
+
+`TERRAFALL_ROAD_CUT=colony:minute` takes up the middle three road tiles of the colony's longest road from its Command Base to a Mine or Smelter (as if bulldozed) and records when the two are joined by road again and when the three tiles are road again. `81f7823`, Medium Versus, Normal, Balanced, cut at minute 12.
+
+| Map and seed | Cut | Link cut | Joined again | Tiles back | Output after | Result (control) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Long haul 21 | Colony 1 | Mine, 20-tile road | 12.73 | 12.73 | Ore 54 vs 58 at minute 13, level again by 15; Alloy 142 vs 133 at 22 | Colony 2 at 30.72 (23.81) |
+| Long haul 21 | Colony 2 | Mine, 20-tile road | 12.35 | 12.35 | no visible dip | Undecided at 33 (23.81) |
+| Standard 25 | Colony 2 | Smelter, 7-tile road | 12.18, by another road | never | Alloy kept rising (97 at minute 13 to 115 at 16), then flat as it lost the war | Colony 1 at 18.30 (17.32) |
+| Standard 25 | Colony 1 | none: no Mine or Smelter 6+ road tiles out | — | — | — | — |
+
+The rival relays a cut road in 20–45 seconds and output dips for at most a minute. A bare cut is not a lasting setback. The match results moved because any change at minute 12 reshuffles the rest of a deterministic game. A cut under enemy guns or with raiders standing on it, where Workers won't go, is the harder case and was not run.
+
+## Investment payback
+
+`tools/doctrine-audit.js` measures each production building's output per building per minute from minute 6 to the end of each game (all 40 doctrine games below, averaged over every building standing each minute, so idle, starved and unstaffed time counts) and divides its build cost by that output. Both are in raw-material units: a gathered good is 1, Cement 0.5, Alloy 1.33, Chips 2.33, Fuel 1, Ammo 0.61 (what went into one).
+
+| Building | Output a minute, measured | Cost (raw units) | Pays back in |
+| --- | ---: | ---: | ---: |
+| Smelter | 6.5 Alloy | 3.5 | 24 s |
+| Chip Fab | 3.0 Chips | 3.7 | 31 s |
+| Ore Mine | 3.7 Ore | 3 | 49 s |
+| Refinery | 6.6 Fuel | 6 | 55 s |
+| Quarry | 2.2 Stone | 2 | 55 s |
+| Oil Pump | 3.4 Crude | 3.7 | 64 s |
+| Crystal Tap | 2.2 Crystal | 3 | 82 s |
+| Cement Works | 7.0 Cement | 6 | 103 s |
+| Ammo Plant | 1.5 Ammo | 4.2 | 280 s |
+
+Every production building repays its cost within two minutes of its own output, the Ammo Plant within five. A building's price never limits growth; Workers, inputs and freight do. The Ammo Plant's slow payback reflects how rarely it runs: it makes Ammo only when Ammo is wanted.
+
+For the long links, the cost of a line, not its output, is what decides. Over 30 tiles a Maglev line with four pods costs about 46 Cement, 58 Alloy, 29 Chips and moves about 120 goods a minute each way. A Mass Driver line moved 160 a minute each way for 16 Cement, 12 Alloy, 6 Chips at any reach up to 50 tiles. It has been tuned (below). The road, Truck, Express and rail comparison on routes suited to each is still to do.
+
+## Mass Driver against Maglev
+
+| | Mass Driver line (before) | Mass Driver line (now) | Maglev line, 30 tiles |
+| --- | --- | --- | --- |
+| Cost | 16 Cement, 12 Alloy, 6 Chips | 20 Cement, 15 Alloy, 8 Chips | about 46 Cement, 58 Alloy, 29 Chips with 4 pods; more the longer it is |
+| Goods a minute each way | 160 | 120 (118 measured over 30 tiles) | about 120 |
+| Reach | 12–50 tiles, any gap | 12–50 tiles, any gap | 6–40 tiles a line; a chasm or deep water up to 6 tiles; bends, hubs, networks |
+| Set-up | two buildings | two buildings | a Worker builds it out at 3 s a tile (90 s for 30) |
+| Weak point | enemy Flak under the arc | the same | any pylon shot down cuts it |
+
+The Driver line did everything a Maglev line does point to point, for a quarter of the cost, with more reach and nothing to defend between the ends. Now each end fires every 8 s (it was 6) and the ends cost a little more. It still carries about as much as a 30-tile Maglev line for about a third of the cost. It remains the only way over a gap a Maglev line can't span, while Maglev keeps its networks and hubs. `tools/massdriver-test.js` checks 100–130 a minute each way over 30 tiles. Left for the owner: a slower rate when both ends stand on ground a robot can walk between, and whether several Drivers on one Catcher should share its rate.
+
+## Doctrines and snowballing
+
+40 computer-only games, `81f7823`, Medium Versus, Normal, Murmur active, 40-minute cap: every pair of the five doctrines, each with sides swapped, on Standard seed 25 and Long haul seed 21. `tools/doctrine-audit.js` sets both colonies' doctrines (newGame makes colony 1 a Steward in a computer-only game).
+
+| Doctrine | Won | Lost | Undecided |
+| --- | ---: | ---: | ---: |
+| Herald (rusher) | 11 | 4 | 1 |
+| Salvager (raider) | 10 | 6 | 0 |
+| Architect (tycoon) | 8 | 8 | 0 |
+| Warden (turtle) | 6 | 9 | 1 |
+| Steward (balanced) | 4 | 12 | 0 |
+
+- **The Herald is the strongest rival against other rivals**, more so than the Salvager. On Standard 25 it won 7 of 8, three times by minute 10 (as colony 1 it took a Steward's and a Warden's Command Base at 9:00, and a Salvager's at 10:18). On the longer Long haul map it was 4–2 with one undecided. Its early wave beats rivals that don't garrison early. A player can still hold it with a garrison and a turret, as its own description says. Whether it is too strong against a human is for play-testing; no change was made.
+- **The Steward is the weakest** (4–12). It is the default rival, so most players meet it.
+- **Doctrine mattered more than side.** In 12 of the 19 swapped pairs with two results, the same doctrine won from both sides. In 6 more, colony 1 won both games, a side lean on these two seeds (25 of 39 decided games went to colony 1). The opening spot check above found no clear lean on Long haul 21, so this lean is in the middle game. It needs more seeds before anything moves.
+- **An early lead helps but doesn't decide.** The colony that had made more by minute 10 won 24 of 37 games (65%). By minute 15 that rose to 22 of 32 (69%). The bigger army at minute 10 won 25 of 35 (71%). About one game in three was turned around.
+
+## Long haul game lengths after the late-game AI merge
+
+Long haul, two players, Medium Versus, Normal, Balanced, 40-minute cap, eight seeds, on `288eb8f` (main just before the merge `b274301`) and `81f7823` (current main), with `tools/ai-baseline-audit.js`.
+
+| Seed | Before | After |
+| --- | --- | --- |
+| 21 | undecided at 40 | colony 2 at 23.81 |
+| 3 | colony 2 at 29.33 | colony 1 at 30.94 |
+| 7 | colony 2 at 32.97 | colony 2 at 20.54 |
+| 11 | colony 2 at 22.06 | colony 2 at 24.31 |
+| 15 | colony 2 at 19.04 | undecided at 40 |
+| 19 | colony 2 at 26.49 | colony 2 at 31.66 |
+| 25 | colony 2 at 24.82 | colony 2 at 31.22 |
+| 31 | undecided at 40 | undecided at 40 |
+
+Two of eight games went undecided both before and after. The decided games averaged 25.8 minutes before and 27.1 after, and the medians, counting undecided games as 40, were 27.9 and 31.1. Games went longer on four seeds and shorter on two, and seed 21 now finishes. This is about three minutes longer on average, within the seed-to-seed spread, with no new kind of stall, so no change was made. The undecided seed 15 game (traced to 45 minutes) is a late Chip drought on both sides. Both Foundries were mostly "Waiting for Chip" from minute 20, and colony 1 had no Ammo in stock from minute 26. Colony 1's storms of 13, 8, 10 and 6 warbots were worn down on the long road. The before-merge stalls look the same: Chips at 0 on both sides at 40 minutes. The late Chip and Crystal supply on Long haul is the thing to look at next.
+
+## The cargo pickup estimate's cost
+
+The merge review flagged `cargoPickupTime` (a route search per eligible carrier per pickup each dispatch pass). The owner's crowded save `bc3fa232` (minute 56.7, 121 bots, 27 Haulers, 139 buildings) ran 240 game seconds headless. It made 52 estimate calls, taking 14 ms of 70.7 s, which is 0.02%. In the same window `findPath` ran 2,136 times for 1,052 ms. The estimate runs only when more than one carrier is eligible, and results are kept for the dispatch pass. It is not a real cost, so it was left alone.
+
+## Reproduce this pass
+
+```sh
+TERRAFALL_ECONOMY_TRACE=1 TERRAFALL_PICKUP_TRACE=1 node tools/late-attack-audit.js Standard 25 2 38 d9bf339
+TERRAFALL_ECONOMY_TRACE=1 TERRAFALL_ROAD_CUT=1:12 node tools/late-attack-audit.js 'Long haul' 21 2 33 81f7823
+node tools/doctrine-audit.js Standard 25 rusher balanced 40 81f7823      # each pair, both ways round
+node tools/ai-baseline-audit.js 'Long haul' 15 2 40 288eb8f              # and 81f7823; seeds 3 7 11 15 19 21 25 31
+TERRAFALL_PRESSURE_TRACE=1 node tools/late-attack-audit.js 'Long haul' 15 2 45 81f7823
+node tools/massdriver-test.js
+```
