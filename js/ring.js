@@ -253,7 +253,7 @@ function ringSpace(ctx, ox, oy, z) {
 }
 
 /**
- * Clip to the asteroids (their ground and the rock face under each): what the light of the day and the dusk is graded over, so the
+ * Clip to the asteroids (their ground and the first tile of rock face under each): what the light of the day and the dusk is graded over, so the
  * space stays as it is. Call between ctx.save() and ctx.restore(); the map's drawing resumes in screen space after it.
  */
 function ringClipLand(ctx, ox, oy, z) {
@@ -264,7 +264,7 @@ function ringClipLand(ctx, ox, oy, z) {
     for (let j = 0; j < H; j++) {
       let i0 = -1;
       for (let i = 0; i <= W; i++) {
-        const on = i < W && (land(i, j) || land(i, j - 1) || land(i, j - 2));
+        const on = i < W && (land(i, j) || land(i, j - 1)); // (the ground and the first tile of rock face under it: the fading second tile is left to the sky)
         if (on && i0 < 0) i0 = i;
         else if (!on && i0 >= 0) { p.rect(i0, j, i - i0 + 0.04, 1.04); i0 = -1; }
       }

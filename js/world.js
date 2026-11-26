@@ -2725,8 +2725,8 @@ function ringMap(seed, W, H, cfg) {
   for (let t = 0; t < N; t++) if (rim[t]) { near[t] = 1; orth(t, (u) => { near[u] = 1; }); }
   // The middle of the middle rock and of every stepping stone stays bare, open ground (5 × 5): a Trade Post or an Uplink can stand there.
   const bare = new Uint8Array(N);
-  for (const o of [mid, ...sides, ...rocks.filter((r) => r.kind === 'stone'), ...rocks.filter((r) => r.kind === 'stone').map(twin)]) {
-    for (let j = Math.round(o.y) - 2; j <= Math.round(o.y) + 2; j++) for (let i = Math.round(o.x) - 2; i <= Math.round(o.x) + 2; i++) if (i >= 0 && j >= 0 && i < W && j < H) bare[id(i, j)] = 1;
+  for (const o of [mid, ...sides, ...rocks.filter((r) => r.kind === 'stone')]) {
+    for (let j = Math.round(o.y) - 2; j <= Math.round(o.y) + 2; j++) for (let i = Math.round(o.x) - 2; i <= Math.round(o.x) + 2; i++) if (i >= 0 && j >= 0 && i < W && j < H) bare[id(i, j)] = bare[mir(id(i, j))] = 1; // (each tile and its twin: rounding a twin's centre can differ by one)
   }
   // A few crags, away from the rim, the middle and the bases.
   for (let t = 0; t < N; t++) {

@@ -1750,6 +1750,7 @@ function drawVoidTile(ctx, i, j, x, y) {
   ctx.clearRect(x, y, TP, TP);
   const one = terrAt(i, j - 1) === T_GROUND, two = !one && terrAt(i, j - 1) === T_CHASM && terrAt(i, j - 2) === T_GROUND;
   if (!one && !two) return;
+  if (two && hash2(i, j, 771) < 0.4) return; // (a ragged bottom: not every column of the rock goes down a second tile)
   const art = canyonArt(one ? 'chasm-wall' : 'chasm-wall-2') || canyonArt('chasm-wall');
   if (art) drawTileArt(ctx, art, x, y, 0);
   else {
@@ -1760,10 +1761,10 @@ function drawVoidTile(ctx, i, j, x, y) {
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
   const f = ctx.createLinearGradient(0, y, 0, y + TP);
-  f.addColorStop(0, `rgba(0,0,0,${one ? 0 : 0.5})`); f.addColorStop(1, `rgba(0,0,0,${one ? 0.5 : 1})`);
+  f.addColorStop(0, `rgba(0,0,0,${one ? 0.05 : 0.6})`); f.addColorStop(1, `rgba(0,0,0,${one ? 0.6 : 1})`);
   ctx.fillStyle = f; ctx.fillRect(x, y, TP, TP);
   // (the face is narrower than the rim: its sides taper in toward the point of the rock)
-  const sx = (one ? 0.06 : 0.2) * TP;
+  const sx = (one ? 0.1 : 0.32) * TP;
   ctx.fillStyle = 'rgba(0,0,0,0.9)';
   if (terrAt(i - 1, j) === T_CHASM && terrAt(i - 1, j - 1) !== T_GROUND) ctx.fillRect(x, y, sx, TP);
   if (terrAt(i + 1, j) === T_CHASM && terrAt(i + 1, j - 1) !== T_GROUND) ctx.fillRect(x + TP - sx, y, sx, TP);
