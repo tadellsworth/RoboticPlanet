@@ -1427,9 +1427,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   (walk and run cycles, wing beats, grazing and startle poses, flocks that turn together, herds that bunch when they
   run). Keep them scenery (LORE.md: nobody's side, no victory count); pair with "Total war scars the land" above so
   the dead are drawn too.
-- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18: for later). The Fiber plant on the map is the
-  Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`, ART_GUIDE; the Bloom and the Hollow
-  use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
+- **Redesign the Fiber stalks (Reedcane)** (the owner's to-do, Nov 18). DONE, Nov 26 2026: from six directions drawn in
+  the running game the owner picked **A, Lantern Cane** (tall jointed mint-teal canes whose rings light up mint when
+  ripe, pale stumps where cut, the joints growing back one by one; 1.5 tiles tall, three clumps by position, lit at
+  night dimmer while growing), now drawn in code (`js/reedcane.js`, ART_GUIDE Batch 34). The original note: the Fiber
+  plant on the map was the Reedcane the owner picked from a sheet in Nov 2026 (jointed canes; `art/resources`,
+  ART_GUIDE; the Bloom and the Hollow use veins instead). The owner wants a new look. When picked up: ask what they dislike and what they want (taller?
   denser groves? a grass or crop look? motion in the wind?), then a sheet of three directions as for the oil seeps,
   on the Rust and the green biomes, by day and at night, at 96/48/28 px, with the Harvester cutting it and a cut grove
   regrowing (the Grove Planter).
@@ -1439,12 +1442,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   line, a "no entry" bar at the wrong-way end), small roadside signs or bollards at the entry, a lit cat's-eye string
   at night as the Expressway has, or an arrow that fades out along the lane. Pair with the Express highway's art so the
   two share a marking language. A small sheet of three looks first.
-- **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
-  Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
-  `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
-  what the redesign covers (its look in the Silo, in flight and the blast; how it plays; or both), then show a design
-  sheet to pick from, as for the Airship. Mind the single file's room (see Room to grow below): its art may want a
-  bundle of its own beside the page.
+- **Redesign the nuclear missile** (the owner's to-do, Nov 17). DONE, Nov 26 2026 (the owner's spec): a long, rounded
+  three-stage ICBM drawn in code (off-white, a dark heat-shield nose, stage bands, red warning marks, small fins: ART_GUIDE,
+  The nuclear missile), and a launch sequence in the look only: the missile waits in its Silo with the warning lights
+  flashing and steam venting, lifts off 10 s before impact, climbs off the screen and falls onto the target (README,
+  Nuclear race). Open: the blast itself (`nuke-blast-sheet`) is unchanged; a rival's launch seen off screen shows only on
+  the minimap and in the messages (an edge marker pointing to it?); the Silo's art still has no closed hatch to open.
 - **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
   maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
   Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.

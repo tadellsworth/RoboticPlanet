@@ -11,7 +11,8 @@ weapon effects, explosions and building collapses (muzzle flashes, tracers, smok
 [Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
 and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed); the Airship and
 the Mooring Mast in [Batch 18](#batch-18-the-airship-and-the-mooring-mast-installed); the Maglev line in
-[Batch 21](#batch-21-the-maglev-line-installed).
+[Batch 21](#batch-21-the-maglev-line-installed); Fiber's Stalks as Lantern Cane, drawn in code, in
+[Batch 34](#batch-34-fibers-stalks-as-lantern-cane-installed-drawn-in-code).
 
 This guide has three parts:
 
@@ -218,7 +219,7 @@ Make them roughly in this order. The first few change the look of the game the m
 | `worker@0`, `worker@1` | Worker bot: carries goods, builds, runs buildings | A small, sturdy utility robot seen from directly above, facing right: a compact rounded body on treads or four small wheels, a cargo cradle on its back, one glowing team-colour sensor eye at the front. Chunky and friendly-looking but worn. |
 | `warbot@0`, `warbot@1` | Combat bot | An aggressive, low-slung combat robot seen from directly above, facing right: an arrowhead or wedge-shaped armoured chassis, twin forward weapon barrels, team-colour glowing armour seams and visor. Clearly more dangerous than the worker. |
 | `ground` | Basic sand tile (128×128, **seamless, opaque**) | A seamless top-down texture of rust-ochre alien sand and packed dust with small pebbles and subtle wind ripples. Low contrast so buildings stand out on it. |
-| `stalk` | Fungal plants, harvested for Fiber | A small cluster of 2–3 alien fungal stalks seen from above: thin dark-teal stems topped with glowing mint-teal bulbous caps, slightly bioluminescent. |
+| `stalk` | Fungal plants, harvested for Fiber (no longer an image: Lantern Cane, drawn in code, [Batch 34](#batch-34-fibers-stalks-as-lantern-cane-installed-drawn-in-code)) | A small cluster of 2–3 alien fungal stalks seen from above: thin dark-teal stems topped with glowing mint-teal bulbous caps, slightly bioluminescent. |
 | `boulder` | Rocks, quarried for Stone | A cluster of 2–3 pale grey weathered boulders with cracks and dust, seen from above. |
 | `ore` | Ore vein, mined for Ore | A jagged chunk of near-black rock seamed with glowing molten-orange metallic veins, seen from above. |
 | `crystal` | Crystal cluster, tapped for Crystal | A cluster of 3 tall hexagonal violet crystals jutting from the ground at angles, faintly glowing from inside, seen from above. |
@@ -1640,7 +1641,8 @@ toward a pale crest; and here and there a short fissure off the crest where the 
 `paintRidges`, baked as before). Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
 morning, evening and night versions) and `tunnel-exit-collapsed` (drawn with the ground while it stays shut).
 
-**Fiber and Oil, on every map** (`art/resources/`). Fiber's Stalks are now **Reedcane**: a clump of jointed sage-teal
+**Fiber and Oil, on every map** (`art/resources/`). (Both since redone in code: Fiber as Lantern Cane, Batch 34, its
+images removed; Oil as a puddle of crude, Batch 20.) Fiber's Stalks were then **Reedcane**: a clump of jointed sage-teal
 canes with mint plumes. `stalk` is full grown and `stalk-1`, `stalk-2`, `stalk-3` show it a quarter, half and three
 quarters grown back, drawn full size (`stalkKey`); `stalk-glow` and `stalk-3-glow` are the plumes' light at night. All
 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they have no time-of-day
@@ -1820,6 +1822,44 @@ under a road or track the puddle stops at the kerb and the road keeps its dark s
 the body also holds the sky: a faint cool sheen across its top half, gone toward the bottom, and a thin film of oil's
 colours just inside its edge (both baked with it, in `drawSeepPuddle`). Everything is render state (`SEEP`),
 read from `S` and never written to it; the simulation never reads it.
+
+### Batch 34: Fiber's Stalks as Lantern Cane (installed; drawn in code)
+
+The owner asked for a new Fiber plant (IDEAS, Nov 18). Six Reedcane directions were drawn inside the running game (on
+the Rust and Greenreach, by day and at night, at 80/64/48/28 px a tile, a whole field and one being cut and regrown);
+the owner picked **A, Lantern Cane**: tall jointed canes in Fiber's mint-teal, a dark ring at every joint and a few
+narrow leaves off the joints. Ripe, the rings turn pale mint, and at night they're lit, so a field after dark reads as
+rows of mint lights. Cut canes leave pale stumps, and the canes grow back a joint at a time.
+
+**There are no images** (the old `stalk`, `stalk-1…3`, `stalk-glow` and `stalk-3-glow` WebPs are gone from
+`art/resources/` and the manifest): each look is drawn in code (`js/reedcane.js`, a port of the design sheet's
+prototype) the first time it's needed, into a small canvas, and kept (`REED.cache`), so it costs one image a clump when
+the ground is baked and nothing per frame by day.
+
+| Look | When (`reedState`) | What |
+|---|---|---|
+| A quarter grown | `S.grow` under 0.375 | Mostly pale cut stumps, a few short shoots |
+| Half, three quarters grown | under 0.625, under 0.875 | The canes at about half and three quarters height, a joint at a time, their rings dull green (paler at three quarters) |
+| Ripe | 0.875 and up | Full height, the rings pale mint with a white glint |
+| Ripe, being cut | `S.amt` down to two thirds or less of a grove's (`RES[R_STALK].amount`) | A third, then two thirds of its canes cut to pale stumps (a rich grove shows full until it's down to a plain grove's) |
+
+- **Size and place:** a sprite is 1.5 tiles square (`REED.scale`, anchor [0.5, 2/3]): the clump's foot at the tile's
+  middle and its canes standing up half a tile into the tile above. 128 px a tile (the sharp map's finest). So the
+  clumps are drawn after the ground of the tiles round them, row by row (`drawStalks`, from `bakeMap`, `hdBake`,
+  `redrawRegion` and `redrawAround`, before the decorative plants), and a tile repainted near a Stalk, or where one
+  stood, repaints the tiles round it too (`reedNear`, `R.reedAt`).
+- **Variety:** three clumps (`REED.variants`: 10, 12 or 13 canes, a little narrower or wider), each tile picking one by
+  its position and nudged a little off the middle (`reedVariant`), so a field isn't one clump repeated on a grid.
+- **Shadows:** a soft pool under the clump and each cane's shadow cast down-right, drawn small and laid on enlarged
+  (soft in every browser, no canvas filter).
+- **Evening and night:** the clumps are graded with the ground, like every resource. Their light: a soft mint halo of
+  the rings in the night glow map (`drawStalks` with glow), and zoomed in past 30 px a tile (fully by 46), where that
+  map is too coarse for single rings, each ring's own small light (`drawReedLights`: one cached sprite a clump in view,
+  each pulsing a little on its own; not on the Saver step). A grove growing back is lit too, dimmer the less grown
+  (`REED.lit`: 0.28, 0.45, 0.68, ripe 1); its shoots' tips glow, and a quarter-grown grove's stumps faintly. Under a
+  road or track a Stalk shows faintly and gives no light.
+
+All of it is render state, read from `S` and never written to it; the simulation never reads it.
 
 ### Batch 21: the Maglev line (installed)
 
@@ -2220,8 +2260,34 @@ and night (as `TOD.state.lights` rises) each one but Arrival City (its own `city
 Their own lights stay as they were (the Lift's cable, the Uplink's rim, the Deep Core's shaft, the Engine's plume, the
 Lance's charge glow, the Dome's shimmer). Knocked out or offline (`megaOut`) it is dark: its graded day art in place of
 the lit night art (`drawMegaArt`), no layer, no pools, its Lift cable dim and unlit, and only its amber lamp blinking
-(`drawMegaDark`). A site is drawn as any site. Moving a lamp: change its `[u, v]` in `MEGA_LAMPS` (read off the night
+(`drawMegaDark`). Their moving parts go dark with them (Nov 26 2026): the Sundering Ray's rams and plates and the Deep
+Core's winding wheels are drawn through `drawMegaArt` too, so no lit night frames sit on a dark structure. A site is drawn as any site. Moving a lamp: change its `[u, v]` in `MEGA_LAMPS` (read off the night
 render, 0..1 across and down).
+
+### The nuclear missile (drawn in code; no images)
+
+The owner, Nov 26 2026: longer and more rounded, like a modern ICBM, still menacing. It replaced
+`markers/nuclear-missile.webp` (the old black-and-yellow rocket) and the missile baked into `nukesilo@T`: the Nuclear Silo
+is now always drawn with its open shaft (`nukesilo-empty@T`) and the missile in code standing in it.
+- **The sprite** (`icbmArt` in `js/render.js`, made once, 768 px square, nose to the right, kept as an art entry so
+  `drawArt` grades it for morning, evening and night like any image): `ICBM.len` 1.85 tiles long, `ICBM.dia` 0.155 wide
+  (12 : 1). Three stages, each a little narrower (radius 0.5, 0.47, 0.435 of its width), grey separation bands with rivet
+  rows, a rounded ogive nose (about 1.9 calibres, blunt at the tip) with a dark ablative heat-shield on its front third and
+  a scorched edge; an off-white body (`#e9e7df`) shaded as a cylinder lit from above (multiply, then a soft sheen and a
+  cool reflected rim); panel seams, a stencilled serial block, red warning bands (`#b3191e`) on the first and third
+  stages, a short black-and-yellow stripe by the first band, a red trefoil; soot toward the base; a dark nozzle; four
+  small clipped-delta fins (two edge-on, one face-on). A fine dark outline keeps it readable on pale ground.
+- **Drawing it** (`drawIcbm`): turned to any angle, flipped so its lit side stays up and to the left; at night its day
+  colours come back at 45% (floodlit by its Silo, then its own fire); `drawIcbmFlame` is its exhaust (three additive
+  layers, a white-hot core, flickering) with a glow; re-entry adds a hot glow at the nose.
+- **In the Silo** (`drawSiloIcbm`, `NSILO_HOLE`: the shaft's mouth in tiles from the square's middle): standing in the
+  shaft, cut off at the mouth (the back half of the rim behind it, the front lip over it), falling into shadow down the
+  shaft; armed, `ICBM_OUT` (24%) of it shows; it rises into place over `SILO_RISE`. During a strike, `drawNukeSiloAlarm`:
+  four red beacons turning round the pad (a sweep of light each), the hatch rim flashing red faster toward liftoff, white
+  steam (`steamPuff`) from four vents, and in the last 1.6 s fire and smoke out of the mouth as it shakes.
+- **Climb and fall** (`drawNukeClimb`, `drawNukeFall`): see README (Nuclear race). Smoke puffs are laid every third of a
+  tile of the climb (so the column has no gaps however fast it goes), white steam with grey smoke mixed in, drifting
+  downwind as they age; the fall is a white-hot streak 7 tiles long behind it.
 
 ### The minimap (drawn in code)
 
@@ -2336,7 +2402,7 @@ Campaign's picture is unchanged.
 - All six robots now drive with Batch 8 frames (`worker`, `warbot`, `hauler`, `agribot`, `paver`, `truck`, each
   `@0/@1-f0…f3` plus `-brake` and `-boost`, stored as WebP in `art/bots/` and listed with `driveSet()`); the hauler's
   crates are drawn on its bed. The military buildings, the 3D Command Base, the Repair Bay (`repair`) and the nuclear
-  set (`reactor`, `nukesilo@0/@1`, `nuclear-missile`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
+  set (`reactor`, `nukesilo@0/@1`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
   installed too. Any robot can use this pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
   `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
   Installed since: the Batch 14 defences, streetlamps (`streetlamp-road`/`-asphalt`, `-lit`, `-pool`) and the Pulse
@@ -2378,7 +2444,8 @@ Campaign's picture is unchanged.
   to adjust angle, lighting and scale with two assets than with twenty.
 - If a building looks too small or too big in the game, change its `scale` in the manifest rather than
   re-exporting. `scale: 1.2` draws it 20% larger.
-- Stalk plants are drawn smaller while they are still growing; Ore and Crystal shrink a little as they are mined out.
+- Stalks show how far they've grown back (stumps, then canes a joint at a time, then ripe: Batch 34); Ore and Crystal
+  shrink a little as they are mined out.
 
 
 ### Deer and wildebeest

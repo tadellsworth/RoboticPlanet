@@ -797,7 +797,9 @@ function bakeMap() {
   R.mapCtx.hdScale = scale;
   hdReset();
   seepIndexBuild(); // (the oil seeps' puddles, drawn with the ground: js/seep.js)
+  R.reedAt = null;
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
+  drawStalks(R.mapCtx, 0, 0, S.W - 1, S.H - 1); // (Fiber's clumps of cane, standing up over the tile above: js/reedcane.js)
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   bakeGlow();
   if (typeof duskSilReset === 'function') duskSilReset(); // (the plants' sunset silhouettes are made again for the new map)
@@ -858,12 +860,13 @@ function repaintTile(t) {
  */
 function redrawAround(ctx, i, j) {
   const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
-  if (!canyon && !(R.look?.plantScale || R.secondRegion?.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // no scenery spills onto the next tile
+  if (!canyon && !(R.look?.plantScale || R.secondRegion?.look.plantScale) && !reedNear(i, j)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // no scenery spills onto the next tile (a Stalk's canes do: reedNear)
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
   ctx.save();
   ctx.beginPath();
   ctx.rect((i - 1) * TP, (j - 1) * TP, 3 * TP, 3 * TP);
   ctx.clip();
+  drawStalks(ctx, i - 2, j - 2, i + 2, j + 2);
   drawPlants(ctx, i - 2, j - 2, i + 2, j + 2);
   ctx.restore();
 }
@@ -881,6 +884,7 @@ function redrawRegion(i0, j0, i1, j1) {
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) drawTile(i, j, ctx);
     ctx.save();
     ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
+    drawStalks(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1);
     drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1);
     ctx.restore();
   }
@@ -899,7 +903,7 @@ function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
   const biomes = R.secondRegion ? [R.biome, R.secondRegion.biome] : [R.biome];
-  let any = !!(biomes.some((b) => ART['ground-glow-' + b] || ART['water-glow-' + b]) || S.hollow || ART['stalk-glow'] || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' plumes and the oil seeps' gleam everywhere)
+  let any = !!(biomes.some((b) => ART['ground-glow-' + b] || ART['water-glow-' + b]) || S.hollow || typeof drawStalks === 'function' || SEEP.list.length); // (the Hollow: its Bloom veins glow; Stalks' rings and the oil seeps' gleam everywhere)
   for (let k = 1; k <= PLANT_KINDS && !any; k++) if (biomes.some((b) => ART[`plant-${b}-${k}-glow`])) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
@@ -925,7 +929,7 @@ function glowTiles(i0, j0, i1, j1) {
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
     drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
-    if (S.res[t] && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (Stalks' plumes, the Bloom's veins)
+    if (S.res[t] && S.res[t] !== R_STALK && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (the Bloom's veins; Stalks' rings below)
     if (S.hollow) hollowTileGlow(ctx, i, j, t);
     // (rounded shores: each corner glows as what it now shows)
     for (const { fill, dx, dy } of shoreRounds(i, j)) {
@@ -939,29 +943,22 @@ function glowTiles(i0, j0, i1, j1) {
   R.inMap = false;
   ctx.save();
   ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
+  drawStalks(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true); // (their rings' halo, reaching over the tiles round them: js/reedcane.js)
   drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true);
   ctx.restore();
 }
 
 /**
  * A resource's light in the night glow map, from its art's glow image where it has one (drawn just as drawResource draws
- * the resource): a Stalk's plumes once grown, a Bloom vein (or, without art, a violet glow). (An oil seep's gleam is
- * drawn with its puddle: drawSeepTile.)
+ * the resource): a Bloom vein (or, without art, a violet glow). (A Stalk's rings are drawn with the clumps, drawStalks in
+ * js/reedcane.js, and an oil seep's gleam with its puddle, drawSeepTile.)
  */
 function resourceGlow(ctx, type, amt, grow, i, j) {
   const cx = i * TP + TP / 2, cy = j * TP + TP / 2;
-  if (type === R_STALK) {
-    const art = ART[stalkKey(grow) + '-glow'];
-    if (art) drawArt(ctx, art, cx, cy, TP);
-  } else if (type === R_VEIN) {
+  if (type === R_VEIN) {
     if (ART['vein-glow-hollow']) drawArt(ctx, ART['vein-glow-hollow'], cx, cy, TP * (0.5 + 0.5 * grow));
     else veinGlow(ctx, i, j, grow);
   }
-}
-
-/** Which of a Stalk's images shows it at growth `grow` (0..1): a quarter, half or three-quarters grown, or full. */
-function stalkKey(grow) {
-  return grow >= 0.875 || !ART['stalk-1'] ? 'stalk' : grow < 0.375 ? 'stalk-1' : grow < 0.625 ? 'stalk-2' : 'stalk-3';
 }
 
 /** A Bloom vein's glow in the night glow map (dimmer while it grows back): violet light along it. */
@@ -1038,6 +1035,7 @@ function hdBake(level, cx, cy) {
   const i0 = cx * HD_CHUNK, j0 = cy * HD_CHUNK;
   // One tile of margin, so plants and resources leaning over the chunk's edge aren't cut off.
   for (let j = j0 - 1; j <= j0 + HD_CHUNK; j++) for (let i = i0 - 1; i <= i0 + HD_CHUNK; i++) if (inMap(i, j)) drawTile(i, j, ctx);
+  drawStalks(ctx, i0 - 1, j0 - 1, i0 + HD_CHUNK, j0 + HD_CHUNK);
   drawPlants(ctx, i0 - 1, j0 - 1, i0 + HD_CHUNK, j0 + HD_CHUNK);
   return { c, ctx, level, i0, j0, used: 0 };
 }
@@ -1314,6 +1312,7 @@ function paintTile(ctx, i, j, other, blend) {
       }
       return; // (no glint on a rich seep: the puddle's sheen is its shine)
     }
+    if (S.res[t] === R_STALK) return; // (a clump of cane stands up over the tiles round it: drawn after their ground, drawStalks)
     if (under) { ctx.save(); ctx.globalAlpha = 0.4; }
     drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (under) ctx.restore();
@@ -3135,8 +3134,9 @@ function drawBurnt(ctx, i, j, x, y) {
 }
 
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
-  // A Stalk has an image for each stage as it grows back (stalk-1 … stalk-3, then stalk: see stalkKey), drawn full size.
-  if (type === R_STALK && ART['stalk-1']) { const a = ART[stalkKey(grow)]; if (a) { drawArt(ctx, a, cx, cy, s); return; } }
+  // A Stalk is a clump of Lantern Cane drawn in code for its stage (js/reedcane.js; on the map drawStalks draws them, after
+  // the ground round them). Here, as an icon (drawDepletedRes), its foot is set a little low so the clump sits in the middle.
+  if (type === R_STALK && typeof reedArt === 'function') { drawArt(ctx, reedArt(0, reedState(grow, amt), 'art'), cx, cy + s * 0.28, s); return; }
   const art = ART[RES[type].key] || (type === R_VEIN ? ART['vein-hollow'] : null); // (the Bloom veins' art comes with the Hollow's)
   if (art) {
     const sc = type === R_STALK || type === R_VEIN ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
@@ -3348,10 +3348,18 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
   // A Silo shows its missile only once it's ready to fire (a Nuclear Silo: once it's armed); the
   // missile fades in as it's raised.
-  if (art && b && b.built && (type === 'silo' || type === 'nukesilo')) {
+  if (art && b && b.built && type === 'silo') {
     const empty = artFor(type + '-empty', owner);
-    const k = siloRise(b, type === 'silo' ? siloReady(b) : !!b.armed);
+    const k = siloRise(b, siloReady(b));
     if (empty && k < 1) { full = k > 0 ? art : null; fade = k; art = empty; }
+  }
+  // A Nuclear Silo: its open shaft (nukesilo-empty), with the missile drawn in code standing in it (drawSiloIcbm), raised
+  // as it's armed, and kept in it through a strike's countdown until liftoff.
+  let icbm = null;
+  if (art && type === 'nukesilo' && artFor('nukesilo-empty', owner)) {
+    art = artFor('nukesilo-empty', owner);
+    const m = b && b.id && b.built ? siloNuke(b) : null;
+    icbm = { m, up: m ? 1 : b && b.id ? (b.built ? siloRise(b, !!b.armed) : 0) : 1 };
   }
   // A Mass Driver's ramp points along its two tiles toward its Catcher (mdriver-<dir>: e, w, n, s); a Catcher's arms swing in as a
   // canister lands (catcher-closed).
@@ -3381,6 +3389,8 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
     if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
+    if (icbm && icbm.up > 0) drawSiloIcbm(ctx, b, cx, cy, s, icbm.up, icbm.m);
+    if (icbm && icbm.m && !R.inMap) drawNukeSiloAlarm(ctx, b, cx, cy, s, icbm.m);
     if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
     // The Lance of Corvane: its gun on the turntable turns to its aim (lance-head-0…15), and its rings light as it charges.
     if (type === 'lance') {
@@ -7177,6 +7187,7 @@ function render(dtReal) {
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
+  drawReedLights(ctx, ox, oy, z, v0, v1); // (zoomed in, each Stalk's rings lit: js/reedcane.js)
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
@@ -9249,6 +9260,7 @@ function drawCommandView(ctx, ox, oy, z) {
 /** Missiles fly in an arc: a shadow on the ground and the missile above it. */
 function drawMissiles(ctx, ox, oy, z) {
   drawTrails(ctx, ox, oy, z); // smoke trails and exhaust (js/fx.js)
+  drawNukeAfter(ctx, ox, oy, z); // (a nuclear strike's smoke column, lingering after the blast)
   for (const m of S.missiles) {
     if (m.nuke) { drawNukeFlight(ctx, m, ox, oy, z); continue; }
     if (m.bomb) {
@@ -9309,14 +9321,258 @@ function drawMissiles(ctx, ox, oy, z) {
   }
 }
 
+/*
+ * The nuclear missile (the owner's redesign, Nov 26 2026): a long, slender ICBM drawn in code (icbmArt, a cached
+ * sprite graded for the time of day like any art): an off-white body in three stages with dark separation bands, a
+ * rounded ogive nose with a dark heat-shield tip, panel seams, red warning bands and a trefoil, four small fins at
+ * the base. Its strike (drawNukeFlight), on the game's clock: the missile waits in its Silo while the warning lights
+ * flash and steam vents, until NUKE_LAUNCH seconds before impact; then it climbs straight up on a long plume, off the
+ * top of the screen, leaving a smoke column; in its last NUKE_FALL seconds it drops out of the sky onto the target,
+ * glowing with re-entry. Only the look: the game still has it land NUKE.flight seconds after it was fired.
+ */
+const ICBM = { len: 1.85, dia: 0.155 };  // tiles: its length, and its body's width
+const NUKE_FALL = 2;                      // (looks only) seconds it takes to come down onto the target
+const ICBM_OUT = 0.24;                    // how much of it shows out of its Silo's open hatch while it waits (of its length)
+/** Where the Nuclear Silo's shaft opens, from its square's middle (tiles), and its mouth's half-width and half-height. */
+const NSILO_HOLE = { x: -0.042, y: -0.093, rx: 0.148, ry: 0.107 };
+
+/** A soft white puff of steam (cached sprite). */
+function steamPuff() {
+  if (R.steamPuff) return R.steamPuff;
+  const n = 64, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  gr.addColorStop(0, 'rgba(244,246,248,0.85)'); gr.addColorStop(0.5, 'rgba(236,239,242,0.45)'); gr.addColorStop(1, 'rgba(230,234,238,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, n, n);
+  return (R.steamPuff = c);
+}
+
+/** The missile's sprite (nose to the right, in the middle of a square), made once. */
+function icbmArt() {
+  if (R.icbm) return R.icbm;
+  const N = 768, c = document.createElement('canvas');
+  c.width = c.height = N;
+  const g = c.getContext('2d'), L = N * 0.94, D = L * ICBM.dia / ICBM.len, x0 = (N - L) / 2, cy = N / 2;
+  const X = (f) => x0 + f * L;
+  // its radius along its length (f: 0 at the nozzle, 1 at the tip): three stages, each a little narrower, then the ogive
+  const rad = (f) => {
+    if (f < 0.03) return D * (0.36 + 0.1 * f / 0.03);         // the nozzle bell
+    if (f < 0.49) return D * 0.5;                            // first stage
+    if (f < 0.505) return D * (0.5 - 0.03 * (f - 0.49) / 0.015);
+    if (f < 0.715) return D * 0.47;                          // second stage
+    if (f < 0.73) return D * (0.47 - 0.035 * (f - 0.715) / 0.015);
+    if (f < 0.86) return D * 0.435;                          // third stage and the warhead bus
+    // the nose: a rounded ogive (about 1.9 calibres), blunt at the tip as a re-entry shroud is
+    const u = (1 - f) / 0.14;
+    return D * 0.435 * Math.pow(Math.max(0, 2 * u - u * u), 0.6);
+  };
+  const body = (ctx) => {
+    ctx.beginPath();
+    const n = 220;
+    for (let k = 0; k <= n; k++) { const f = k / n; ctx[k ? 'lineTo' : 'moveTo'](X(f), cy - rad(f)); }
+    for (let k = n; k >= 0; k--) { const f = k / n; ctx.lineTo(X(f), cy + rad(f)); }
+    ctx.closePath();
+  };
+  // the fins: two seen edge-on above and below, a third face-on (in front)
+  const fin = (sgn) => {
+    g.beginPath();
+    g.moveTo(X(0.035), cy + sgn * D * 0.48); g.lineTo(X(0.035), cy + sgn * D * 0.98); g.lineTo(X(0.075), cy + sgn * D * 0.98);
+    g.lineTo(X(0.135), cy + sgn * D * 0.48); g.closePath();
+    const gr = g.createLinearGradient(0, cy + sgn * D * 0.5, 0, cy + sgn * D);
+    gr.addColorStop(0, sgn < 0 ? '#5d6066' : '#3a3c40'); gr.addColorStop(1, sgn < 0 ? '#7a7d83' : '#2a2b2e');
+    g.fillStyle = gr; g.fill();
+    g.strokeStyle = 'rgba(20,20,24,0.6)'; g.lineWidth = 1.2; g.stroke();
+  };
+  fin(-1); fin(1);
+  // the body in its flat colours: off-white, grey separation bands, the dark nozzle and the heat-shield on the nose
+  g.save(); body(g); g.clip();
+  g.fillStyle = '#e9e7df'; g.fillRect(0, 0, N, N);
+  const band = (f0, f1, col) => { g.fillStyle = col; g.fillRect(X(f0), 0, X(f1) - X(f0), N); };
+  band(0, 0.03, '#2c2d30');                 // nozzle
+  band(0.03, 0.045, '#55585d');             // aft skirt ring
+  band(0.135, 0.15, '#b8b5ac');             // a panel joint
+  band(0.475, 0.51, '#4b4e53');             // first separation band
+  band(0.70, 0.735, '#4b4e53');             // second
+  band(0.86, 0.87, '#6a6d72');              // the shroud joint
+  band(0.945, 1.01, '#232427');             // the heat-shield
+  band(0.93, 0.945, '#3e3f43');            // ... its edge, scorched
+  // red warning bands (menacing, and to be seen from far off) and a short black-and-yellow stripe by the first band
+  band(0.39, 0.41, '#b3191e'); band(0.42, 0.427, '#b3191e');
+  band(0.80, 0.82, '#b3191e');
+  for (let k = 0; k < 7; k++) {
+    g.fillStyle = k % 2 ? '#1d1d1f' : '#e2b21c';
+    g.beginPath(); const xa = X(0.452) + k * D * 0.07;
+    g.moveTo(xa, cy - D); g.lineTo(xa + D * 0.07, cy - D); g.lineTo(xa + D * 0.07 - D * 0.25, cy + D); g.lineTo(xa - D * 0.25, cy + D); g.closePath(); g.fill();
+  }
+  // a trefoil on the first stage, red on white, and a stencilled serial block
+  const tx = X(0.3), r0 = D * 0.3;
+  g.fillStyle = '#b3191e';
+  for (let k = 0; k < 3; k++) { const a = -Math.PI / 2 + k * Math.PI * 2 / 3; g.beginPath(); g.moveTo(tx, cy); g.arc(tx, cy, r0, a - Math.PI / 6, a + Math.PI / 6); g.closePath(); g.fill(); }
+  g.beginPath(); g.arc(tx, cy, r0 * 0.24, 0, Math.PI * 2); g.fillStyle = '#e9e7df'; g.fill();
+  g.beginPath(); g.arc(tx, cy, r0 * 0.15, 0, Math.PI * 2); g.fillStyle = '#b3191e'; g.fill();
+  g.fillStyle = 'rgba(30,30,34,0.75)';
+  for (let k = 0; k < 6; k++) g.fillRect(X(0.18) + k * D * 0.13, cy - D * 0.06, D * 0.09, D * 0.12);
+  g.fillRect(X(0.585), cy - D * 0.05, D * 0.5, D * 0.1);
+  // panel seams and rivet lines
+  g.strokeStyle = 'rgba(60,58,54,0.35)'; g.lineWidth = 1.3;
+  for (const f of [0.1, 0.22, 0.34, 0.6, 0.66, 0.775, 0.895]) { g.beginPath(); g.moveTo(X(f), 0); g.lineTo(X(f), N); g.stroke(); }
+  g.beginPath(); g.moveTo(X(0.045), cy - D * 0.2); g.lineTo(X(0.85), cy - D * 0.2); g.stroke();
+  g.fillStyle = 'rgba(70,68,62,0.45)';
+  for (const f of [0.045, 0.475, 0.51, 0.70, 0.735]) for (let k = -3; k <= 3; k++) { g.beginPath(); g.arc(X(f) + (f === 0.045 || f === 0.51 || f === 0.735 ? 3 : -3), cy + k * D * 0.12, 1.3, 0, Math.PI * 2); g.fill(); }
+  // shading round the body: lit from above, falling off to a dark underside, with a soft sheen and a rim of reflected light
+  g.globalCompositeOperation = 'multiply';
+  let gr = g.createLinearGradient(0, cy - D * 0.5, 0, cy + D * 0.5);
+  gr.addColorStop(0, '#8a8884'); gr.addColorStop(0.18, '#ffffff'); gr.addColorStop(0.4, '#e4e2dd'); gr.addColorStop(0.72, '#9a9894'); gr.addColorStop(0.92, '#4e4d4b'); gr.addColorStop(1, '#666563');
+  g.fillStyle = gr; g.fillRect(0, 0, N, N);
+  g.globalCompositeOperation = 'screen';
+  gr = g.createLinearGradient(0, cy - D * 0.5, 0, cy + D * 0.5);
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.2, 'rgba(255,255,255,0.32)'); gr.addColorStop(0.3, 'rgba(255,255,255,0)'); gr.addColorStop(0.9, 'rgba(150,170,200,0)'); gr.addColorStop(1, 'rgba(150,170,200,0.25)');
+  g.fillStyle = gr; g.fillRect(0, 0, N, N);
+  // grime toward the base (exhaust soot) and the nose's ablative sheen
+  g.globalCompositeOperation = 'source-over';
+  gr = g.createLinearGradient(X(0.03), 0, X(0.2), 0);
+  gr.addColorStop(0, 'rgba(40,34,30,0.45)'); gr.addColorStop(1, 'rgba(40,34,30,0)');
+  g.fillStyle = gr; g.fillRect(X(0.03), 0, X(0.2) - X(0.03), N);
+  g.restore();
+  // the third fin, face-on, in front of the body
+  g.beginPath();
+  g.moveTo(X(0.035), cy - D * 0.07); g.lineTo(X(0.075), cy - D * 0.07); g.lineTo(X(0.135), cy - D * 0.02); g.lineTo(X(0.135), cy + D * 0.02);
+  g.lineTo(X(0.075), cy + D * 0.07); g.lineTo(X(0.035), cy + D * 0.07); g.closePath();
+  g.fillStyle = '#4a4d52'; g.fill(); g.strokeStyle = 'rgba(15,15,18,0.7)'; g.lineWidth = 1.2; g.stroke();
+  // a fine dark outline, so it reads on pale ground and snow
+  g.save(); body(g); g.strokeStyle = 'rgba(25,25,30,0.55)'; g.lineWidth = 1.6; g.stroke(); g.restore();
+  return (R.icbm = { img: c, scale: 1, key: 'icbm' });
+}
+
 /**
- * A nuclear missile in flight: a high, slow arc, and for everyone a pulsing red ring over the whole
- * blast area with the seconds to impact.
+ * Draw the missile with its nozzle at (x, y) px, pointing along angle `ang`, `len` px long (lit from the upper left
+ * whichever way it points). With `glow` (0..1), its nose glows with re-entry heat.
+ */
+function drawIcbm(ctx, x, y, ang, len, glow) {
+  const art = icbmArt(), size = len / 0.94, cxp = x + Math.cos(ang) * len / 2, cyp = y + Math.sin(ang) * len / 2;
+  const flip = Math.cos(ang) < -0.05 || (Math.abs(Math.cos(ang)) <= 0.05 && Math.sin(ang) > 0); // (keep its lit side up and to the left)
+  ctx.save(); ctx.translate(cxp, cyp); ctx.rotate(ang); if (flip) ctx.scale(1, -1);
+  drawArt(ctx, art, 0, 0, size);
+  // at night it's floodlit (by its Silo, then by its own fire): some of its day colours back over the dark
+  const lit = 0.45 * fxNight();
+  if (lit > 0.01) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * lit; drawArtRaw(ctx, art, 0, 0, size); ctx.globalAlpha = ga; }
+  ctx.restore();
+  if (glow > 0.01) {
+    const nx = x + Math.cos(ang) * len * 0.97, ny = y + Math.sin(ang) * len * 0.97;
+    fxGlow(ctx, nx, ny, len * 0.22, '#ff9a3c', glow);
+    fxGlow(ctx, nx, ny, len * 0.08, '#fff2d0', glow);
+  }
+}
+
+/** Its exhaust: a white-hot core in a long orange flame from the nozzle at (x, y) px, streaming along angle `ang`. */
+function drawIcbmFlame(ctx, x, y, ang, len, w, k) {
+  if (k <= 0.01) return;
+  const fl = 0.85 + 0.15 * Math.sin(R.time * 53) * Math.sin(R.time * 31 + 1);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalCompositeOperation = 'lighter';
+  for (const [L, W, c0, c1] of [[len * fl, w * 1.5, 'rgba(255,120,40,0.55)', 'rgba(255,80,20,0)'], [len * 0.62 * fl, w * 0.95, 'rgba(255,200,110,0.85)', 'rgba(255,150,60,0)'], [len * 0.3 * fl, w * 0.55, 'rgba(255,255,240,1)', 'rgba(255,230,180,0)']]) {
+    const gr = ctx.createLinearGradient(0, 0, L, 0);
+    gr.addColorStop(0, c0); gr.addColorStop(1, c1);
+    ctx.globalAlpha = k; ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.moveTo(0, -W * 0.42); ctx.quadraticCurveTo(L * 0.35, -W * 0.55, L, 0); ctx.quadraticCurveTo(L * 0.35, W * 0.55, 0, W * 0.42); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  fxGlow(ctx, x, y, w * 3.2, '#ffb45a', 0.9 * k);
+}
+
+/** How high (tiles) the missile has climbed `t` seconds after liftoff: off quickly, faster and faster. */
+function icbmClimb(t) { return t <= 0 ? 0 : 0.8 * t + 5 * t * t; }
+/** The inverse: how long after liftoff it was `h` tiles up. */
+function icbmClimbT(h) { return (-0.8 + Math.sqrt(0.64 + 20 * h)) / 10; }
+
+/** The strike's moments for missile m: seconds since liftoff (negative while it waits), and the fall's progress (0..1, -1 before). */
+function nukePhase(m) {
+  const lead = Math.min(NUKE_LAUNCH, m.dur * 0.5), left = m.dur - m.t;
+  return { lift: (m.t - (m.dur - lead)), left, fall: left <= NUKE_FALL ? 1 - left / NUKE_FALL : -1 };
+}
+
+/** The nuclear missile in Silo b now (or null): its strike, while the missile hasn't left. */
+function siloNuke(b) {
+  for (const m of S.missiles) if (m.nuke && m.from === b.id && nukePhase(m).lift < 0) return m;
+  return null;
+}
+
+/**
+ * The missile standing in Nuclear Silo b's shaft (at cx, cy, tile size s): raised `up` (0: sunk, its nose below the
+ * rim; 1: ready, its nose out of the hatch), cut off at the mouth. During a strike, `m`: the warning lights flash and
+ * steam vents from the pad (drawNukeSiloAlarm), and it shakes as its engine lights.
+ */
+function drawSiloIcbm(ctx, b, cx, cy, s, up, m) {
+  const H = NSILO_HOLE, hx = cx + H.x * s, hy = cy + H.y * s, rx = H.rx * s, ry = H.ry * s, len = ICBM.len * s;
+  const ph = m ? nukePhase(m) : null, ign = ph ? clamp((ph.lift + 1.6) / 1.6, 0, 1) : 0;
+  const shake = ign > 0 ? Math.sin(R.time * 70) * s * 0.008 * ign : 0;
+  const out = len * ICBM_OUT * (0.15 + 0.85 * up);     // how much shows above the mouth
+  const base = hy + (len - out);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(hx - s * 2, hy - len * 2, s * 4, len * 2); ctx.ellipse(hx, hy, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2); ctx.clip();
+  drawIcbm(ctx, hx + shake, base, -Math.PI / 2, len, 0);
+  // down the shaft it falls into shadow (lit from below as its engine lights)
+  const w = ICBM.dia * s * 0.62, gr = ctx.createLinearGradient(0, hy - ry * 0.5, 0, hy + ry);
+  gr.addColorStop(0, 'rgba(6,7,9,0)'); gr.addColorStop(1, 'rgba(6,7,9,0.9)');
+  ctx.fillStyle = gr; ctx.fillRect(hx - w, hy - ry * 0.5, w * 2, ry * 1.6);
+  ctx.restore();
+  if (ign > 0) {
+    // its engine lighting at the bottom of the shaft: the mouth glows, then smoke and flame boil out
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const gl = ctx.createRadialGradient(hx, hy, 0, hx, hy, rx * 1.4);
+    gl.addColorStop(0, `rgba(255,210,140,${0.75 * ign})`); gl.addColorStop(0.6, `rgba(255,120,40,${0.35 * ign})`); gl.addColorStop(1, 'rgba(255,90,30,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(hx, hy, rx * 1.4, ry * 1.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    fxGround(ctx, hx, hy, s * 2.4, '#ffa050', 0.8 * ign);
+  }
+}
+
+/** A strike's alarm at Nuclear Silo b (cx, cy, tile size s): beacons turning, the mouth's rim flashing red, steam venting. */
+function drawNukeSiloAlarm(ctx, b, cx, cy, s, m) {
+  const H = NSILO_HOLE, hx = cx + H.x * s, hy = cy + H.y * s, rx = H.rx * s, ry = H.ry * s, ph = nukePhase(m);
+  const near = clamp(1 - (-ph.lift) / 8, 0, 1);       // the last seconds before liftoff: more steam, faster flashing
+  const flash = 0.5 + 0.5 * Math.sin(R.time * (7 + 5 * near)), on = flash > 0.35 ? 1 : 0.25, night = fxNight();
+  // steam venting from the pad's vents (the shaft's cooling), and out of the mouth as the engine lights
+  if (R.clean < 2) {
+    const puff = steamPuff(), vents = [[-0.33, -0.02], [0.25, -0.05], [-0.18, 0.13], [0.12, 0.15]];
+    vents.forEach(([vx, vy], k) => {
+      for (let n = 0; n < 4; n++) {
+        const q = (R.time * (0.55 + 0.35 * near) + n / 4 + k * 0.29) % 1, r = s * (0.1 + q * (0.28 + 0.2 * near));
+        const x = hx + vx * s + (vx > 0 ? 1 : -1) * q * s * 0.22 + Math.sin(q * 6 + k) * s * 0.03, y = hy + vy * s - q * s * (0.55 + 0.4 * near);
+        ctx.globalAlpha = (0.6 + 0.3 * near) * (1 - q) * Math.min(1, q * 6) * (1 - 0.35 * night);
+        ctx.drawImage(puff, x - r, y - r, r * 2, r * 2);
+      }
+    });
+    if (ph.lift > -1.6) for (let n = 0; n < 6; n++) {
+      const q = (R.time * 1.4 + n / 6) % 1, r = s * (0.15 + q * 0.5), a = n * 2.1;
+      ctx.globalAlpha = 0.7 * (1 - q) * clamp((ph.lift + 1.6) / 1.2, 0, 1);
+      ctx.drawImage(puff, hx + Math.cos(a) * q * s * 0.6 - r, hy + Math.sin(a) * q * s * 0.25 - q * s * 0.3 - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  // the mouth's rim flashing red
+  ctx.strokeStyle = `rgba(255,40,30,${0.85 * on})`; ctx.lineWidth = Math.max(1.5, s * 0.035);
+  ctx.beginPath(); ctx.ellipse(hx, hy, rx * 1.18, ry * 1.18, 0, 0, Math.PI * 2); ctx.stroke();
+  // four beacons round the pad, turning (a sweep of red light each), and red light washing the ground
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + k * Math.PI / 2, bx = hx + Math.cos(a) * rx * 2.1, by = hy + Math.sin(a) * ry * 2.1, sw = R.time * 6 + k * 1.7;
+    const facing = 0.5 + 0.5 * Math.cos(sw), rr = s * (0.12 + 0.1 * facing);
+    ctx.globalAlpha = 0.5 + 0.5 * facing; ctx.drawImage(glowDisc('#ff3a2a'), bx - rr, by - rr, rr * 2, rr * 2);
+    ctx.globalAlpha = 0.9; ctx.drawImage(glowDisc('#ffd0c0'), bx - rr * 0.25, by - rr * 0.25, rr * 0.5, rr * 0.5);
+    const bl = s * 0.9, bw = 0.35;
+    const gr = ctx.createRadialGradient(bx, by, 0, bx, by, bl);
+    gr.addColorStop(0, `rgba(255,50,30,${0.35 * facing})`); gr.addColorStop(1, 'rgba(255,50,30,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(bx, by); ctx.arc(bx, by, bl, sw - bw, sw + bw); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  fxGround(ctx, hx, hy, s * 1.6, '#ff3a2a', 0.5 * on);
+}
+
+/**
+ * A nuclear missile's strike (see ICBM): for everyone a pulsing red ring over the whole blast area with the seconds to
+ * impact; the missile waiting in its Silo (drawn with the Silo: drawSiloIcbm), climbing away, then falling.
  */
 function drawNukeFlight(ctx, m, ox, oy, z) {
-  const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.1) / m.dur), H = 7;
-  const at = (q) => ({ x: lerp(m.x0, m.x1, q), y: lerp(m.y0, m.y1, q) - Math.sin(q * Math.PI) * H });
-  const p = at(k), p2 = at(k2);
   const tx = ox + m.x1 * z, ty = oy + m.y1 * z, rr = NUKE.radius * z, pulse = 0.5 + 0.5 * Math.sin(R.time * 8);
   ctx.fillStyle = `rgba(255,40,40,${0.08 + 0.1 * pulse})`;
   ctx.strokeStyle = `rgba(255,70,70,${0.6 + 0.4 * pulse})`;
@@ -9329,18 +9585,98 @@ function drawNukeFlight(ctx, m, ox, oy, z) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText('☢ ' + secs, tx, ty);
   ctx.fillStyle = '#ffd23d'; ctx.fillText('☢ ' + secs, tx, ty);
-  // Shadow on the ground, then the missile up in the air.
-  const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.4, z * 0.14, 0, 0, Math.PI * 2); ctx.fill();
-  const ang = Math.atan2(p2.y - p.y, p2.x - p.x), sx = ox + p.x * z, sy = oy + p.y * z;
-  const art = ART['nuclear-missile'];
-  if (art) { drawArt(ctx, art, sx, sy, z * 1.6, ang); return; }
-  ctx.save(); ctx.translate(sx, sy); ctx.rotate(ang);
-  ctx.fillStyle = '#ff9a3c'; ctx.beginPath(); ctx.ellipse(-z * 0.6, 0, z * 0.3, z * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#16171b'; ctx.fillRect(-z * 0.45, -z * 0.09, z * 0.8, z * 0.18);
-  ctx.fillStyle = '#ffd23d'; ctx.fillRect(z * 0.05, -z * 0.09, z * 0.12, z * 0.18);
+  const ph = nukePhase(m);
+  nukeSounds(m, ph);
+  if (ph.lift >= 0) drawNukeClimb(ctx, m, ph.lift, 0, ox, oy, z);
+  if (ph.fall >= 0) drawNukeFall(ctx, m, ph.fall, ox, oy, z);
+}
+
+/** The launch roar as it lifts off (heard far off, as a blast), once, if this screen saw it waiting. */
+function nukeSounds(m, ph) {
+  if (typeof sfx !== 'function') return;
+  const seen = R.nukeSeen || (R.nukeSeen = new WeakMap()), was = seen.get(m);
+  seen.set(m, ph.lift);
+  if (was !== undefined && was < 0 && ph.lift >= 0 && ph.lift < 1) sfx('nukelaunch', m.x0, m.y0);
+}
+
+/**
+ * The climb, `t` seconds after liftoff (`late` seconds after impact, when only its smoke is left): the missile on its
+ * plume going straight up off the screen, the smoke column it leaves and the cloud boiling out round the Silo.
+ */
+function drawNukeClimb(ctx, m, t, late, ox, oy, z) {
+  const H = NSILO_HOLE, hx = ox + (m.x0 + H.x) * z, hy = oy + (m.y0 + H.y) * z, len = ICBM.len * z;
+  const night = fxNight(), age0 = t + late, puff = steamPuff(), puffD = fxPuff(false);
+  const fade = late > 0 ? clamp(1 - late / 9, 0, 1) : 1;
+  if (fade <= 0) return;
+  // the cloud boiling out round the Silo at liftoff, spreading and settling
+  if (R.clean < 2) for (let n = 0; n < 12; n++) {
+    const a = n / 12 * Math.PI * 2 + hash2(n, 3, 71), sp = clamp(age0 / 2.5, 0, 1), d = z * (0.3 + 1.7 * Math.sqrt(sp)) * (0.7 + 0.5 * hash2(n, 5, 13));
+    const r = z * (0.45 + 0.8 * sp), x = hx + Math.cos(a) * d + age0 * z * 0.06, y = hy + Math.sin(a) * d * 0.45 - z * 0.2;
+    ctx.globalAlpha = 0.55 * fade * clamp(1 - (age0 - 2) / 12, 0, 1) * (1 - 0.3 * night);
+    ctx.drawImage(n % 3 ? puff : puffD, x - r, y - r, r * 2, r * 2);
+  }
+  // the smoke column: puffs left at every third of a tile of the climb, swelling and drifting downwind as they age
+  const top = Math.min(80, (hy + len * 2) / z + 4), step = 0.32 / Math.max(0.5, gfx().fx);
+  const hNow = icbmClimb(t);
+  if (R.clean < 2) for (let h = 0; h < Math.min(hNow, top); h += step) {
+    const te = icbmClimbT(h), age = t - te + late;
+    if (age < 0) continue;
+    const w = clamp(age / 14, 0, 1), r = z * (0.16 + 0.55 * Math.sqrt(age * 0.7)) * (1 + h * 0.012);
+    const x = hx + age * z * (0.1 + 0.02 * h) + Math.sin(h * 0.9 + age * 0.6) * z * 0.12 * Math.min(1, age), y = hy - len * 0.05 - h * z - age * z * 0.05;
+    ctx.globalAlpha = 0.5 * (1 - w) * fade * Math.min(1, age * 4 + 0.4) * (1 - 0.35 * night);
+    ctx.drawImage(h < 1.2 || (h * 7 | 0) % 3 === 0 ? puffD : puff, x - r, y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+  if (late > 0) return;
+  // the missile on its plume (cut off at the Silo's mouth while it clears it)
+  const y0 = hy + len * (1 - ICBM_OUT) - hNow * z, power = clamp(t / 0.25, 0.4, 1);
+  if (y0 + len * 2.5 < 0) return; // (off the top of the screen)
+  const flen = len * (0.55 + 0.9 * clamp(t / 1.2, 0, 1)), fw = ICBM.dia * z * 1.3;
+  // (while its nozzle is still down the shaft, it and its flame are cut off at the mouth: the flame bursts out of it)
+  const inShaft = y0 + flen * 0.3 > hy;
+  if (inShaft) { ctx.save(); ctx.beginPath(); ctx.rect(hx - z * 3, hy - len * 4, z * 6, len * 4); ctx.ellipse(hx, hy, H.rx * z * 0.98, H.ry * z * 0.98, 0, 0, Math.PI * 2); ctx.clip(); }
+  drawIcbmFlame(ctx, hx, y0, Math.PI / 2, flen, fw, power);
+  drawIcbm(ctx, hx, y0, -Math.PI / 2, len, 0);
+  if (inShaft) ctx.restore();
+  if (y0 > hy - len * 0.2) fxGlow(ctx, hx, hy, z * 0.9, '#ffd08a', 0.9); // (fire in the mouth)
+  // its light on the ground round the Silo, fading as it climbs away
+  fxGround(ctx, hx, hy, z * 4, '#ffb45a', 1.2 / (1 + hNow * 0.25));
+}
+
+/** The fall, f (0..1) of the way down: out of the sky, steeply, from the Silo's side, glowing with re-entry heat. */
+function drawNukeFall(ctx, m, f, ox, oy, z) {
+  const tx = ox + m.x1 * z, ty = oy + m.y1 * z, len = ICBM.len * z;
+  const dx = m.x1 - m.x0, dy = m.y1 - m.y0, dl = Math.hypot(dx, dy) || 1, ux = dx / dl;
+  const h0 = Math.max(14, ty / z + ICBM.len * 2 + 3), h = h0 * (1 - f); // (starts above the top of the screen)
+  const slope = 0.28, ang = Math.atan2(1, ux * slope);                     // nose down, leaning in from the Silo's side
+  const nx = tx - ux * slope * h * z, ny = ty - h * z;                     // where its nose is
+  const bx = nx - Math.cos(ang) * len, by = ny - Math.sin(ang) * len;      // and its nozzle
+  // its shadow on the ground, closing in
+  ctx.fillStyle = `rgba(0,0,0,${0.12 + 0.3 * f})`;
+  ctx.beginPath(); ctx.ellipse(tx - ux * slope * h * z * 0.5, ty, z * (0.2 + 0.5 * f), z * (0.08 + 0.2 * f), 0, 0, Math.PI * 2); ctx.fill();
+  // the re-entry streak behind it, white-hot to orange to nothing
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  const sl = z * 7, ex = bx - Math.cos(ang) * sl, ey = by - Math.sin(ang) * sl;
+  let gr = ctx.createLinearGradient(ex, ey, nx, ny);
+  gr.addColorStop(0, 'rgba(255,120,40,0)'); gr.addColorStop(0.6, 'rgba(255,150,70,0.45)'); gr.addColorStop(1, 'rgba(255,240,210,0.9)');
+  ctx.strokeStyle = gr; ctx.lineWidth = ICBM.dia * z * 2.2;
+  ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(nx, ny); ctx.stroke();
+  ctx.lineWidth = ICBM.dia * z * 0.8; ctx.strokeStyle = gr; ctx.stroke();
   ctx.restore();
+  drawIcbm(ctx, bx, by, ang, len, 0.9);
+  // a plasma sheath round its nose
+  fxGlow(ctx, nx, ny, z * (0.6 + 0.3 * Math.sin(R.time * 40)), '#ffcf8a', 0.9);
+  fxGround(ctx, tx, ty, z * (2 + 4 * f), '#ffb45a', 0.4 + 0.6 * f);
+}
+
+/** A strike's smoke column lingering after the blast (drawn with the missiles: drawMissiles keeps them a while). */
+function drawNukeAfter(ctx, ox, oy, z) {
+  if (R.nukeAfterS !== S) { R.nukeAfterS = S; R.nukeLive = new Set(); R.nukeGone = []; }
+  const live = new Set(S.missiles.filter((m) => m.nuke));
+  for (const m of R.nukeLive) if (!live.has(m)) R.nukeGone.push({ m, end: S.time });
+  R.nukeLive = live;
+  R.nukeGone = R.nukeGone.filter((g) => S.time - g.end < 9 && S.time >= g.end);
+  for (const g of R.nukeGone) drawNukeClimb(ctx, g.m, nukePhase({ t: g.m.dur, dur: g.m.dur }).lift, S.time - g.end, ox, oy, z);
 }
 
 /** Ground scorched by a nuclear blast: the crater art (or a dark burn) fading as the ground recovers. */
@@ -10177,7 +10513,12 @@ function renderMinimap() {
     ctx.fillRect(r.x * sx + 1, r.y * sy - 5, 3, 2.5);
   }
   for (const m of S.missiles) {
-    const k = Math.min(1, m.t / m.dur);
+    let k = Math.min(1, m.t / m.dur);
+    if (m.nuke) { // (a nuclear missile: blinking red at its Silo until liftoff, then on its way)
+      const ph = nukePhase(m), lead = ph.left + ph.lift;
+      if (ph.lift < 0) { if (Math.sin(R.time * 10) > -0.3) { ctx.fillStyle = '#ff3a2a'; ctx.fillRect(m.x0 * sx - 2, m.y0 * sy - 2, 4, 4); } continue; }
+      k = clamp(ph.lift / Math.max(0.1, lead), 0, 1);
+    }
     ctx.fillStyle = '#ffcf4a';
     ctx.fillRect(lerp(m.x0, m.x1, k) * sx - 1.5, lerp(m.y0, m.y1, k) * sy - 1.5, 3, 3);
   }
@@ -12183,7 +12524,7 @@ function drawDeep(ctx, cx, cy, s, owner, b) {
     DEEP_WHEEL.set(b.id, f);
   }
   const w = ART['deepcore-work-' + f];
-  if (w) drawArt(ctx, w, cx, cy, s);
+  if (w) drawMegaArt(ctx, w, cx, cy, s, b); // (knocked out or offline: its wheels unlit too, as the rest of it)
   if (live) deepLights(ctx, b, cx, cy, s);
 }
 /** How strongly the Deep Core's shaft glows at stage st now (0 at bedrock): faint by day, full at night. */
@@ -13488,9 +13829,10 @@ function drawSunder(ctx, cx, cy, s, owner, b) {
     g.addColorStop(0, `rgba(255,${200 + 55 * A.flash | 0},${120 + 120 * A.flash | 0},${0.85 * glow})`); g.addColorStop(0.5, `rgba(255,120,40,${0.45 * glow})`); g.addColorStop(1, 'rgba(255,90,30,0)');
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(bo.x, bo.y, s * (0.5 + A.flash * 0.6), s * (0.3 + A.flash * 0.4), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
   }
-  const ram = (k, h) => { const im = ART[`sunder-ram-${k}-${Math.max(0, Math.min(2, Math.round(h)))}`]; if (im) drawArt(ctx, im, cx, cy, s); };
+  // (the rams and plates, as the rest of it, unlit while it's knocked out or offline: drawMegaArt)
+  const ram = (k, h) => { const im = ART[`sunder-ram-${k}-${Math.max(0, Math.min(2, Math.round(h)))}`]; if (im) drawMegaArt(ctx, im, cx, cy, s, b); };
   ram('w', A.w); ram('e', A.e);
-  for (let i = 0; i < 6; i++) { const im = ART[`sunder-plate-${i}-${A.plates[i]}`]; if (im) drawArt(ctx, im, cx, cy, s); }
+  for (let i = 0; i < 6; i++) { const im = ART[`sunder-plate-${i}-${A.plates[i]}`]; if (im) drawMegaArt(ctx, im, cx, cy, s, b); }
   // dust lifting off the plates as each comes down
   if (R.clean < 2) for (let i = 0; i < 6; i++) {
     const d = A.dust[i];

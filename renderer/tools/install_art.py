@@ -83,7 +83,8 @@ save(Image.open(f'{OH}/exit-open.png'), 'buildings/tunnel-exit.webp', 82)
 for t in ('morning', 'evening', 'night'):
     save(Image.open(f'{OH}/exit-open-{t}.png'), f'tod/{t}/buildings/tunnel-exit.webp', 82)
 save(Image.open(f'{OH}/exit-collapsed.png'), 'buildings/tunnel-exit-collapsed.webp', 82)
-# ---- Fiber (Reedcane) and Oil (the survey stake and its seep), every map: small
+# ---- Fiber (Reedcane) and Oil (the survey stake and its seep), every map: small. (Both retired since: Fiber's Stalks
+# are Lantern Cane drawn in code, js/reedcane.js, and an oil seep a puddle made in code, js/seep.js.)
 save(Image.open(f'{OR}/fiber-1.png'), 'resources/stalk.webp', 80, (192, 192))
 for n, g in ((1, '0.25'), (2, '0.5'), (3, '0.75')):
     save(Image.open(f'{OR}/fiber-1-g{g}.png'), f'resources/stalk-{n}.webp', 80, (192, 192))
