@@ -304,3 +304,4 @@ This log covers the chat that started November 18, 2026, with a GitHub access ch
 - Verified with the megastructure, transit, Workforce, Workforce lockstep, help, mission data and lint checks, and built the single-file game.
 - Ran six default-setting four-colony seeds each on Standard and Crossroads. All twelve finished by 75 minutes, and seven took longer than 45 minutes. The longest was Standard seed 25 at 64.56 minutes. [Seed-by-seed finish times](four-colony-ai-audit.md)
 - Explored four nuclear missile silhouettes, refined the rounded-nose design with more realistic materials, and previewed it at normal and closer zoom in the game's flight renderer. The art is still at the preview stage.
+- Audited Warbot orders and reproduced stale Hunt flags, success reports for unreachable orders, and missed opportunities to move into Bulwark cover. Verified shared path searches and direct open-ground movement. [Warbot order and pathing audit](army-order-pathing-audit.md)
