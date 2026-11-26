@@ -12598,7 +12598,7 @@ function eventNow(type) {
 /** Bot speed in a dust storm. */
 function evSpeed(x, y, p) { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 && !(x !== undefined && (caveAt(x, y) || (p === undefined ? atmosAt(x, y) >= 1 : atmosOwnAt(x, y, p)))) ? DUST_SPEED : 1; } // (an Atmosphere Engine's calm: no storm inside, for its owner and allies)
 /** Battery drain in a solar flare. */
-function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
+function evDrain(x, y) { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 && !(x !== undefined && caveAt(x, y)) ? FLARE_DRAIN : 1; } // (the caves' roof keeps a flare out)
 
 /** Start, run and end planetary events (see EVENTS). */
 function updateEvents() {
@@ -13007,7 +13007,7 @@ function acceptTrade(p) {
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
 function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
-function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
+function drainMul(u) { return evDrain(u.x, u.y) * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
 function carryOf(u, g) { return isLiquid(g) && !BOTS[u.type].tanker && !BOTS[u.type].tankShip ? 1 : botCarry(u); }
@@ -18294,6 +18294,7 @@ function airNeeds(c) {
 function airSuppliable(b) {
   const def = b && BDEFS[b.type];
   if (!def || b.dead || def.airfield || def.wild || b.type === 'lander') return false;
+  if (caveTile(tIdx(b.x, b.y))) return false; // (Half underground: no plane flies into the caves)
   if (!b.built) return !storeFunded(b);
   return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
 }

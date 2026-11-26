@@ -94,6 +94,8 @@ const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL
  * fresh fields in their own land and more out on open ground, and the game ran past an hour.)
  */
 const AI_ORE_FIELD = 3, AI_ORE_REACH = 30, AI_ORE_AT = 900;
+const AI_CAVE_OUT_ORE = 16; // Half underground: Ore or Crystal tiles a colony on the surface holds before it stops counting them short (see aiThink)
+const AI_CAVE_REACH = 110; // Half underground: how far off (tiles) a deposit it lacks still pulls a colony's Outposts toward it (see aiSearchSpot)
 const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300, AI_TRADE_AT = 480;
 /**
  * Fuel with no source: low (P.fuelLow) for AI_FUEL_DRY s with no Bio Farm that has soil and no Refinery with oil
@@ -524,7 +526,9 @@ function aiThink(p) {
     !me.some((b) => b.type === 'mine' && aiGathers(b, AI_ORE_FIELD));
   const noMine = !!(P.noSpot && P.noSpot.mine && P.noSpot.mine.ver === S.territoryVer && S.time < P.noSpot.mine.until);
   // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
-  P.short = [gatherRes('harvester'), R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4) || (r === R_CRYSTAL && crShort && crNear) || (r === R_ORE && oreLow && noMine));
+  // (Half underground: a colony starting on the surface counts its Ore and Crystal short unless it holds a good deal of them, a starter field is not enough: the caves hold the rest, and it goes in early.)
+  const caveOut = !!S.caves && !aiNoCrops(p);
+  P.short = [gatherRes('harvester'), R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : caveOut && (r === R_ORE || r === R_CRYSTAL) ? AI_CAVE_OUT_ORE : 4) || (r === R_CRYSTAL && crShort && crNear) || (r === R_ORE && oreLow && noMine));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
   const quarrying = me.some((b) => b.type === 'quarry'); // a Quarry always has Stone to cut or dig (see BDEFS.quarry.bedrock)
   // While boulders run low, keep enough Cement for the Outpost that reaches new ones.
@@ -4603,6 +4607,13 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
   // ...and the Ore no-one holds, out of enemy guns' reach, while its Ore runs dry with none on its land to mine (AI_ORE_REACH).
   const freeOre = type === 'outpost' && P.oreLow && (P.short || []).includes(R_ORE) ? [] : null;
   if (freeOre) for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_ORE && S.amt[t] && S.owner[t] < 0 && !hotFor(p, t)) freeOre.push(t);
+  // Half underground: what a colony has none of lies through the mouths in the wall (Fiber for one that starts inside the caves, Ore and Crystal for one on the surface):
+  // the nearest such deposit no one holds, however far, pulls its Outposts on, a chain of them out through a mouth (see below).
+  let freeFar = null;
+  if (type === 'outpost' && S.caves) {
+    const want = (P.short || []).filter((r) => (aiNoCrops(p) ? r === fib : r === R_ORE || r === R_CRYSTAL)), zone0 = homeZone(p);
+    if (want.length) { freeFar = []; for (let t = 0; t < S.W * S.H; t += 1) if (want.includes(S.res[t]) && S.amt[t] && S.owner[t] < 0 && S.zone[t] === zone0 && (t + (t / S.W | 0)) % 3 === 0) freeFar.push(t); }
+  }
   const enemyL = getE(S.players[rivalOf(p)].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
@@ -4722,6 +4733,11 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
           let dc = Infinity;
           for (const t of freeOre) if (S.zone[t] === S.zone[j * S.W + i]) dc = Math.min(dc, dist2(i, j, t % S.W, (t / S.W) | 0));
           s += Math.max(0, AI_ORE_REACH - Math.sqrt(dc)) * 0.8;
+        }
+        if (freeFar && freeFar.length) {
+          let dc = Infinity;
+          for (const t of freeFar) dc = Math.min(dc, dist2(i, j, t % S.W, (t / S.W) | 0));
+          s += Math.max(0, AI_CAVE_REACH - Math.sqrt(dc)) * 0.7;
         }
       } else if (def.farm) {
         // The best patch none of our farms works: up to what one farm keeps up with (a little more for a spare tile

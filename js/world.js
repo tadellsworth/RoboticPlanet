@@ -3406,7 +3406,7 @@ function newGame(opts) {
   scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
-  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || SH.tip);
+  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || (S.caves && S.caves.seats[ME] ? (S.caves.seats[ME].inside ? SH.tipIn : SH.tipOut) : SH.tip));
   if (tip && L0) postMsg(ME, tip, L0.x, L0.y, 'info');
   return S;
 }

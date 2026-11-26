@@ -1706,6 +1706,18 @@ function drawShapeThumb(cv, P) {
     rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
     for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
     crags = 0;
+  } else if (P.caves) {
+    // Half underground: the caves dark in the top half (Ore and Crystal dots, rock pillars), the surface below (green fields), the wall
+    // between with its middle gate and its two side mouths.
+    ctx.fillStyle = '#1b1822'; ctx.fillRect(x0, y0, mw, mh * 0.5);
+    ctx.fillStyle = THUMB.ground; ctx.fillRect(x0, y0 + mh * 0.5, mw, mh * 0.5);
+    for (const [uu, vv, rr] of [[0.3, 0.7, 0.09], [0.7, 0.78, 0.09], [0.5, 0.62, 0.06]]) blob(uu, vv, rr, rr * 0.7, THUMB.green, null, false);
+    ctx.fillStyle = '#4a4458'; for (const [uu, vv] of [[0.3, 0.2], [0.7, 0.3], [0.5, 0.35], [0.2, 0.36], [0.8, 0.12]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), U * 0.05, 0, 7); ctx.fill(); }
+    ctx.fillStyle = THUMB.res[1]; for (const [uu, vv] of [[0.34, 0.1], [0.66, 0.4], [0.15, 0.24], [0.85, 0.2]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    ctx.fillStyle = THUMB.res[2]; for (const [uu, vv] of [[0.66, 0.1], [0.34, 0.4], [0.45, 0.22], [0.55, 0.16]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    const wy = 0.5, wl = Math.max(2, U * 0.07);
+    line([[0, wy], [0.14, wy]], THUMB.rock, wl); line([[0.26, wy], [0.46, wy]], THUMB.rock, wl); line([[0.54, wy], [0.74, wy]], THUMB.rock, wl); line([[0.86, wy], [1, wy]], THUMB.rock, wl);
+    crags = 0;
   } else if (P.hollow) {
     // The Hollow: solid rock, caverns joined by passages, a chasm with its floating Crystal on each side, the Deep's
     // mound in the middle and the breaches' daylight (gold) over the bases and the flank caverns.
@@ -1938,7 +1950,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2110,8 +2122,9 @@ function renderPreview(cv, m, p) {
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
-  const other = p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
-  const boundary = other ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
+  const caveMask = m.cave || null; // (Half underground: the caves are the Hollow's look over their tiles)
+  const other = caveMask ? biomeLook('hollow')?.mm : p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
+  const boundary = other && !caveMask ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
@@ -2131,7 +2144,7 @@ function renderPreview(cv, m, p) {
     else { c = F && F[t] ? C.fertile : C.ground; f = n * (0.8 + 0.09 * E[t]); }
     if (other) {
       const key = terr === T_GROUND && c === C.ground ? 'ground' : terr === T_WATER ? 'water' : terr === T_ROCK ? 'rock' : null;
-      if (key && other[key]) c = mixBiomeRGB(c, other[key], biomeMixAt(i, j, W, H, p.seed, boundary));
+      if (key && other[key]) c = mixBiomeRGB(c, other[key], caveMask ? (caveMask[t] ? 1 : 0) : biomeMixAt(i, j, W, H, p.seed, boundary));
     }
     const r = terr === T_GROUND && Rs[t] ? resCol(Rs[t]) : null;
     // Cliff edges: a dark lip where the ground drops to the tile below or beside, a light one where it rises.
