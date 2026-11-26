@@ -38,9 +38,12 @@ how goods move.
   A countdown between waves (`hordeGap`: `levels[k].gap` [first, less each wave, least]) on the top bar ("Wave 7 in 1:40 ·
   23 up") and the Goal card (what's coming, new kinds marked). Waves are **cumulative** (`hordeWave`): each kind joins at
   its wave (`kinds`: Scuttlers 1, Brutes 4, Leeches and Spitters 7, Sappers 10) and stays, growing (`base + per × (n −
-  from)`, times the level's `mult` and `1 + ramp × (n − 1)`, capped per kind); every 5th is a boss wave (× 1.25, led by a
+  from)`, times the level's `mult` and `1 + ramp × (n − 1)`, capped per kind by `cap`, except on Warlord, `uncapped`: its
+  waves grow without end, about 330 by wave 20, 650 by 30, 1,100 by 40); every 5th is a boss wave (× 1.25, led by a
   Harrow whose health grows with the wave, `hordeHarrowHp`; two from wave 15 on Commander and Warlord). The queue
   (`S.horde.q`) comes out of the mouths a few at a time (`hordeSpawn`, every `pace` s), at most `room` (110) up at once,
+  at most `queueMost` (400; a level's `queue`, Warlord's 1,500: `hordeQueueMost`) waiting, and any more held over in
+  `S.horde.over` (counts by kind, `hordeHeld`) to join the next wave's queue, never dropped;
   down three lanes of waypoints (`hordeLanes`, `hordeMarch`); from wave 8 side tunnels open on the flanks partway down
   (`hordeSide`, `side.share` of each wave). The waves route through Walls, Gates, Outposts and Keeps (`routeOpts` breach)
   and bite through them (`hordeBreach`); Spitters go for guns (`murmurSpitStep` with `t.p`), Sappers dig under the first

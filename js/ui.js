@@ -419,7 +419,7 @@ const HORDE_DIFF_INFO = {
   medium: 'Pioneer waves: a little bigger, the gaps a little shorter.',
   normal: 'Colonist waves: a fair fight. About 20 Murmur by wave 5, near 50 by wave 10 and over 100 by wave 20, three minutes apart at first, a minute and a half by the end.',
   hard: 'Commander waves: big, fast-growing and close together, with two Harrows in the boss waves from wave 15.',
-  warlord: 'Warlord waves: relentless and almost unsurvivable. Always Endless: huge waves, under a minute apart from wave 13 on.',
+  warlord: 'Warlord waves: relentless and almost unsurvivable. Always Endless: huge waves that never stop growing, under a minute apart from wave 13 on.',
 };
 /** What each Horde goal means (the Goal row). */
 const HORDE_GOAL_INFO = {
@@ -11102,14 +11102,14 @@ function hordeTopLine() {
     const c = hordeCols().find((q) => S.players[q].down);
     return `${c === ME ? 'You are' : `${playerName(c)} is`} down · wave ${H.n + 1} in ${fmtClock(H.at - S.time)}`;
   }
-  if (!hordeEndless() && H.n >= H.of) return `Wave ${H.n} of ${H.of} · ${up + H.q.length} left`;
+  if (!hordeEndless() && H.n >= H.of) return `Wave ${H.n} of ${H.of} · ${up + H.q.length + hordeHeld()} left`;
   return `Wave ${H.n + 1} in ${fmtClock(H.at - S.time)}${up ? ` · ${up} up` : ''}`;
 }
 
 /** The Goal card in Horde: the next wave and what's in it (what's new), how many cleared, the best kept. */
 function hordeObjective() {
   const H = S.horde, n = H.n + 1, nk = hordeNewKinds(n), best = hordeBests()[H.lv];
-  const head = !hordeEndless() && H.n >= H.of ? `<b>The last wave</b> is out: clear it to win. ${hordeUpCount() + H.q.length} Murmur left.`
+  const head = !hordeEndless() && H.n >= H.of ? `<b>The last wave</b> is out: clear it to win. ${hordeUpCount() + H.q.length + hordeHeld()} Murmur left.`
     : `Hold the line. <b>${n % HORDE.boss.every === 0 ? 'Boss wave' : 'Wave'} ${n}</b> in ${fmtClock(H.at - S.time)}: ${hordeWaveText(n)}${nk.length ? ` <span class="err">New: ${nk.join(', ')}.</span>` : '.'}`;
   return `${head}<br>Cleared ${H.cleared || 0}${hordeEndless() ? '' : ` of ${H.of}`}${hordeEndless() && best ? ` · best wave ${best}` : ''} · ${H.kills || 0} Murmur killed.`;
 }

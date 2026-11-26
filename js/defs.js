@@ -2258,14 +2258,16 @@ const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'na
  *   levels        the difficulty, by the rival levels' keys (Settler to Warlord): `mult` scales every kind's count,
  *                 `ramp` makes it grow faster each wave (times 1 + ramp × (wave − 1)), `gap` the countdown between waves
  *                 [first, less each wave, least] in seconds, `endless`: always Endless (Warlord: relentless, near
- *                 unsurvivable)
+ *                 unsurvivable), `uncapped`: no kind's `cap` (Warlord's waves grow without end: the owner's call, Nov
+ *                 2026), `queue`: its own `queueMost`
  *   kinds         each kind joins from wave `from` with `base` and `per` more each wave after; they stay in every later
  *                 wave and keep growing (the waves are cumulative: the owner's call). `cap` the most of a kind in a wave.
  *   boss          every `every`th wave is a boss wave: every kind `mul` times as many, led by `harrows` Harrows (more
  *                 from `twoFrom` on Commander and Warlord: `twoMult`)
  *   room          the most of the waves' Murmur up at once (the rest wait in the Maw and come as room frees: the scale
  *                 is kept, the spawns staggered); `pace` seconds between two out of the same mouth; `queueMost` the
- *                 most waiting at once
+ *                 most waiting at once (a level's `queue` instead where it has one): any more are held over in the Maw
+ *                 (S.horde.over) and join the next wave, never dropped
  *   mouths        the Maw's tunnel mouths round it, `mouthR` tiles out (armor `mouthArmor`: caved in, it is dug open
  *                 again at the next wave); `mawGuards` more on guard round the Maw than a nest has
  *   side          side tunnels partway down from wave `from` (one more every `every` waves, at most `most` open),
@@ -2293,7 +2295,7 @@ const HORDE = {
     medium:  { mult: 0.8, ramp: 0.01,  gap: [195, 6, 105] },
     normal:  { mult: 1.0, ramp: 0.025, gap: [180, 6, 90] },
     hard:    { mult: 1.3, ramp: 0.04,  gap: [165, 7, 70] },
-    warlord: { mult: 1.7, ramp: 0.07,  gap: [130, 7, 40], endless: true },
+    warlord: { mult: 1.7, ramp: 0.07,  gap: [130, 7, 40], endless: true, uncapped: true, queue: 1500 },
   },
   kinds: {
     scuttler: { from: 1, base: 4, per: 2, cap: 140 },
@@ -2336,11 +2338,14 @@ function hordeWave(n, k, mul = 1) {
   for (const type in HORDE.kinds) {
     const K = HORDE.kinds[type];
     if (n < K.from) continue;
-    out[type] = Math.min(Math.round(K.cap * Math.max(1, mul)), Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * mul * grow * (boss ? HORDE.boss.mul : 1) + 1e-9)));
+    const count = Math.max(1, Math.floor((K.base + K.per * (n - K.from)) * L.mult * mul * grow * (boss ? HORDE.boss.mul : 1) + 1e-9));
+    out[type] = L.uncapped ? count : Math.min(Math.round(K.cap * Math.max(1, mul)), count);
   }
   if (boss) out.harrow = HORDE.boss.harrows + (n >= HORDE.boss.twoFrom && L.mult >= HORDE.boss.twoMult ? 1 : 0);
   return out;
 }
+/** The most of the waves' Murmur waiting in the Maw at once at level k (HORDE.queueMost, or the level's `queue`). */
+function hordeQueueMost(k) { return hordeLevel(k).queue || HORDE.queueMost; }
 /** How many Murmur in wave n at level k, all told. */
 function hordeWaveSize(n, k, mul) { const w = hordeWave(n, k, mul); let s = 0; for (const t in w) s += w[t]; return s; }
 /** The countdown before wave n (seconds) at level k: the first from the landing, then from the wave before. */

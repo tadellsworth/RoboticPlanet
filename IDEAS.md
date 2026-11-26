@@ -2626,6 +2626,12 @@ Murmur's blows). `tools/horde-test.js` plays it headless.
   Base's toughness, the Maw's 600 armor. The computer colony (autoplay) only half defends (guns and an army at home), so
   the headless numbers say little about a human's game.
 - Horde on other maps (the Maw opposite you).
+- ~~How big can waves get?~~ **Decided Nov 26 2026** (the owner: the hardest level endless and almost unsurvivable):
+  Settler to Commander keep the per-kind caps (a wave tops out at about 250); **Warlord** has none (`uncapped`), so its
+  waves keep growing (about 330 by wave 20, 650 by 30, 1,100 by 40, 1,600 by 50). At most 110 are up at once as
+  before; the Maw holds 1,500 waiting on Warlord (400 on the others), and any more are held over to join the next wave
+  (never dropped). Headless, a test fort on Warlord (`horde-test.js warlord 45 4242 endless --fort`) falls at wave 31
+  (32 min) with thousands waiting. Open: whether a held-over backlog should show on the top bar.
 - ~~Co-op Horde~~ **built Nov 25 2026** (the owner's pick: **side by side on Long Haul 2v2**): in multiplayer the host and
   the first partner each run a colony, allies at the south end, the Maw midway across the north end; waves **×1.8**
   (split over both colonies' lanes, so each meets ~0.9 of a lone colony's wave), a Harrow at each colony in a boss wave,

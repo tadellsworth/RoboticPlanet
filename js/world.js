@@ -5672,8 +5672,9 @@ function checkSave(o) {
   if (o.horde != null) {
     const H = o.horde, num = (v) => Number.isFinite(v);
     if (!obj(H) || o.mode !== 'colony' || !ownKey(DIFFICULTY, H.lv) || !['fixed', 'endless'].includes(H.goal) || !['p', 'of', 'n', 'at', 'cleared', 'kills', 'maw'].every((k) => num(H[k]))) bad();
-    if (!Array.isArray(H.q) || H.q.length > HORDE.queueMost || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
+    if (!Array.isArray(H.q) || H.q.length > hordeQueueMost(H.lv) || !H.q.every((e) => obj(e) && ownKey(BOTS, e.t) && BOTS[e.t].wild && Number.isInteger(e.n) && Number.isInteger(e.l) && e.l >= 0)) bad();
     if (!Array.isArray(H.open) || !H.open.every(Number.isInteger)) bad();
+    if (H.over != null && !(obj(H.over) && Object.keys(H.over).every((t) => ownKey(BOTS, t) && BOTS[t].wild && Number.isInteger(H.over[t]) && H.over[t] > 0))) bad();
     if (!Array.isArray(H.lanes) || !H.lanes.every((l) => Array.isArray(l) && l.every((w) => Array.isArray(w) && w.length === 3 && Number.isInteger(w[0]) && Number.isInteger(w[1]) && w[0] >= 0 && w[1] >= 0 && w[0] < o.W && w[1] < o.H && num(w[2])))) bad();
     for (const k of ['warned', 'sides', 'rr', 'mx', 'my', 'lost', 'pair', 'lostP', 'falls']) if (H[k] != null && !num(H[k])) bad();
     if (H.mul != null && !(num(H.mul) && H.mul >= 1 && H.mul <= 3)) bad();

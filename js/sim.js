@@ -20679,7 +20679,7 @@ function hashState() {
     for (const z of D.spots) { int(z.t); int(z.u); int(z.r); num(z.at); }
     if (D.fall) { num(D.fall.at); int(D.fall.r); int(D.fall.amt); for (const [a, b] of D.fall.tiles) { int(a); int(b); } }
   }
-  if (S.horde) { const H = S.horde; int(H.n); num(H.at); int(H.cleared || 0); int(H.kills || 0); int(H.q.length); int(H.open.length); int(H.maw || 0); int(H.rr || 0); int(H.falls || 0); } // (Horde's waves)
+  if (S.horde) { const H = S.horde; int(H.n); num(H.at); int(H.cleared || 0); int(H.kills || 0); int(H.q.length); int(H.open.length); int(H.maw || 0); int(H.rr || 0); int(H.falls || 0); if (H.over) for (const t in H.over) int(H.over[t]); } // (Horde's waves)
   if (S.crew) { for (const c of S.crew) { int(c ? c.c : -1); str(c && c.n); } for (const b of S.buildings) if (b.by !== undefined) { int(b.id); int(b.by); } } // (co-op: who runs the colony, who placed what)
   return h >>> 0;
 }
@@ -24262,16 +24262,24 @@ function hordeLaunch(n) {
   let k = 0;
   // (side by side: a boss wave's Harrows, one for each colony, down a lane of its own)
   const each = cols.length > 1 ? cols.length : 1, per = Math.max(1, Math.floor(H.lanes.length / each));
-  for (const t of ['brute', 'harrow', 'sapper', 'spitter', 'leech', 'scuttler']) for (let q = 0; q < (w[t] || 0) * (t === 'harrow' ? each : 1); q++, k++) {
-    if (H.q.length >= HORDE.queueMost) break;
+  // (more than the Maw holds: held over in it (H.over) to join the next wave, with those held over before)
+  const most = hordeQueueMost(H.lv), over = H.over || {}, held = {};
+  for (const t of ['brute', 'harrow', 'sapper', 'spitter', 'leech', 'scuttler']) for (let q = 0, all = (w[t] || 0) * (t === 'harrow' ? each : 1) + (over[t] || 0); q < all; q++, k++) {
+    if (H.q.length >= most) { held[t] = all - q; break; }
     const l = t === 'harrow' && each > 1 ? ((q % each) * per + (n + Math.floor(q / each)) % per) % H.lanes.length : (k + n) % H.lanes.length;
     H.q.push({ t, n, s: sides && t !== 'harrow' && hash2(n, k, S.seed & 0xffff) < HORDE.side.share ? 1 : 0, l });
   }
+  if (Object.keys(held).length) H.over = held; else delete H.over;
   H.open.push(n);
   const boss = !!w.harrow;
-  hordeSay(`${boss ? 'Boss wave' : 'Wave'} ${n} is coming out of the Maw: ${hordeWaveText(n)}.${boss ? (each > 1 ? ' A Harrow leads it at each colony.' : ' A Harrow leads it.') : ''}`, maw.x, maw.y, boss ? 'lost' : 'bad');
+  let carried = 0;
+  for (const t in over) carried += over[t];
+  hordeSay(`${boss ? 'Boss wave' : 'Wave'} ${n} is coming out of the Maw: ${hordeWaveText(n)}${carried ? `, and ${carried} held over from the waves before` : ''}.${boss ? (each > 1 ? ' A Harrow leads it at each colony.' : ' A Harrow leads it.') : ''}`, maw.x, maw.y, boss ? 'lost' : 'bad');
   sfx(boss ? 'deepsurge' : 'alert', maw.x + 0.5, maw.y + 0.5, boss ? 3 : undefined);
 }
+
+/** How many are held over in the Maw for the next wave (more than its queue holds: H.over). */
+function hordeHeld() { const o = S.horde && S.horde.over; let s = 0; if (o) for (const t in o) s += o[t]; return s; }
 
 /** The Murmur the waves have up now (by wave), in one pass. */
 function hordeUp() {
@@ -24450,7 +24458,7 @@ function hordeTick() {
   }
   for (const c of hordeCols()) if (S.players[c].down) hordeRetake(c); // (a partner holding the ruin brings it back)
   if (!maw) return; // (the Maw wrecked: see hordeMawDown)
-  maw.status = `The Maw · ${H.n ? `wave ${H.n} sent` : 'the first wave is coming'} · ${H.q.length} waiting below`;
+  maw.status = `The Maw · ${H.n ? `wave ${H.n} sent` : 'the first wave is coming'} · ${H.q.length + hordeHeld()} waiting below`;
   // Waves cleared: all out of the Maw and none left up.
   const up = hordeUp();
   for (const n of H.open.slice()) {
@@ -24527,7 +24535,7 @@ function hordeMawDown(b, by) {
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#d797ff', r: 5, life: 2 });
   for (const e of S.buildings) if (!e.dead && e.type === 'burrow' && e.nest === b.id) { addFx('dust', e.x + 0.5, e.y + 0.5, { r: 1.2 }); destroyBuilding(e, false); }
   destroyBuilding(b, true);
-  if (H && S.winner < 0) { H.won = 'maw'; H.q.length = 0; S.winner = by >= 0 && hordeCols().includes(by) ? by : H.p; S.endHow = 'horde'; }
+  if (H && S.winner < 0) { H.won = 'maw'; H.q.length = 0; delete H.over; S.winner = by >= 0 && hordeCols().includes(by) ? by : H.p; S.endHow = 'horde'; }
   if (H) hordeSay('The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good'); else postMsg(by, 'The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good');
   if (isMe(by)) sfx('capture');
 }
