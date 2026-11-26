@@ -526,7 +526,7 @@ const CROSS = {
   [T_CHASM]: { key: 'skybridge', name: 'Sky bridge', cost: { cement: 3, alloy: 0.5 }, time: 9, weight: 16 },
 };
 /** Can a bridge (road or rail) go out over tile t? Water and chasms, not rock. */
-function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
+function bridgeable(t) { return S.terrain[t] === T_WATER || (S.terrain[t] === T_CHASM && !voidTile(t)); } // (not the void of The Ring: only a Viaduct or Ropeway spans it)
 /** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
 const RAIL_BRIDGE_COST = { cement: 3, alloy: 0.5 }; // the same as a Viaduct's span
 // Naval maps (Islands, Lakes): a bridge or rail-bridge tile over water costs more the further it is from
@@ -766,7 +766,16 @@ const SHAPE_PRESETS = [
   { name: 'The Dam', group: 'heights', blurb: 'A high shelf in the middle holds a reservoir over each colony\'s valley, behind an old dam. Demolish a rival\'s dam and its lake floods their valley; guard yours.', w: 1, h: 1.25, dam: true, flat: true, players: 4,
     tip: 'The Dam: the high shelf in front of you holds a reservoir behind an old dam, and your valley lies below it. Tap a dam to see its strength: Demolish it (D) and your armed robots within reach of it shoot it; Shore it up (U) and your free Workers mend it. Breached, the lake floods the valley below: robots are swept and hurt, buildings in the flood take damage (those in the river\'s path are wrecked), roads there wash out, and a shallow river stays. Guard your dam from the shelf and the gorge below it; two ramps by each dam lead up.',
     quadTip: 'The Dam: a colony on each side of the high ground, each valley below its own reservoir and dam. The shelf in front of you holds yours; your rivals\' dams are across the high ground, each over their valley. Tap a dam: Demolish it (D) and your armed robots within reach shoot it; Shore it up (U) and your free Workers mend it. Breached, its lake floods the valley below it.' },
+  // The Ring (the owner's idea, Nov 2026): out in space among the Ring's big asteroids (ringMap in world.js, the backdrop in
+  // js/ring.js). Two colonies only. Argos's look and rules whatever the Biome setting (the biome is forced to Lunar), no
+  // Murmur, no weather, no dust storm.
+  { name: 'The Ring', group: 'heights', noMurmur: true, blurb: 'Out in space among the Ring\'s great asteroids: a home rock each, a rich one in the middle and stepping stones between, with empty space all round. Cross by Viaduct or Ropeway, or fly.', w: 1.15, h: 1.45, asteroids: true, flat: true,
+    tip: 'The Ring: your colony stands on a home asteroid in space, with a rich rock in the middle and a chain of stepping stones between you and your rival. There is nothing in the space between: no floor, no way across on foot and no road to lay. Span a gap with a Viaduct or a Ropeway (Paths), or fly: Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers. Ring Crystal keeps craft aloft out here, so flight works as it does anywhere. Every rock has oil for your Fuel. Argos\'s ground, no weather, no Murmur.' },
 ];
+/** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
+function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.asteroids); }
+/** Is tile t space on The Ring: empty void that nothing can cross or build on (T_CHASM there, never a Sky bridge)? */
+function voidTile(t) { return S.terrain[t] === T_CHASM && ringShape(); }
 /**
  * The Walking Factory (SHAPE_PRESETS walker: walkerSetup in world.js, the rules in sim.js, the look in js/walker.js).
  *   ring      its loop's radius about the middle of the map: a share of the way from the middle to a base (`min` tiles
@@ -982,6 +991,17 @@ const ISLE_GAP = 4;       // Islands maps: at least this much sea between island
 const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (short Viaducts)
 const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold this much more (half the fields fall in the canyons)
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
+/**
+ * The Ring (SHAPE_PRESETS asteroids: ringMap in world.js, the space backdrop in js/ring.js). Two colonies, each on a home
+ * asteroid, a rich rock in the middle, a chain of stepping stones between, and resource rocks beside them, in empty space:
+ * the space between is `T_CHASM` that nothing can cross or build on (no Sky bridge: `voidTile`), so a crossing is a
+ * Viaduct or Ropeway, or flight. Argos's look and rules (the biome is forced to Lunar).
+ *   gap    tiles of space between neighbouring asteroids: from `gap[0]` to `gap[1]` (a Viaduct spans gap + 1)
+ *   mul    Ore, Crystal, Stalk and Stone on the asteroids hold this much more than usual (small rocks, few fields)
+ *   oil    seep fields on each side: on the home asteroid, on each resource rock, and in the middle (both sides' share)
+ *   stone  Stone each home asteroid holds at the start (HOME_STONE, topped up near the base)
+ */
+const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, stone: HOME_STONE };
 const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills of what was inside it
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
 const LOOT_KEEP = 1e9;    // ...or never, for crates that were always there (the Hollow's side chambers): its `until`
