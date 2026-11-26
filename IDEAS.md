@@ -2727,3 +2727,36 @@ Murmur AI rework).
   Later a great 2-player co-op: two colonies side by side at one end (the Long Haul 2v2 layout).
 - **Open questions for the owner:** (1) a fixed number of waves, Endless, or both as a setting? (2) Long Haul only, or a
   Horde option on any map with the Maw opposite you? (3) pure survival, or sometimes a rival colony defending too?
+
+## Idea: Terraforming expansion (owner, Nov 26; brainstorm, to plan later)
+
+Shaping the world for economic and other benefits. Builds on what's there: the Atmosphere Engine's greening, the
+Torch's scorched earth, Ramps, Quarries cutting rock faces, fertile soil, the Deep Core. A **Terraforming tab** in
+Build, a few new robots (a **Grader**, a **Planter**, a **Drill rig**); every change takes time and goods and is
+permanent on the map (and could show on the Contingency globe). Suggested stages: 1 land height and water, 2 soil /
+plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big projects.
+
+1. **Land and height:** raise or lower a tile a level (Grader / Earthworks), cost by earth moved, dug earth comes out as
+   Stone (quarry a mountain down); flatten a plateau for a big base, cut a pass, raise a defensive bank. Fill shallows
+   into land (land bridges to islands, more ground on water maps) or drain marsh. Moats (flood a trench before your
+   walls) and canals (join lakes so ships sail inland). Blast cliffs into slopes with charges (new attack routes; a
+   landslide onto an enemy road below).
+2. **Soil, plants and climate:** compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
+   crops on rich soil). Tree nurseries spread groves (slow Fiber/wood; cover that slows enemy robots). Irrigation:
+   pump water by pipe or canal to dry land so farms grow there (big lever on desert biomes). Local climate (the
+   Atmosphere Engine taken further): weather stations calming sandstorms or bringing rain; cooling lava ground into rich
+   volcanic soil; greening pushing back the Murmur's blight. Biome shift: enough terraforming turns a region desert →
+   savanna → forest, with its look, animals and resource bonuses.
+3. **Resources from the ground:** deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
+   "seed" fields that slowly grow new Crystal on prepared ground (renewable, with upkeep); geothermal power from lava or
+   hot springs (a Fuel-free Generator on volcanic maps); reclaiming wasteland (craters, scorched ground, fallen Lift
+   cable) back into usable land (pairs with "total war scars the land").
+4. **Military uses:** earthworks (berms, trenches, tank traps) that block or slow warbots, cheaper than Walls; flooding
+   enemy lowland by releasing dammed water anywhere (like the Dam map, buildable); collapsing Murmur tunnels, or digging
+   your own under a wall for a surprise attack (mirrors the Sapper); rival terraformers whose equipment you can raid.
+5. **Big projects (megastructure-sized) — the owner's favourite:** a Lake Maker (turn a basin into a lake: ports,
+   fishing, fertile shores), a Mountain Mover (level a whole hill over minutes), and **planetary greening** — green a
+   share of the planet as a goal (preparing Ithaca for Arrival, in LORE's terms).
+   **Owner's direction:** use this to expand **Colony mode** with greening / terraforming goals, and as part of the
+   **main campaign** and other campaigns (e.g. Contingency territories greened, campaign chapters with terraforming
+   objectives). Check LORE.md before writing the setting's side of it (never state Earth's fate).
