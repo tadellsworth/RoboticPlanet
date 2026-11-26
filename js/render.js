@@ -7574,6 +7574,7 @@ function render(dtReal) {
   drawLavaBombs(ctx, ox, oy, z);
   if (R.workerView || (typeof wfMapOn === 'function' && wfMapOn())) drawWorkerView(ctx, ox, oy, z); // (and while the Workforce panel is open: js/workforce.js)
   if (typeof ecMapOn === 'function' && ecMapOn()) ecDrawStates(ctx, ox, oy, z); // (the Economy panel open: each building's state, js/economy.js)
+  if (typeof ecDrawJoin === 'function') ecDrawJoin(ctx, ox, oy, z); // (Join the roads: the gap between two road networks, js/economy.js)
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.mur && S.mur.husks) drawHarrowDeathFx(ctx, ox, oy, z); // (a Harrow's death: its shards, the dust of its fall, its core bursting)

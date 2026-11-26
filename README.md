@@ -1673,7 +1673,18 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   unstaffed. **History**: the Statistics graphs (`renderStats(into)`), three across. **Quick actions**, only beside the
   problem they fix and only when they'd apply: Make more Haulers (`foundryOrder` 3 Haulers, where Haulers are too few or
   all busy and a Foundry is under the robot limit), Prioritise this (`wfOrder`: the row of the first unstaffed maker
-  down the chain to the top of the ladder, Manual), Build a maker (Build, with it picked to place). While it's open the
+  down the chain to the top of the ladder, Manual), Build a maker (Build, with it picked to place), and **Join the roads**
+  for a split road network (`ecSplit`: you hold the good, but on roads that don't join those of a building waiting for
+  it, directly or behind the maker of a good you're out of; Make more Haulers is never offered there). It runs
+  `roadJoinRoute(owner, a, b)` (world.js: Route to's `routeTree` from every tile of a's network to the cheapest tile
+  of b's, a Ramp of yours still being built counting as the road it will be, so a join already planned isn't planned
+  twice; it returns the tiles to lay, the Ramp tiles, the cost and how many tiles on the way are planned already, or
+  `{ why }`), then closes the panel, opens Paths on Roads with Route to on and that plan sketched (the same Build /
+  Clear / Undo as any route; Build sends `ORDERS.paths`), glides the map to it between the banner and the tools, and
+  outlines the gap in red with each tile dashed (`ecDrawJoin`). Already planned: a toast and the outline for six
+  seconds. No way: a toast saying why and what would (a bridge, a Ramp, a Viaduct, a Port and Ferry, Route to). On
+  This good the problem shows the gap's cost instead of the button, and the outline stays on the map (found once, a
+  moment after the tab shows it, and again only when roads, plans, land or buildings change: `ecJoinFor`). While it's open the
   map draws the goods carried over the last minute (`R.gf`, the Goods flow map's counts) as lines along the roads with a
   dash running along, in each good's colour, and a ring on each building that makes or uses goods in its state's colour
   (`ecDrawFlow`, `ecDrawStates`); on This good only that good's. On a desktop it sits to the right and never scrolls

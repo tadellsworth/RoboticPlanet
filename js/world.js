@@ -4998,6 +4998,66 @@ function roadRouteTo(owner, b, join) {
   return out;
 }
 
+/**
+ * The shortest buildable road joining two of owner's road networks: the one building `a` stands on (where goods are
+ * stored) and the one building `b` stands on (one that waits for them). The Economy panel's Join the roads (js/economy.js)
+ * shows it and plans it as Route to would. It uses Route to's search (routeTree) from every tile of a's network, on to
+ * the cheapest tile of b's: round fields where it can, up one-level cliffs over a Ramp, over water as a bridge where
+ * allowed, along roads already planned. It only reads S. Returns { tiles (a's end first), add (the tiles that need new
+ * road), ramps (the tiles for a Ramp, one at each cliff step), cost (goods), planned (tiles and Ramps on the way already planned) }, with
+ * joined: true when a road already links them (no add and no ramps: a plan joins them once it's built), or { why } when
+ * no road can.
+ */
+function roadJoinRoute(owner, a, b) {
+  const ga = buildingGroups(a), gb = buildingGroups(b);
+  if (ga.some((c) => gb.indexOf(c) >= 0)) return { tiles: [], add: [], ramps: [], cost: {}, planned: 0, joined: true };
+  const net = roadNet(owner), W = S.W, N = W * S.H, seeds = [tIdx(a.x, a.y)], goal = new Uint8Array(N);
+  for (let t = 0; t < N; t++) {
+    const c = net.comp[t];
+    if (c < 0) continue;
+    const g = netGroup(c);
+    if (ga.indexOf(g) >= 0) seeds.push(t);
+    else if (gb.indexOf(g) >= 0) goal[t] = 1;
+  }
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj) && !S.bAt[tIdx(b.x + di, b.y + dj)]) goal[tIdx(b.x + di, b.y + dj)] = 1;
+  // (A Ramp of ours still being built counts as the road it will be: a join already planned isn't planned twice.)
+  const rampSite = (t) => { const s = S.bAt[t] ? getE(S.bAt[t]) : null; return s && !s.dead && !s.built && s.owner === owner && s.type === 'ramp' ? 2 : 0; };
+  const T = routeTree(owner, 'road', seeds, rampSite);
+  let end = -1, bc = Infinity;
+  if (!T.why) for (let t = 0; t < N; t++) if (goal[t]) for (let d = 0; d < 4; d++) if (T.best[t * 4 + d] < bc) { bc = T.best[t * 4 + d]; end = t; }
+  if (end < 0) {
+    const za = S.zone[tIdx(a.x, a.y)], zb = S.zone[tIdx(b.x, b.y)];
+    return { why: za !== zb ? 'water or a cliff too high for a Ramp lies between them, so no road can join them' : 'a rival\'s land, deep water or a high cliff is in the way of every road between them' };
+  }
+  const r = routeFromTree(T, end, seeds.length);
+  if (!r.tiles) return { why: r.why };
+  // The tiles to pave, and a Ramp at each one-level cliff the way climbs (on whichever side can take one, a tile with no
+  // road on it first, as a drag in Paths plans it: dragCliff, ui.js).
+  const add = [], ramps = [], cost = {};
+  let planned = 0;
+  for (let k = 0; k < r.tiles.length; k++) {
+    const t = r.tiles[k], p = k ? r.tiles[k - 1] : -1;
+    if (p >= 0 && Math.abs((p % W) - (t % W)) + Math.abs(((p / W) | 0) - ((t / W) | 0)) === 1 && !canStep(p, t) && !stepPlan(p, t) && !rampSite(p) && !rampSite(t) &&
+      S.terrain[p] === T_GROUND && S.terrain[t] === T_GROUND && Math.abs(S.elev[p] - S.elev[t]) === 1 && !ramps.includes(p) && !ramps.includes(t)) {
+      const busy = (u) => (S.road[u] || S.plan[u] || (S.rail && S.rail[u]) ? 1 : 0);
+      const ok = [t, p].filter((u) => canPlace(owner, 'ramp', u % W, (u / W) | 0).ok).sort((x, y) => busy(x) - busy(y));
+      if (ok.length) {
+        ramps.push(ok[0]);
+        const ai = add.indexOf(ok[0]);
+        if (ai >= 0) { add.splice(ai, 1); const c = roadTileCost(ok[0]); for (const g in c) cost[g] -= c[g]; } // (the Ramp is the road there)
+        for (const g in BDEFS.ramp.cost) cost[g] = (cost[g] || 0) + BDEFS.ramp.cost[g];
+      }
+    }
+    if (rampSite(t) || (S.plan[t] && !S.road[t])) { planned++; continue; }
+    if (S.road[t] || roadLike(t) || ramps.includes(t)) continue;
+    add.push(t);
+    const c = roadTileCost(t);
+    for (const g in c) cost[g] = (cost[g] || 0) + c[g];
+  }
+  for (const g in cost) cost[g] = Math.round(cost[g] * 100) / 100;
+  return { tiles: r.tiles, add, ramps, cost, planned };
+}
+
 /*
  * Route to (Paths, for Roads and Track): the cheapest way to lay road (kind 'road') or track ('rail')
  * for `owner` from any of the `seeds` to tile `goal` (or beside it, if a building stands there). It runs
@@ -5043,6 +5103,7 @@ function routeSearch(owner, kind, seeds, goal, have) {
     if ((mine(a) || roadLike(a)) && (mine(b) || roadLike(b)) && canStep(a, b)) return 0;
     if (stepPlan(a, b)) return 0;
     if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND || Math.abs(S.elev[a] - S.elev[b]) !== 1) return -1;
+    if (have && (have(a) === 2 || have(b) === 2)) return 0; // (a Ramp already being built there: roadJoinRoute)
     return rampOk(a) || rampOk(b) ? ROUTE_RAMP : -1;
   };
   // A building in the way: a route can end beside it (a station, a factory), not go through it.

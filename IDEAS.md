@@ -19,7 +19,13 @@ Built from the owner's ask: goods flow, like the Workforce panel, replacing the 
 - **Prioritise this** makes the ladder Manual (that's how wfOrder works); its toast says Workforce changes it back.
 
 Open questions:
-- Should a split road network get its own quick action (show the gap, or open Route to between the two)?
+- ~~Should a split road network get its own quick action?~~ Done (owner approved): **Join the roads** finds the
+  shortest buildable road between the two networks (`roadJoinRoute`, Route to's search), outlines it in red and plans it
+  in Paths for Build or Clear; a join already planned (a Ramp site included) is shown, not planned twice. On the owner's
+  Nov 24 10:24 save the join was already half planned (a Ramp being cut at 29,43): it says so. With that plan taken out
+  it plans 4 tiles and a Ramp (3.8 Cement, 1 Fiber); the networks join 2.5 minutes after Build and the Crystal and
+  Cement at the captured Command Base reach the Chip Fab and Armory. Open: should it also look past the first split
+  (a chain of three networks), or offer a Port and Ferry where only water lies between?
 - Per-building throughput (goods a minute each) would make the link widths exact; it needs a counter in the sim and
   the save. Worth it?
 - The History tab's buildings list scrolls in its own box on a short screen; fine, or page it?

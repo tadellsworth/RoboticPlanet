@@ -1,8 +1,9 @@
 'use strict';
 /*
  * Terrafall — the Economy panel (tap a good in the top bar, or Y; Statistics, I, opens it on History): where your goods
- * come from, where they go and what holds them up. Display only: it reads S and changes nothing. Its three quick
- * actions send orders that already exist (foundryOrder, wfOrder: js/orders.js) or only open Build.
+ * come from, where they go and what holds them up. Display only: it reads S and changes nothing. Its quick actions
+ * send orders that already exist (foundryOrder, wfOrder: js/orders.js), only open Build, or (Join the roads) put a road
+ * plan in Paths for you to build with its own Build button (ORDERS.paths).
  *
  *  - This good: stock now and over the last ten minutes, made and used a minute, the net ("−3/min, empty in 2:10");
  *    its chain both ways as a small flow diagram (what it's made from, down to the raw goods, and what it goes into);
@@ -13,7 +14,10 @@
  *    (building sites, robots, upkeep, guns). Beside it the Bottlenecks: the worst few, in plain words, each with its
  *    chain ("Chips short ← Chip Fab waits ← Crystal short ← 2 Crystal Taps unstaffed") and the quick action that fixes
  *    it: Make more Haulers (3 at a Bot Foundry), Prioritise this (the maker's row to the top of the Workforce ladder,
- *    Manual) or Build a maker (Build, with it picked to place). An action that can't apply isn't shown.
+ *    Manual), Build a maker (Build, with it picked to place) or, where the goods sit on one road network and the
+ *    buildings waiting for them on another (a split network: more Haulers wouldn't help), Join the roads: the shortest
+ *    road between the two (roadJoinRoute, world.js) outlined in red and planned in Paths, waiting for Build or Clear.
+ *    An action that can't apply isn't shown. On This good a split's gap is outlined on the map too, without the button.
  *  - History: the Statistics graphs (renderStats in ui.js), as they were.
  * The rates are goodRates' (the last two minutes, sim.js); the stock over time is the statistics history (S.hist). While
  * it's open the map shows the goods your robots carried over the last minute as flowing lines in each good's colour
@@ -31,7 +35,7 @@ const EC_BAD = { staff: 0, road: 1, wait: 2, full: 3, off: 4, idle: 5, work: 6 }
 /** Where goods end up besides other goods: [key, name]. */
 const EC_SINKS = [['sites', 'Building sites'], ['bots', 'Robots'], ['upkeep', 'Upkeep'], ['guns', 'Guns']];
 const EC_SINK = Object.fromEntries(EC_SINKS);
-const EC = { at: -1, of: null, d: null, pg: 0 };
+const EC = { at: -1, of: null, d: null, pg: 0, join: null, joinWait: false };
 
 function ecMapOn() { return UI.sheetKind === 'econ'; }
 function ecEsc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -229,8 +233,23 @@ function ecIdleRow(d, g, seen) {
 }
 
 /**
- * The bottlenecks, worst first: [{ g, s (HTML), chain, at (a building to go to), acts: { haul, prio: row, build: type },
- * w (weight) }].
+ * A split road network behind good g's waiting buildings `cons`: you hold g (in storage, at a maker), but on roads that
+ * don't join those of some of the buildings waiting for it, so no Hauler can carry it there. { from (the building
+ * holding the most of it), to (a waiting one cut off from all of it), n (how many are) } or null.
+ */
+function ecSplit(g, cons) {
+  const src = S.buildings.filter((s) => !s.dead && s.owner === ME && s.built && !cons.includes(s) && supplyOf(s, g) >= 1);
+  if (!src.length) return null;
+  const cut = cons.filter((b) => !(b.unlinked && needsRoad(b)) && !src.some((s) => roadLinked(s, b)));
+  if (!cut.length) return null;
+  // (the one holding most, storage first)
+  src.sort((a, c) => (BDEFS[c.type].store ? 1 : 0) - (BDEFS[a.type].store ? 1 : 0) || supplyOf(c, g) - supplyOf(a, g) || a.id - c.id);
+  return { from: src[0].id, to: cut[0].id, n: cut.length };
+}
+
+/**
+ * The bottlenecks, worst first: [{ g, s (HTML), chain, at (a building to go to), acts: { haul, prio: row, build: type,
+ * join: 'from:to' }, join (ecSplit's), w (weight) }].
  */
 function ecProblems(d, mine) {
   const out = [], H = ecHaulers(), fdy = ecFoundry(), auto = wfAutoOrder(ME), top = wfLadder(auto)[0];
@@ -257,7 +276,12 @@ function ecProblems(d, mine) {
       const busy = c && /busy/.test(c.text) && /carrier|Hauler/.test(c.text);
       const s = `<b>${ecEsc(who)} wait${cons.length === 1 && D.waitB.length ? 's' : ''} for ${goodN(g, 2)}</b>: ${c ? ecEsc(c.text) : 'none on hand'}${busy ? ` (${haulWords})` : ''}`;
       const w = 10 * cons.length + (foundryWaits && d.st.get(foundryWaits.id).g === g ? 60 : 0) + (D.have < 1 ? 15 : 0) + (c && c.ok ? -20 : 0);
-      out.push({ g, s, chain: D.have < 1 ? ecChain(d, g) : null, at: (c && c.at) || cons[0].id, acts: acts(c, g), w });
+      const a = acts(c, g);
+      let split = D.waitB.length && D.have >= 1 ? ecSplit(g, D.waitB) : null;
+      // (out of g because its maker waits behind a split: "Chips short ← the Chip Fab has no Crystal, in a Command Base no road joins to it")
+      if (!split && c && /no road joins/.test(c.text)) for (const m of D.makers) { const q = d.st.get(m.id); if (q && q.k === 'wait' && q.g && (split = ecSplit(q.g, [m]))) break; }
+      if (split) { delete a.haul; a.join = `${split.from}:${split.to}`; } // (Haulers can't cross from one road network to another)
+      out.push({ g, s, chain: D.have < 1 ? ecChain(d, g) : null, at: (c && c.at) || cons[0].id, acts: a, join: split, w });
     }
     // 2. Makers with their output full.
     const full = D.makers.filter((b) => d.st.get(b.id)?.k === 'full');
@@ -386,16 +410,119 @@ function ecAction(k, v) {
     closeSheet();
     openBuildMenu();
     enterPlaceMode(v);
-  }
+  } else if (k === 'join') ecJoin(v);
 }
 
-/** A problem's line, its chain and its quick actions. */
-function ecProbHTML(p) {
+/* ------------------------------------------------------------------ Join the roads */
+
+/** Building ids 'from:to' (ecSplit's) as buildings of yours still there, or null. */
+function ecJoinEnds(v) {
+  const [a, b] = String(v).split(':').map((x) => getE(+x));
+  return a && b && !a.dead && !b.dead && a.owner === ME && b.owner === ME ? { a, b } : null;
+}
+
+/** "the Command Base's roads", "the Fab's". */
+function ecRoadsOf(b) { return `the ${BDEFS[b.type].name}'s`; }
+
+/** The new road a join needs, in words: "Lay road: 4 tiles and a Ramp, 3.8 Cement, 1 Fiber". */
+function ecJoinCost(r) {
+  const n = r.add.length, m = r.ramps.length;
+  return `Lay road: ${n ? `${n} tile${n === 1 ? '' : 's'}` : ''}${n && m ? ' and ' : ''}${m ? (m === 1 ? 'a Ramp' : `${m} Ramps`) : ''}${Object.keys(r.cost).length ? ', ' + costText(r.cost) : ''}`;
+}
+
+/** A join's gap: the tiles of its route with no road yet (to lay, a Ramp to build, or planned already). */
+function ecGap(r) {
+  const rampSite = (t) => { const b = S.bAt[t] ? getE(S.bAt[t]) : null; return !!b && b.type === 'ramp' && !b.built; };
+  return r.tiles ? r.tiles.filter((t) => r.add.includes(t) || r.ramps.includes(t) || (S.plan[t] && !S.road[t]) || rampSite(t)) : [];
+}
+
+/** Why no road joins them, and what would: a plain sentence (r: roadJoinRoute's { why }). */
+function ecJoinWhy(e, r) {
+  return `No road can join ${ecRoadsOf(e.a)} roads to ${ecRoadsOf(e.b)}: ${r.why}. A bridge (Paths → Bridges, G) or a Ramp (Paths → Ramps, V) where it's narrow, a Viaduct across a valley (Build), or a Port and a Ferry would; or try Paths → Route to (Z) from another spot.`;
+}
+
+/**
+ * Join the roads (a split-road bottleneck's quick action): the shortest road between the two networks (roadJoinRoute,
+ * world.js) is put in Paths as a plan, as Route to does: outlined in red on the map (ecDrawJoin), the map gliding to
+ * it, its cost in the banner, and nothing spent until Build (ORDERS.paths, like any plan made in Paths). Clear or Done
+ * drops it.
+ */
+function ecJoin(v) {
+  const e = ecJoinEnds(v);
+  if (!e) { sfx('error'); return; }
+  const r = roadJoinRoute(ME, e.a, e.b);
+  if (r.why) { sfx('error'); toast(ecJoinWhy(e, r), 'warn'); return; }
+  if (r.joined) { sfx('click'); toast(`The roads are joined now: Haulers can carry from the ${BDEFS[e.a.type].name} to the ${BDEFS[e.b.type].name}.`, 'info'); EC.d = null; refreshEconomy(true); return; }
+  const gap = ecGap(r);
+  const mid = gap.length ? gap[gap.length >> 1] : r.tiles[r.tiles.length >> 1];
+  if (!r.add.length && !r.ramps.length) {
+    // (already planned: the workers just haven't got there yet)
+    sfx('click');
+    UI.joinGap = { tiles: gap, until: performance.now() + 6000 };
+    closeSheet();
+    UI.glide = { x: (mid % S.W) + 0.5, y: ((mid / S.W) | 0) + 0.5, t: 0.5 };
+    toast(`A road joining ${ecRoadsOf(e.a)} roads to ${ecRoadsOf(e.b)} is planned already: ${r.planned} tile${r.planned === 1 ? '' : 's'} on the way wait${r.planned === 1 ? 's' : ''} for Workers (outlined in red). Nothing more to plan.`, 'info');
+    return;
+  }
+  sfx('click');
+  closeSheet();
+  if (R.mode !== 'road') setMode('road');
+  UI.roadMode = 'road'; UI.route = true; UI.routeGhost = null;
+  draftReset();
+  paintFlagsReset();
+  UI.stroke = []; UI.draft.strokes.push(UI.stroke);
+  for (const t of r.ramps) draftOp(UI.stroke, t, 'ramp');
+  for (const t of r.add) draftOp(UI.stroke, t, 'add');
+  UI.routePrev = UI.stroke; // (tap somewhere else and Route to plans that instead, as after any route)
+  UI.joinGap = { tiles: gap, draft: true };
+  showRoadBanner(`<b>Join the roads</b> (outlined in red): ${ecJoinCost(r)}, joining ${ecRoadsOf(e.a)} roads to ${ecRoadsOf(e.b)}. Tap <b>Build</b> to plan it, or <b>Clear</b> to drop it.`, true);
+  // The map glides to the gap, in the band between the Paths banner and the tools below (whichever way it's docked).
+  const ban = $('banner').getBoundingClientRect(), bar = $('bottombar').getBoundingClientRect();
+  const top = ban.bottom < R.h * 0.6 ? ban.bottom : $('topbar').getBoundingClientRect().bottom;
+  const bot = ban.top > R.h * 0.4 ? ban.top : bar.top > R.h * 0.5 ? bar.top : R.h;
+  const x = (mid % S.W) + 0.5, y = ((mid / S.W) | 0) + 0.5;
+  UI.glide = { x, y: y - ((top + bot) / 2 - R.h / 2) / R.cam.z, t: 0.5 };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { centerOn(UI.glide.x, UI.glide.y); UI.glide = null; }
+}
+
+/**
+ * On This good, the gap behind a split there (its route found once, a moment after the tab shows it, and again only
+ * when the roads, plans, land or buildings change): roadJoinRoute's result with its { tiles, key }, or null.
+ */
+function ecJoinFor(p) {
+  const e = p && p.join && ecJoinEnds(`${p.join.from}:${p.join.to}`);
+  if (!e) return null;
+  const key = [e.a.id, e.b.id, S.roadVer, S.planVer, S.territoryVer, S.buildings.length].join(':');
+  if (EC.join && EC.join.key === key) return EC.join;
+  if (!EC.joinWait) {
+    EC.joinWait = true;
+    setTimeout(() => {
+      EC.joinWait = false;
+      if (!S || UI.sheetKind !== 'econ') return;
+      const r = roadJoinRoute(ME, e.a, e.b);
+      r.key = key; r.e = e;
+      r.gap = ecGap(r);
+      EC.join = r;
+      refreshEconomy(true);
+    }, 30);
+  }
+  return null;
+}
+
+/** A problem's line, its chain and its quick actions (on This good, a split's gap in words instead of Join the roads). */
+function ecProbHTML(p, here) {
   const a = p.acts || {};
-  const btns = (a.haul ? `<button type="button" class="btn small" data-qa="haul" data-v="${a.haul}">Make more Haulers</button>` : '') +
+  let note = '';
+  if (a.join && here) {
+    const r = ecJoinFor(p);
+    note = !r ? 'Finding the gap…' : r.why ? ecJoinWhy(r.e, r) : r.joined ? '' : !r.add.length && !r.ramps.length ? `The road joining them is planned: ${r.planned} tile${r.planned === 1 ? '' : 's'} wait${r.planned === 1 ? 's' : ''} for Workers (red on the map).`
+      : `The gap is outlined in red on the map: ${ecJoinCost(r)}. Whole economy → Join the roads plans it.`;
+  }
+  const btns = (a.join && !here ? `<button type="button" class="btn small" data-qa="join" data-v="${a.join}">Join the roads</button>` : '') +
+    (a.haul ? `<button type="button" class="btn small" data-qa="haul" data-v="${a.haul}">Make more Haulers</button>` : '') +
     (a.prio ? `<button type="button" class="btn small" data-qa="prio" data-v="${a.prio}">Prioritise this</button>` : '') +
     (a.build ? `<button type="button" class="btn small" data-qa="build" data-v="${a.build}">Build ${aOrAn(BDEFS[a.build].name)}</button>` : '');
-  return `<div class="ec-pr" style="--c:${GOOD[p.g].color}"><button type="button" class="ec-prt"${p.at ? ` data-at="${p.at}"` : ''}><i class="gi ${p.g}"></i><span>${p.s}${p.chain && p.chain.length > 2 ? `<small class="ec-chain">${p.chain.map(ecEsc).join(' ← ')}</small>` : ''}</span></button>${btns ? `<div class="ec-qa">${btns}</div>` : ''}</div>`;
+  return `<div class="ec-pr" style="--c:${GOOD[p.g].color}"><button type="button" class="ec-prt"${p.at ? ` data-at="${p.at}"` : ''}><i class="gi ${p.g}"></i><span>${p.s}${p.chain && p.chain.length > 2 ? `<small class="ec-chain">${p.chain.map(ecEsc).join(' ← ')}</small>` : ''}${note ? `<small class="ec-chain ec-gap">${ecEsc(note)}</small>` : ''}</span></button>${btns ? `<div class="ec-qa">${btns}</div>` : ''}</div>`;
 }
 
 /** The chain diagram: goods (all, or those in `only`) as nodes in columns, links input → output and to the ends. */
@@ -493,7 +620,7 @@ function refreshEconomy(now) {
     set('ec-flow', ecFlowHTML(d, null, null));
     const most = innerHeight <= 760 ? 4 : 5;
     $('ec-bn').textContent = d.probs.length ? `${d.probs.length} · tap one to go there` : '';
-    set('ec-probs', d.probs.length ? d.probs.slice(0, most).map(ecProbHTML).join('') + (d.probs.length > most ? `<p class="hint ec-more" data-n="${d.probs.length - most}">and ${d.probs.length - most} more: tap a good for its own.</p>` : '')
+    set('ec-probs', d.probs.length ? d.probs.slice(0, most).map((p) => ecProbHTML(p)).join('') + (d.probs.length > most ? `<p class="hint ec-more" data-n="${d.probs.length - most}">and ${d.probs.length - most} more: tap a good for its own.</p>` : '')
       : '<p class="hint">None: nothing waits for a good, no maker is full or cut off, and nothing is running out.</p>');
     if (EC.fit) { EC.fit = false; ecFit(); }
     return;
@@ -514,7 +641,7 @@ function refreshEconomy(now) {
   set('ec-flow', ecFlowHTML(d, ecChainSet(d, g), g));
   const probs = d.probs.filter((p) => p.g === g || (p.chain && p.chain.some((c) => c.startsWith(goodN(g, 2) + ' '))));
   $('ec-bn').textContent = probs.length ? String(probs.length) : '';
-  set('ec-probs', probs.length ? probs.slice(0, 2).map(ecProbHTML).join('') : `<p class="hint">None for ${G.name}${s === 'up' ? ': you make more than you use' : ''}.</p>`);
+  set('ec-probs', probs.length ? probs.slice(0, 2).map((p) => ecProbHTML(p, true)).join('') : `<p class="hint">None for ${G.name}${s === 'up' ? ': you make more than you use' : ''}.</p>`);
   // The makers or the users, a page at a time (problems first).
   const side = UI.ecSide === 'use' ? 'use' : 'make';
   for (const b of $('ec-side').children) { b.classList.toggle('on', b.dataset.v === side); b.textContent = `${b.dataset.v === 'make' ? 'Made by' : 'Used by'} ${b.dataset.v === 'make' ? D.makers.length : D.users.length + (D.sites.length ? 1 : 0)}`; }
@@ -613,5 +740,50 @@ function ecDrawStates(ctx, ox, oy, z) {
     ctx.strokeStyle = '#fff1ec'; ctx.lineWidth = Math.max(2, z * 0.07);
     ctx.beginPath(); ctx.arc(x, y, z * (0.7 + (1 - k) * 0.6), 0, Math.PI * 2); ctx.stroke();
   }
+  ctx.restore();
+}
+
+/**
+ * The gap a Join the roads would fill, outlined in red on the map, each of its tiles dashed: in Paths while its plan
+ * is still there to Build (ecJoin), for a few seconds after it found the join already planned, and on This good while
+ * that good waits behind a split (ecJoinFor). Display only.
+ */
+function ecDrawJoin(ctx, ox, oy, z) {
+  if (typeof UI === 'undefined') return;
+  let tiles = null;
+  const J = UI.joinGap;
+  if (J && J.draft) {
+    const d = UI.draft;
+    if (R.mode === 'road' && d && J.tiles.some((t) => d.addSet.has(t) || d.ramps.has(t))) tiles = J.tiles; else UI.joinGap = null;
+  } else if (J && J.until) {
+    if (performance.now() < J.until) tiles = J.tiles; else UI.joinGap = null;
+  }
+  if (!tiles && ecMapOn() && UI.ecTab === 'good' && EC.join && EC.join.gap && EC.join.gap.length) {
+    const d = ecData(), p = d.probs.find((q) => q.g === UI.ecGood && q.join && q.join.from === EC.join.e.a.id && q.join.to === EC.join.e.b.id);
+    if (p) tiles = EC.join.gap;
+  }
+  if (!tiles || !tiles.length) return;
+  const W = S.W, set = new Set(tiles), pulse = 0.75 + 0.25 * Math.sin(R.time * 4);
+  ctx.save();
+  // Each tile: a dashed red square (a tile still to lay).
+  ctx.setLineDash([Math.max(2, z * 0.14), Math.max(2, z * 0.1)]);
+  ctx.lineDashOffset = -R.time * z * 0.5;
+  ctx.strokeStyle = `rgba(255,77,106,${0.8 * pulse})`; ctx.lineWidth = Math.max(1.2, z * 0.045);
+  for (const t of tiles) ctx.strokeRect(ox + (t % W) * z + z * 0.18, oy + ((t / W) | 0) * z + z * 0.18, z * 0.64, z * 0.64);
+  ctx.setLineDash([]);
+  // Round the whole gap: its outer edges, dark under red.
+  const edges = () => {
+    ctx.beginPath();
+    for (const t of tiles) {
+      const i = t % W, j = (t / W) | 0, x = ox + i * z, y = oy + j * z;
+      if (!(i > 0 && set.has(t - 1))) { ctx.moveTo(x, y); ctx.lineTo(x, y + z); }
+      if (!(i < W - 1 && set.has(t + 1))) { ctx.moveTo(x + z, y); ctx.lineTo(x + z, y + z); }
+      if (!set.has(t - W)) { ctx.moveTo(x, y); ctx.lineTo(x + z, y); }
+      if (!set.has(t + W)) { ctx.moveTo(x, y + z); ctx.lineTo(x + z, y + z); }
+    }
+  };
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(12,14,20,0.7)'; ctx.lineWidth = Math.max(3.5, z * 0.13); edges(); ctx.stroke();
+  ctx.strokeStyle = '#ff4d6a'; ctx.globalAlpha = pulse; ctx.lineWidth = Math.max(2, z * 0.07); edges(); ctx.stroke();
   ctx.restore();
 }
