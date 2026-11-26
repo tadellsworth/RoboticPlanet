@@ -7148,6 +7148,7 @@ function doCrate(u, t, dt) {
 
 /** Crates of `goods` on tile (x, y). `keep`: they never rot (the Hollow's side chambers: robot parts laid out in rows). */
 function addLoot(x, y, goods, keep, dismantled) {
+  if (inMap(x, y) && voidTile(tIdx(x, y))) return; // (crates that fall into the void of The Ring are gone: nothing can reach them)
   S.loot = S.loot || [];
   const pile = S.loot.find((l) => l.x === x && l.y === y);
   if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = Math.max(pile.until, S.time + LOOT_TIME); if (dismantled !== undefined) pile.dismantled = dismantled; return; }

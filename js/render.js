@@ -781,6 +781,8 @@ function bakeMap() {
   for (let t = 0; t < S.W * S.H; t++) if (S.elev[t] > maxElev) maxElev = S.elev[t];
   R.levelOffset = maxElev === 0 ? 1 : 0;
   R.skyFloor = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
+  R.void = ringShape(); // (The Ring: the void tiles are left clear over the space behind: js/ring.js)
+  RSP.land = null;
   applyBiome();
   // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
   // image, tens of megabytes of it, waiting to be collected, and a phone has only so much canvas memory.
@@ -1185,6 +1187,7 @@ function blendTexture(ctx, art, weight, i, j, x, y) {
 function paintTile(ctx, i, j, other, blend) {
   const x = i * TP, y = j * TP, t = tIdx(i, j);
   const terr = pillarAt(t) ? T_GROUND : S.terrain[t]; // (a pillar of the Hollow stands on the cavern floor: see drawPillar)
+  if (terr === T_CHASM && R.void) { drawVoidTile(ctx, i, j, x, y); return; }
   const n = fbm(i / 6, j / 6, 991, 3);
   ctx.fillStyle = levelColor(S.elev[t], n);
   ctx.fillRect(x, y, TP, TP);
@@ -1736,6 +1739,35 @@ function tallFace(ctx, i, j, x, y, h, d, foot) {
 function canyonArt(key) {
   const b = R.biome || artBiome(biome());
   return (b !== 'desert' && ART[key + '-' + b]) || ART[key] || null;
+}
+
+/**
+ * A tile of space on The Ring: left clear (the starfield shows through), but for the rock under an asteroid's southern rim:
+ * the canyon wall's art (Argos's) for the first tile below it and the wall carrying on in the second, each fading out into
+ * the dark, so the asteroid ends in a rocky underside and nothing is drawn below it.
+ */
+function drawVoidTile(ctx, i, j, x, y) {
+  ctx.clearRect(x, y, TP, TP);
+  const one = terrAt(i, j - 1) === T_GROUND, two = !one && terrAt(i, j - 1) === T_CHASM && terrAt(i, j - 2) === T_GROUND;
+  if (!one && !two) return;
+  const art = canyonArt(one ? 'chasm-wall' : 'chasm-wall-2') || canyonArt('chasm-wall');
+  if (art) drawTileArt(ctx, art, x, y, 0);
+  else {
+    const g = ctx.createLinearGradient(0, y, 0, y + TP);
+    g.addColorStop(0, THEME.cliffTop || '#8a5c3e'); g.addColorStop(1, THEME.cliffBottom || '#4a2e1e');
+    ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  const f = ctx.createLinearGradient(0, y, 0, y + TP);
+  f.addColorStop(0, `rgba(0,0,0,${one ? 0 : 0.5})`); f.addColorStop(1, `rgba(0,0,0,${one ? 0.5 : 1})`);
+  ctx.fillStyle = f; ctx.fillRect(x, y, TP, TP);
+  // (the face is narrower than the rim: its sides taper in toward the point of the rock)
+  const sx = (one ? 0.06 : 0.2) * TP;
+  ctx.fillStyle = 'rgba(0,0,0,0.9)';
+  if (terrAt(i - 1, j) === T_CHASM && terrAt(i - 1, j - 1) !== T_GROUND) ctx.fillRect(x, y, sx, TP);
+  if (terrAt(i + 1, j) === T_CHASM && terrAt(i + 1, j - 1) !== T_GROUND) ctx.fillRect(x + TP - sx, y, sx, TP);
+  ctx.restore();
 }
 
 function drawChasm(ctx, i, j, x, y) {
@@ -7014,10 +7046,12 @@ function updateTerritoryLayer() {
     for (let i = 0; i < S.W; i++) {
       const o = S.owner[j * S.W + i];
       if (o < 0) continue;
-      if (i + 1 >= S.W || S.owner[j * S.W + i + 1] !== o) segs.push([o, i + 1, j, i + 1, j + 1]);
-      if (i === 0 || S.owner[j * S.W + i - 1] !== o) segs.push([o, i, j, i, j + 1]);
-      if (j + 1 >= S.H || S.owner[(j + 1) * S.W + i] !== o) segs.push([o, i, j + 1, i + 1, j + 1]);
-      if (j === 0 || S.owner[(j - 1) * S.W + i] !== o) segs.push([o, i, j, i + 1, j]);
+      // (On The Ring no border runs along an asteroid's rim: the space beside it is no one's, and the edge is plain to see.)
+      const sp = R.void ? (u) => S.terrain[u] === T_CHASM : () => false, t0 = j * S.W + i;
+      if (i + 1 >= S.W || (S.owner[t0 + 1] !== o && !sp(t0 + 1))) segs.push([o, i + 1, j, i + 1, j + 1]);
+      if (i === 0 || (S.owner[t0 - 1] !== o && !sp(t0 - 1))) segs.push([o, i, j, i, j + 1]);
+      if (j + 1 >= S.H || (S.owner[t0 + S.W] !== o && !sp(t0 + S.W))) segs.push([o, i, j + 1, i + 1, j + 1]);
+      if (j === 0 || (S.owner[t0 - S.W] !== o && !sp(t0 - S.W))) segs.push([o, i, j, i + 1, j]);
     }
   }
   R.borders = segs;
@@ -7124,7 +7158,7 @@ function render(dtReal) {
   const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
-  drawOffMap(ctx, ox, oy, z);
+  if (R.void) ringSpace(ctx, ox, oy, z); else drawOffMap(ctx, ox, oy, z); // (The Ring: space behind the asteroids)
   drawMapLayer(ctx, ox, oy, z);
   if (typeof natureGround === 'function') natureGround(ctx, ox, oy, z, v0, v1); // (swaying plants, wind in the grass, wet ground, frost: js/nature.js)
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
@@ -7135,6 +7169,7 @@ function render(dtReal) {
   if (S.town && typeof townGround === 'function') townGround(ctx, ox, oy, z); // (the city map's streets and lots: js/city.js)
   if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
   if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
+  if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
@@ -7149,6 +7184,7 @@ function render(dtReal) {
   drawSeaLife(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
+  if (R.void) ctx.restore();
 
   // Territory borders
   ctx.lineWidth = Math.max(1.5, z * 0.07);
@@ -9836,6 +9872,7 @@ const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ve
 /** Warbots on the minimap: a pale tint of each player's colour (cyan, red, green, purple: every rival its own). */
 const MM_WARBOT = ['#bff2ff', '#ffc2ca', '#c6f4cc', '#e4cbff'];
 
+const MM_VOID = [7, 10, 20]; // (space, on The Ring)
 const MM_COLORS = {
   ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150], chasm: [18, 12, 10],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
@@ -9870,7 +9907,7 @@ function rebuildMinimapBase() {
   const team = PLAYER_COLORS.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
-    let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] === R_OIL ? MM_COLORS[R_OIL] : S.ramp[t] ? MM_COLORS.ramp
+    let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? (R.void ? MM_VOID : MM_COLORS.chasm) : terr === T_ROCK ? MM_COLORS.rock : S.res[t] === R_OIL ? MM_COLORS[R_OIL] : S.ramp[t] ? MM_COLORS.ramp
       : S.fert && S.fert[t] ? MM_COLORS.fertile : (S.burnt && S.burnt[t]) || (S.ash && S.ash[t] > SCARS.light) ? MM_COLORS.burnt : S.crater && S.crater[t] >= 3 ? [70, 56, 40] : MM_COLORS.ground;
     const blend = R.biomeMix?.[t] || 0;
     if (blend) {
