@@ -245,7 +245,7 @@ function _noise(dur, vol, o) {
 const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 0.5, ratchet: 0.4, press: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
   touchdown: 0.4, approach: 0.8, planetakeoff: 0.8, trainhorn: 1.2, brakes: 1, clack: 0.05, shiphorn: 2.5, bubble: 0.15, cricket: 0.1,
   launch: 0.3, drizzle: 0.8, mdcharge: 0.8, mdlaunch: 0.4, mdcatch: 0.3, mdburst: 0.2, mdthud: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
-  deepsurge: 0.8, weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.8, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
+  deepsurge: 0.8, weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.8, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4, klaxon: 2.5, nukelaunch: 3,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3, arc: 0.12, rail: 0.18, railcharge: 0.3,
@@ -266,7 +266,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
  */
 const BLAST_SIZE = {
   flak: 0.4, shellhit: 0.55, botboom: 0.6, collapse: 0.9, boom: 1, howitzerhit: 1.1, fireball: 1.3, bombhit: 1.35, missilehit: 1.8, nuke: 3.2,
-  bombfall: 0.9, incoming: 1.2, nukefall: 3.2,
+  bombfall: 0.9, incoming: 1.2, nukefall: 3.2, nukelaunch: 2.8, // (a nuclear missile lifting off: heard far off)
   planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
   flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, arc: 0.5, rail: 0.6, railcharge: 0.4, // (heard only on screen)
   mdcharge: 0.5, mdlaunch: 0.7, mdcatch: 0.5, mdburst: 0.45, mdthud: 0.45, // (a Mass Driver and its canisters: heard on screen)
@@ -1079,6 +1079,19 @@ function sfx(name, dest, y, dur) {
     // The Arrival clock striking: two slow, low bell notes from the stele in the square, the second a little lower, fading long.
     case 'cityclock':
       for (const [f, dl] of [[392, 0], [329.6, 0.9]]) { _tone(f, 2.6, 'sine', 0.035, null, dl, D); _tone(f * 2.76, 1.1, 'sine', 0.008, null, dl, D); _tone(f * 0.5, 2.2, 'sine', 0.02, null, dl, D); }
+      break;
+    // A nuclear strike's launch sequence beginning at its Silo: a two-tone klaxon, four short blasts.
+    case 'klaxon':
+      for (let k = 0; k < 4; k++) { _tone(560, 0.26, 'square', 0.03, null, k * 0.55, D); _tone(440, 0.24, 'square', 0.03, null, k * 0.55 + 0.27, D); }
+      break;
+    // A nuclear missile lifting off: a crack as its engine lights, then a deep roar climbing away over seconds.
+    case 'nukelaunch':
+      _noise(0.09, 0.2, { type: 'highpass', freq: 1200, attack: 0.002, dest: D });
+      _tone(52, 1.2, 'sine', 0.2, 32, 0, D);
+      _noise(4.2, 0.22, { freq: 420, to: 140, attack: 0.25, dest: D });
+      _noise(3.6, 0.12, { type: 'bandpass', freq: 900, to: 2600, q: 0.7, attack: 0.4, delay: 0.1, dest: D });
+      _tone(70, 3.4, 'sawtooth', 0.03, 140, 0.1, D);
+      duckMusic(0.6, 2.5);
       break;
     // A nuclear missile coming for you: an air-raid siren, rising and falling.
     case 'siren': {

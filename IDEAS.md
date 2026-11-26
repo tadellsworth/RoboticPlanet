@@ -1432,12 +1432,12 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
   line, a "no entry" bar at the wrong-way end), small roadside signs or bollards at the entry, a lit cat's-eye string
   at night as the Expressway has, or an arrow that fades out along the lane. Pair with the Express highway's art so the
   two share a marking language. A small sheet of three looks first.
-- **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
-  Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
-  `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
-  what the redesign covers (its look in the Silo, in flight and the blast; how it plays; or both), then show a design
-  sheet to pick from, as for the Airship. Mind the single file's room (see Room to grow below): its art may want a
-  bundle of its own beside the page.
+- **Redesign the nuclear missile** (the owner's to-do, Nov 17). DONE, Nov 26 2026 (the owner's spec): a long, rounded
+  three-stage ICBM drawn in code (off-white, a dark heat-shield nose, stage bands, red warning marks, small fins: ART_GUIDE,
+  The nuclear missile), and a launch sequence in the look only: the missile waits in its Silo with the warning lights
+  flashing and steam venting, lifts off 10 s before impact, climbs off the screen and falls onto the target (README,
+  Nuclear race). Open: the blast itself (`nuke-blast-sheet`) is unchanged; a rival's launch seen off screen shows only on
+  the minimap and in the messages (an edge marker pointing to it?); the Silo's art still has no closed hatch to open.
 - **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
   maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
   Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.

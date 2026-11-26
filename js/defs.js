@@ -1131,6 +1131,7 @@ const NUKE_GOODS = ['uranium', 'fissile'];
  * A Command Base in the blast is left with almost no armor and no garrison, ready to be captured.
  */
 const URANIUM_DEPOSITS = 6;
+const NUKE_LAUNCH = 10; // (looks only) the missile waits in its Silo, warning lights flashing, until this many seconds before impact, then climbs away
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 /*

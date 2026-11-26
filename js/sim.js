@@ -10202,11 +10202,8 @@ function updateMissiles(dt) {
       continue;
     }
     if (m.nuke) {
+      // (its countdown in the Silo, the launch at NUKE_LAUNCH s to go, the climb, its smoke and the fall are all drawn: drawNukeFlight)
       if (!m.roar && m.dur - m.t <= MISSILE_WARN * 1.6) { m.roar = true; sfx('nukefall', m.x1, m.y1); }
-      if (S.tick % 3 === 0) {
-        const k = Math.min(1, m.t / m.dur);
-        addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 7 + 0.2, { r: 0.35, life: 1.4 });
-      }
       if (m.t >= m.dur) nukeImpact(m);
       continue;
     }
@@ -10347,9 +10344,9 @@ function fireNukeAt(silo, i, j) {
     x0: silo.x + 0.5, y0: silo.y + 0.5, x1: i + 0.5, y1: j + 0.5,
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#9dff3a', r: 2, life: 1.2 });
-  sfx('launch');
+  sfx('klaxon'); // (the launch itself comes NUKE_LAUNCH s before impact: drawNukeFlight)
   if (!isMe(silo.owner) && !S.players[ME].absent) sfx('siren');
-  postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
+  postMsg(silo.owner, `Launch sequence started: liftoff in ${NUKE.flight - NUKE_LAUNCH} seconds, impact in ${NUKE.flight}.`, i, j, 'good');
   // Every launch by a rival is detected (in a free-for-all too), wherever it's aimed.
   if (!isMe(silo.owner)) {
     const atUs = nukesThreatening(ME).includes(S.missiles[S.missiles.length - 1]), L = getE(S.players[ME].lander);

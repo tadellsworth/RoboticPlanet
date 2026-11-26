@@ -2220,8 +2220,34 @@ and night (as `TOD.state.lights` rises) each one but Arrival City (its own `city
 Their own lights stay as they were (the Lift's cable, the Uplink's rim, the Deep Core's shaft, the Engine's plume, the
 Lance's charge glow, the Dome's shimmer). Knocked out or offline (`megaOut`) it is dark: its graded day art in place of
 the lit night art (`drawMegaArt`), no layer, no pools, its Lift cable dim and unlit, and only its amber lamp blinking
-(`drawMegaDark`). A site is drawn as any site. Moving a lamp: change its `[u, v]` in `MEGA_LAMPS` (read off the night
+(`drawMegaDark`). Their moving parts go dark with them (Nov 26 2026): the Sundering Ray's rams and plates and the Deep
+Core's winding wheels are drawn through `drawMegaArt` too, so no lit night frames sit on a dark structure. A site is drawn as any site. Moving a lamp: change its `[u, v]` in `MEGA_LAMPS` (read off the night
 render, 0..1 across and down).
+
+### The nuclear missile (drawn in code; no images)
+
+The owner, Nov 26 2026: longer and more rounded, like a modern ICBM, still menacing. It replaced
+`markers/nuclear-missile.webp` (the old black-and-yellow rocket) and the missile baked into `nukesilo@T`: the Nuclear Silo
+is now always drawn with its open shaft (`nukesilo-empty@T`) and the missile in code standing in it.
+- **The sprite** (`icbmArt` in `js/render.js`, made once, 768 px square, nose to the right, kept as an art entry so
+  `drawArt` grades it for morning, evening and night like any image): `ICBM.len` 1.85 tiles long, `ICBM.dia` 0.155 wide
+  (12 : 1). Three stages, each a little narrower (radius 0.5, 0.47, 0.435 of its width), grey separation bands with rivet
+  rows, a rounded ogive nose (about 1.9 calibres, blunt at the tip) with a dark ablative heat-shield on its front third and
+  a scorched edge; an off-white body (`#e9e7df`) shaded as a cylinder lit from above (multiply, then a soft sheen and a
+  cool reflected rim); panel seams, a stencilled serial block, red warning bands (`#b3191e`) on the first and third
+  stages, a short black-and-yellow stripe by the first band, a red trefoil; soot toward the base; a dark nozzle; four
+  small clipped-delta fins (two edge-on, one face-on). A fine dark outline keeps it readable on pale ground.
+- **Drawing it** (`drawIcbm`): turned to any angle, flipped so its lit side stays up and to the left; at night its day
+  colours come back at 45% (floodlit by its Silo, then its own fire); `drawIcbmFlame` is its exhaust (three additive
+  layers, a white-hot core, flickering) with a glow; re-entry adds a hot glow at the nose.
+- **In the Silo** (`drawSiloIcbm`, `NSILO_HOLE`: the shaft's mouth in tiles from the square's middle): standing in the
+  shaft, cut off at the mouth (the back half of the rim behind it, the front lip over it), falling into shadow down the
+  shaft; armed, `ICBM_OUT` (24%) of it shows; it rises into place over `SILO_RISE`. During a strike, `drawNukeSiloAlarm`:
+  four red beacons turning round the pad (a sweep of light each), the hatch rim flashing red faster toward liftoff, white
+  steam (`steamPuff`) from four vents, and in the last 1.6 s fire and smoke out of the mouth as it shakes.
+- **Climb and fall** (`drawNukeClimb`, `drawNukeFall`): see README (Nuclear race). Smoke puffs are laid every third of a
+  tile of the climb (so the column has no gaps however fast it goes), white steam with grey smoke mixed in, drifting
+  downwind as they age; the fall is a white-hot streak 7 tiles long behind it.
 
 ### The minimap (drawn in code)
 
@@ -2336,7 +2362,7 @@ Campaign's picture is unchanged.
 - All six robots now drive with Batch 8 frames (`worker`, `warbot`, `hauler`, `agribot`, `paver`, `truck`, each
   `@0/@1-f0…f3` plus `-brake` and `-boost`, stored as WebP in `art/bots/` and listed with `driveSet()`); the hauler's
   crates are drawn on its bed. The military buildings, the 3D Command Base, the Repair Bay (`repair`) and the nuclear
-  set (`reactor`, `nukesilo@0/@1`, `nuclear-missile`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
+  set (`reactor`, `nukesilo@0/@1`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
   installed too. Any robot can use this pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
   `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
   Installed since: the Batch 14 defences, streetlamps (`streetlamp-road`/`-asphalt`, `-lit`, `-pool`) and the Pulse

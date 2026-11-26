@@ -3091,8 +3091,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Only a Command Base or Keep (`captureOnly`) drops no lower than `MISSILE_FLOOR` (35%) of its armor, from Missiles, bombs or rockets alike; warbots have to capture those. Everything else, Outposts and Bunkers included, can be knocked out, and a wrecked fort's garrison walks out alive (`releaseBotsFrom`; a nuke kills it first). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
-  A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading; a Nuclear Silo once
-  armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
+  A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading), then the missile fades
+  in (`siloRise`; art `silo-empty`). A Nuclear Silo is always drawn open (`nukesilo-empty`), the nuclear missile (drawn in
+  code: `icbmArt`) rising into its hatch once it's armed.
   To fire, tap a Silo and press **Aim missile**: its 22-tile range shows as a red ring; tap any spot inside it (a
   building, open ground, or a rival robot or vehicle on the ground) to see the blast radius, then **Fire**. With no
   building there, a rival robot or vehicle within `MISSILE_LOCK` (0.9) tiles of the tile's middle is the target
@@ -3104,12 +3105,21 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   strike and a Howitzer's target are picked by a tap, ringed, then confirmed on the banner (`pickTarget`).
 - **Nuclear race** (new-game option): six small Uranium deposits on each side (`URANIUM_DEPOSITS`, in each colony's half, third or quarter) glow green. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
-  Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
+  Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It lands `NUKE.flight` (30) s after it's fired (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
   `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
   garrison and 1 armor, unless the missile lands on it (within `NUKE.direct`, 2 tiles, of its centre): then it's
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
+  **The strike as it looks** (render only, `drawNukeFlight` in `js/render.js`; the game still just counts the 30 s down,
+  the owner's spec, Nov 26 2026): a klaxon (`sfx('klaxon')`) and the launch sequence in the Silo, the missile still in
+  its shaft with its nose out of the hatch, beacons turning, the hatch rim flashing red and steam venting
+  (`drawNukeSiloAlarm`), the engine lighting in the shaft in the last 1.6 s; liftoff `NUKE_LAUNCH` (10) s before impact
+  (`sfx('nukelaunch')`, heard far off), straight up and faster and faster (`icbmClimb`) off the top of the screen,
+  leaving a smoke column and a ground cloud that linger 9 s after the blast (`drawNukeAfter`); in its last `NUKE_FALL`
+  (2) s it falls steeply out of the sky onto the target from the Silo's side, nose glowing with re-entry heat, a
+  white-hot streak behind it (`drawNukeFall`). The minimap shows a blinking red dot at the Silo until liftoff, then the
+  missile crossing to the target. The missile is a long three-stage ICBM drawn in code (`icbmArt`, see ART_GUIDE).
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
   - **Radiation** (`RAD` in `js/defs.js`; the rules in `js/sim.js`, "radiation"; the looks and sound in `js/radfx.js`).
     A nuke's fallout (`radAdd(..., 'nuke')` in `nukeImpact`, after `domeCatch`: a nuke a Shield Dome stops leaves none)
@@ -3887,7 +3897,7 @@ Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Pla
 (team versions for the military ones), plus the Repair Station, the fortified Command Base, the Nuclear Reactor and
 Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team
 plus brake-light and boost overlays (WebP, `driveSet()` in the manifest); the frames advance with the distance driven.
-The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too, and so are the Bunker,
+The nuclear missile's 24-frame detonation sheet and the scorch mark are custom too (the missile itself is drawn in code: `icbmArt`), and so are the Bunker,
 Disruptor Tower and Mortar Pit (with their firing overlays, the Mortar's tube in 16 directions and morning, evening
 and night sets), the streetlamps along roads (`streetLamps`: posts sorted with buildings and bots, lit heads and
 light pools at dusk and night) and the Pulse Turret's twin violet laser and hit burst (`fx-pulse-laser`,

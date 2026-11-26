@@ -47,7 +47,7 @@
  *              anchor ('bottom' or [x, y]), a 3/4-view base only, plus head images turret-head-0@0 … turret-head-7@0
  *              (and @1): the gun head alone on the same canvas, facing right (0), then each 45° step
  *              clockwise on screen (1 down-right … 6 up/away, 7 up-right). 16 heads (0-15) also work.
- *   Markers:   missile (in flight, facing right; 128x128)  nuclear-missile  rally (your rally flag; 128x128)
+ *   Markers:   missile (in flight, facing right; 128x128)  rally (your rally flag; 128x128)
  *              oneway (arrow painted on a one-way path, pointing right; 64x64)
  *   Effects:   nuke-blast (a 6×4 sprite sheet, 24 frames)  nuke-scorch (the scorched crater)
  *              Weapon effects (ART_GUIDE Batch 15), sprite sheets given with frames and cols, e.g.
@@ -186,7 +186,6 @@ const ART_MANIFEST = {
   // The same Silos with no missile in them: drawn until one is armed and ready to fire.
   'nukesilo-empty@0': B3D('buildings/nuclear-silo-empty@0.webp'),
   'nukesilo-empty@1': B3D('buildings/nuclear-silo-empty@1.webp'),
-  'nuclear-missile': 'markers/nuclear-missile.webp',
   'nuke-blast': 'effects/nuke-blast-sheet.webp',
   'nuke-scorch': 'effects/nuke-scorch.webp',
 
