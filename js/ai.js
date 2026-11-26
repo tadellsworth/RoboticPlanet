@@ -2119,9 +2119,10 @@ function aiAir(p, me, kinds, lvl) {
   }
   if (!cands.length) return;
   cands.sort((a, c) => a.s - c.s || a.b.id - c.b.id);
-  for (const c of cands.slice(0, 4)) {
-    const spot = aiAirSpot(p, pl, c.b);
-    if (!spot) continue;
+  const none = new Set(); // (a candidate's spot is looked for round it: one more fort in an area with no free ground is not looked at again)
+  for (const c of cands.slice(0, 12)) {
+    const spot = none.has(c.b.id) ? null : aiAirSpot(p, pl, c.b);
+    if (!spot) { for (const e of cands) if (dist2(e.b.x, e.b.y, c.b.x, c.b.y) <= 36) none.add(e.b.id); continue; }
     P.air = { i: spot.i, j: spot.j, tgt: c.b.id, need: c.need, since: S.time, go: 0, rid: 0, sent: 0, fails: 0 };
     const n = Math.min(AI_AIR.flight, avail), why = orderAirdrop(p, pl, 'warbot', spot.i, spot.j, n);
     if (why) { P.air = null; P.airLast = S.time - 30; return; }

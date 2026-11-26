@@ -280,14 +280,15 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   everywhere else (`T_CHASM` that no road, bridge or Sky bridge crosses): armies cross by Viaduct or Ropeway where the gaps
   are short (3½ to 6 tiles), and otherwise fly (Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers, Missiles).
   Argos's ground and rules (the biome is forced to Lunar: no Murmur, no weather), no dust storm, more oil than any other map.
-  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring (the
-  rest won at 20, 35 and 45 minutes), against 8 of 8 on Sky islands run the same way. The long ones are the fight over the middle rock
-  (both sides land a span there by minute 8) and then a span a stone at a time; the rival's economy there matches Standard's (more Cement,
-  Alloy and Fuel at 15 minutes).
+  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring
+  before the rival flew (the rest won at 20, 35 and 45 minutes), 8 of 8 on Sky islands. The Viaduct chain was measured to join the two home
+  asteroids by minute 10, so the games stalled at the Viaduct (both armies meet there; the spans get shot down), not for want of a crossing.
+  The rival now also flies bands of warbots over in Cargo Planes (README, the AI: *The rival's aircraft*): 2 of 8 undecided.
   Open: **drifting rocks** (the owner likes the idea as a later one: the asteroids stay put today, only the backdrop moves;
   a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
-  home asteroid each round a rich middle one: only two now); the rival builds **no Airships or aircraft** and crosses by
-  Viaduct only (as on Sky islands); whether the Ring needs a **mission** (none yet).
+  home asteroid each round a rich middle one: only two now); the rival flies Cargo Planes but builds **no Airships or Mooring Masts**
+  and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
+  a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface). Cave entrances split the map. **Inside the caves: plenty of Ore and
   Crystal, but nothing grows and nothing is harvested** (no farms, Reedcane or crops), and **no Missiles or aircraft**
   reach in. Outside: the surface with the growing and harvested goods. Build inside for safety and venture out, or
