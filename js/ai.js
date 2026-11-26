@@ -563,6 +563,10 @@ function aiThink(p) {
   // Its planes burn Fuel (a bomber sortie BOMBER.fuel on top of its tank): with an Airfield going up, one more Fuel
   // maker, whichever fits its land (decided once, P.airFuel): a Refinery while it pumps more Crude than its Refineries
   // take, or else a Bio Farm where there's soil none of its farms works, or else a Refinery (and Oil Pump) on oil.
+  // Over a gap it cannot cross on foot (The Ring, Sky islands), the Airfield comes early, and a second one: a Cargo Plane
+  // flies its warbots across (aiAir).
+  const airN = aiAirFields(p, me);
+  if (airN && (counts.airfield || 0) < airN) plan = [['airfield', airN]].concat(plan.filter(([t]) => t !== 'airfield'));
   if (counts.airfield && !P.airFuel) {
     const pumps = me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length;
     const type = pumps > (counts.refinery || 0) ? 'refinery' : aiFindSpot(p, 'farm', lander) ? 'farm' : pumps || aiFindSpot(p, 'pump', lander) ? 'refinery' : 'farm';
@@ -1312,6 +1316,9 @@ function aiThink(p) {
     aiNaval(p, me, kinds, lvl, lander, !few && (sites < maxSites || portRoom), firstFerry);
   }
 
+  // 4d) A gap with no crossing on foot (The Ring, Sky islands): Cargo Planes fly warbots over it.
+  if (S.mode !== 'colony') aiAir(p, me, kinds, lvl);
+
   // 4e) Howitzers: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
   // 4f) Bulk trade: pick a contract at the Trade Terminal.
@@ -1930,6 +1937,247 @@ function aiBeach(p, lvl, army, ferries, yard) {
     return true;
   }
   return false;
+}
+
+/**
+ * Over a gap it cannot cross on foot (The Ring's empty space, Sky islands' canyons: the rival's Command Base stands in
+ * another area, `S.zone`), a Medium, Normal or Hard rival flies: an Airfield (a second one too) with a Cargo Plane each,
+ * and the warbots go across two to a flight, landing out of the enemy guns' reach near the target (aiAirSpot) to gather
+ * under a flag, as a beach landing does (aiBeach), then go in together. Its Viaducts go up as ever (aiBridge) and shut
+ * the gap if they get there first. Only on those two maps, never in the Hollow (no aircraft there). A doctrine sets
+ * when it starts (`at`), the lead over the rival's army it wants first (`lead`, a multiple, with `more` over it), the band
+ * (`need`, a multiple of what the target takes), and how many planes it keeps (`planes`): the Herald rushes soonest with
+ * a small band, the Salvager raids the cheapest fort rather than the base (`raid`), the Architect brings the biggest band
+ * with two planes, the Warden waits for a decisive lead.
+ */
+const AI_AIR = { second: 10, third: 18, first: 5, reach: 22, more: 2, wait: 300, part: 0.7, give: 540, bat: 40, gap: 60, flight: 2, max: 24, tries: 3 };
+const AI_AIR_STYLE = {
+  rusher: { at: 480, lead: 0.9, more: 2, need: 0.7, planes: 1 },
+  raider: { at: 540, lead: 1, more: 2, need: 0.8, planes: 1, raid: true },
+  balanced: { at: 600, lead: 1.15, more: 3, need: 1, planes: 2 },
+  tycoon: { at: 660, lead: 1.2, more: 3, need: 1.15, planes: 2 },
+  turtle: { at: 780, lead: 1.5, more: 4, need: 1.2, planes: 1 },
+};
+function aiAirStyle(p) { return AI_AIR_STYLE[S.players[p].style] || AI_AIR_STYLE.balanced; }
+
+/** Rivals of p to fly to: [{ q, L }]. Empty off The Ring and Sky islands (every way across is a Viaduct, a Ropeway or a flight there). */
+function aiAirFoes(p) {
+  const out = [], sh = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0];
+  if (!sh || !(sh.asteroids || sh.sky) || S.difficulty === 'easy' || !warOn() || worldBan('airfield') || botBanned(p, 'cargoplane')) return out;
+  for (let q = 0; q < S.players.length; q++) {
+    const Q = S.players[q], L = getE(Q.lander);
+    if (q === p || !foes(q, p) || isWild(q) || Q.out || Q.absent || !L || L.dead || L.owner !== q) continue;
+    out.push({ q, L });
+  }
+  return out;
+}
+
+/** How many Airfields rival p wants (0: none: it has no gap to fly over yet, or the basics aren't up). */
+function aiAirFields(p, me) {
+  const P = S.players[p], st = aiAirStyle(p);
+  if (S.time < st.at - 240 || aiArmyOf(p) < AI_AIR.first || !me.some((b) => b.type === 'armory' && b.built) || !me.some((b) => b.type === 'foundry' && b.built)) return 0;
+  if (!aiAirFoes(p).length) return 0;
+  // (A second Airfield and plane once there is an army worth carrying: Chips go to the first plane, then to warbots.)
+  return S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoplane') ? aiAirPlanes(p) : 1;
+}
+
+/** How many Cargo Planes rival p keeps: one, then its doctrine's count from an army of AI_AIR.second, one more from AI_AIR.third. */
+function aiAirPlanes(p) {
+  const a = aiArmyOf(p);
+  return a < AI_AIR.second ? 1 : a < AI_AIR.third ? aiAirStyle(p).planes : aiAirStyle(p).planes + 1;
+}
+
+/** Cargo Planes of p, and the ones parked ready (idle, at their Airfield, with a tank to fly). */
+function aiPlanes(p) {
+  const all = [], ready = [];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.type !== 'cargoplane') continue;
+    all.push(u);
+    const b = planeBase(u);
+    if (b && u.inside === b.id && !u.mission && !u.flight) ready.push(u);
+  }
+  return { all, ready };
+}
+
+/**
+ * Where a band of `n` warbots lands to take building T: a ground tile of T's area within AI_AIR.reach of it that a plane
+ * of p's can drop on, out of every gun's reach (two tiles more) and of the sortie of the forts round it, off the enemy's
+ * land where it can be, the nearer the better. {i, j} or null.
+ */
+function aiAirSpot(p, pl, T) {
+  const z = S.zone[tIdx(T.x, T.y)], R = AI_AIR.reach;
+  dangerMap(p);
+  const guns = DANGER.guns[p] || [];
+  const forts = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && BDEFS[e.type].mil && !BDEFS[e.type].bunker && e.garrison && e.garrison.length && dist2(e.x, e.y, T.x, T.y) <= (R + 8) * (R + 8));
+  const flak = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && BDEFS[e.type].flak), base = planeBase(pl);
+  let best = null, bs = Infinity;
+  for (let j = Math.max(1, T.y - R); j <= Math.min(S.H - 2, T.y + R); j++) for (let i = Math.max(1, T.x - R); i <= Math.min(S.W - 2, T.x + R); i++) {
+    const t = tIdx(i, j), d = dist(i, j, T.x, T.y);
+    if (d > R || S.zone[t] !== z || S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t) || S.res[t] || scorched(t)) continue;
+    let cover = 0;
+    for (const g of guns) if (dist2(g.b.x + 0.5, g.b.y + 0.5, i + 0.5, j + 0.5) <= (g.r + 2) * (g.r + 2)) cover++;
+    if (cover) continue;
+    for (const e of forts) if (dist2(e.x, e.y, i, j) <= (SORTIE_REACH + 2) * (SORTIE_REACH + 2)) cover++;
+    const sc = cover * 10 + (S.owner[t] >= 0 && S.owner[t] !== p ? 3 : 0) + d * 0.4;
+    if (sc >= bs || (flak.length && base && aiAirFlak(flak, base.x, base.y, i + 0.5, j + 0.5)) || airdropBlocked(p, pl, 'warbot', i, j)) continue;
+    bs = sc; best = { i, j };
+  }
+  return best;
+}
+
+/** Does a Flak Gun of `flak` reach the plane's way from (x0, y0) to (x1, y1) (its range and a margin from the line, or the spot's)? */
+function aiAirFlak(flak, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1, m = BDEFS.flak.range + 3;
+  for (const f of flak) {
+    const k = clamp(((f.x + 0.5 - x0) * dx + (f.y + 0.5 - y0) * dy) / l2, 0, 1);
+    if (dist2(f.x + 0.5, f.y + 0.5, x0 + dx * k, y0 + dy * k) <= m * m || dist2(f.x + 0.5, f.y + 0.5, x1, y1) <= (m + 2) * (m + 2)) return true;
+  }
+  return false;
+}
+
+/**
+ * How many warbots a band needs to take building b (aiTakeNeed and a few over, by the doctrine's `need`; AI_AIR.max at most;
+ * its attack threshold at least). Against a rival crushed (twice its army and four more on our side) no more than that
+ * army's twice and two (as for a storm: aiMarch).
+ */
+function aiAirNeed(p, b, lvl, st, shields, army) {
+  let n = Math.min(AI_AIR.max, Math.ceil((aiTakeNeed(b, lvl, shields) + AI_AIR.more) * st.need));
+  const foe = aiArmyOf(b.owner);
+  if (army >= foe * 2 + 4) n = Math.min(n, Math.max(8, foe * 2 + 2));
+  return Math.max(Math.ceil(lvl.threshold * st.need), n);
+}
+
+/** The flag (rally) of rival p's band on the spot (i, j), made if none stands there yet. */
+function aiAirFlag(p, i, j) {
+  const ox = i + 0.5, oy = j + 0.5;
+  let r = S.rallies.find((q) => q.owner === p && !q.grp && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
+  if (!r) { r = { id: S.nextId++, owner: p, x: ox, y: oy }; S.rallies.push(r); }
+  return r;
+}
+
+/** Rival P's air band is over (`back` s of its wait for the next left off the gap). */
+function aiAirEnd(P, why, back) {
+  P.air = null; P.airLast = S.time - back;
+}
+
+function aiAir(p, me, kinds, lvl) {
+  const P = S.players[p], foesAir = aiAirFoes(p), st = aiAirStyle(p);
+  if (!foesAir.length) { if (P.air) aiAirEnd(P, 'nofoes', 0); return; }
+  const hz = homeZone(p);
+  // Warbots of ours left idle in another area (a band called off, a flight that missed) go after the nearest enemy building there.
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !isArmy(u) || u.inside || u.dropping || u.ferryWait || !botArmed(u) || u.task) continue;
+    const z = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+    if (z === hz || z < 0 || (P.air && dist2(u.x, u.y, P.air.i + 0.5, P.air.j + 0.5) <= 64)) continue; // (not the ones just landed for a band: they fall in under its flag)
+    let tgt = null, bd = Infinity;
+    for (const b of S.buildings) {
+      if (b.dead || !foes(b.owner, p) || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
+      const d = dist(b.x, b.y, u.x, u.y) - (b.type === 'lander' ? 8 : 0);
+      if (d < bd) { bd = d; tgt = b; }
+    }
+    if (tgt) { u.task = { type: 'attack', target: tgt.id }; u.path = null; }
+  }
+  if (S.time < st.at - 240 || !me.some((b) => b.type === 'foundry' && b.built) || aiArmyOf(p) < AI_AIR.first) return;
+  // The planes: each Airfield's hangar builds a Cargo Plane (up to what the doctrine keeps).
+  const { all, ready } = aiPlanes(p);
+  const fields = me.filter((b) => b.built && BDEFS[b.type].airfield);
+  let have = all.length;
+  for (const b of fields) if (b.yard && b.yard.cargoplane > 0) have += b.yard.cargoplane;
+  const want = have ? aiAirPlanes(p) : 1; // (more planes wait for an army)
+  for (const b of fields) {
+    if (have >= want) break;
+    const h = hangarCount(b, 'cargoplane');
+    if (h.have + h.making < 1 && !(b.yard && b.yard.cargoplane > 0)) { orderAtYard(b, 'cargoplane', 1); have++; }
+  }
+  if (S.time < st.at) return;
+  const army = aiArmyKinds(kinds);
+  let B = P.air;
+  if (B) {
+    const T = getE(B.tgt);
+    let r = B.rid ? rallyById(B.rid) : null;
+    if (!r) { r = S.rallies.find((q) => q.owner === p && !q.grp && Math.abs(q.x - B.i - 0.5) < 1.5 && Math.abs(q.y - B.j - 0.5) < 1.5) || null; B.rid = r ? r.id : 0; } // (a drop leaves the warbots under a flag of their own: updateDrops)
+    const z = S.zone[tIdx(B.i, B.j)];
+    // Any landed warbot with nothing to do falls in under the flag.
+    let landed = 0;
+    for (const u of S.bots) {
+      if (u.dead || u.owner !== p || !isArmy(u) || u.inside || u.dropping || u.task || dist2(u.x, u.y, B.i + 0.5, B.j + 0.5) > 64 || S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] !== z) continue;
+      if (!r) { r = aiAirFlag(p, B.i, B.j); B.rid = r.id; r.landing = S.time; }
+      u.task = { type: 'hold', rally: r.id, slot: rallyMembers(r.id).length };
+      landed++;
+    }
+    const band = r ? rallyMembers(r.id).filter((u) => botArmed(u)) : [];
+    const lost = !T || T.dead || !foes(T.owner, p) || S.players[T.owner].out;
+    if (B.go) {
+      if (lost || !r || band.length * 5 < B.go * 2) { aiAirEnd(P, 'goend ' + (lost ? 'lost ' : '') + (r ? band.length + '/' + B.go : 'noflag'), 0); return; }
+      const g = getE(r.first);
+      if (!g || g.dead || !foes(g.owner, p)) r.first = aiFirstGun(T.owner, Math.floor(r.x), Math.floor(r.y));
+      return;
+    }
+    if (lost) { aiAirEnd(P, 'lost target', 30); return; }
+    let coming = 0;
+    for (const u of all) if (u.mission && u.mission.kind === 'warbot' && u.mission.x === B.i && u.mission.y === B.j) coming += (u.aboard ? u.aboard.length : 0) || u.mission.n || 0;
+    for (const u of S.bots) if (!u.dead && u.dropping && u.owner === p) coming++;
+    const nHave = band.length, waited = S.time - B.since;
+    B.need = aiAirNeed(p, T, lvl, st, band.filter((u) => BOTS[u.type].shield).length, army);
+    const low = nHave && band.reduce((n, u) => n + (u.bat ?? 100), 0) < AI_AIR.bat * nHave;
+    if (r && nHave && (nHave >= B.need || ((waited > AI_AIR.wait || low) && nHave >= B.need * AI_AIR.part))) {
+      for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+        const i = T.x + di, j = T.y + dj;
+        if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === z) { r.x = i + 0.5; r.y = j + 0.5; break; }
+      }
+      r.first = aiFirstGun(T.owner, Math.floor(r.x), Math.floor(r.y));
+      B.go = nHave;
+      (P.fights = P.fights || []).push({ x: T.x, y: T.y, n: nHave, t: S.time, ids: band.map((u) => u.id) });
+      P.siegeAt = { x: T.x, y: T.y, until: S.time + 120 };
+      return;
+    }
+    if (waited > AI_AIR.give) { aiAirEnd(P, 'gave up', 0); return; }
+    if (B.sent - nHave - coming >= Math.max(4, B.sent * 0.4)) {
+      if (r && nHave >= B.need * AI_AIR.part) B.need = nHave;
+      else { (P.beaten = P.beaten || []).push({ x: T.x, y: T.y, n: B.sent, until: S.time + 300 }); aiAirEnd(P, 'beaten', 0); return; }
+      return;
+    }
+    // More flights: each Cargo Plane ready on its Airfield brings two.
+    for (const u of ready) {
+      const want = B.need + st.more - nHave - coming;
+      if (want <= 0) break;
+      const base = planeBase(u), avail = rallyAvailable(p, base.x, base.y, true);
+      if (avail < Math.min(2, want)) continue;
+      const n = Math.min(AI_AIR.flight, avail, want), why = orderAirdrop(p, u, 'warbot', B.i, B.j, n);
+      if (why) { B.fails = (B.fails || 0) + 1; if (B.fails >= AI_AIR.tries) { aiAirEnd(P, 'flights failed', 0); return; } continue; }
+      B.fails = 0; B.sent += n; coming += n;
+    }
+    return;
+  }
+  // No band under way: start one, with the lead over a rival across the gap, a plane ready, warbots to spare.
+  if (!ready.length || S.time < lvl.grace || S.time - (P.airLast || -999) < AI_AIR.gap || S.time < (P.airTry || 0) || army < lvl.threshold + 2) return;
+  P.airTry = S.time + 20;
+  const pl = ready[0], base = planeBase(pl), avail = rallyAvailable(p, base.x, base.y, true);
+  if (avail < Math.min(4, lvl.threshold)) return;
+  let best = null;
+  for (const { q } of foesAir) { const n = aiArmyOf(q); if (army >= n * st.lead + st.more && (!best || n < best.n)) best = { q, n }; }
+  if (!best) return;
+  const cands = [], bases = best.q;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner !== bases || !BDEFS[b.type].mil || BDEFS[b.type].bunker || BDEFS[b.type].wild) continue;
+    const need = aiAirNeed(p, b, lvl, st, 0, army);
+    if (need > avail + 2 * AI_AIR.flight * 4 || aiBeaten(P, b, need)) continue;
+    const eL = getE(S.players[b.owner].lander), base0 = b.id === S.players[b.owner].lander;
+    // (The Command Base first when it has the lead for it; a Salvager raids the cheapest fort instead.)
+    cands.push({ b, need, s: (base0 && !st.raid ? -100 : 0) + need + (eL ? dist(b.x, b.y, eL.x, eL.y) * 0.15 : 0) });
+  }
+  if (!cands.length) return;
+  cands.sort((a, c) => a.s - c.s || a.b.id - c.b.id);
+  const none = new Set(); // (a candidate's spot is looked for round it: one more fort in an area with no free ground is not looked at again)
+  for (const c of cands.slice(0, 12)) {
+    const spot = none.has(c.b.id) ? null : aiAirSpot(p, pl, c.b);
+    if (!spot) { for (const e of cands) if (dist2(e.b.x, e.b.y, c.b.x, c.b.y) <= 36) none.add(e.b.id); continue; }
+    P.air = { i: spot.i, j: spot.j, tgt: c.b.id, need: c.need, since: S.time, go: 0, rid: 0, sent: 0, fails: 0 };
+    const n = Math.min(AI_AIR.flight, avail), why = orderAirdrop(p, pl, 'warbot', spot.i, spot.j, n);
+    if (why) { P.air = null; P.airLast = S.time - 30; return; }
+    P.air.sent = n;
+    return;
+  }
 }
 
 /**
@@ -3688,7 +3936,9 @@ function aiBomber(p, me) {
   const field = me.find((b) => b.type === 'airfield' && b.built);
   if (!field) return;
   const bombers = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].bomber);
-  if (!bombers.length && !(field.yard && field.yard.bomber > 0) && !botBanned(p, 'bomber')) orderAtYard(field, 'bomber', 1);
+  // (Over a gap with no crossing on foot a Cargo Plane first: its Chips go to that, not to a bomber: see aiAir.)
+  const planeFirst = aiAirFoes(p).length && !S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoplane');
+  if (!bombers.length && !(field.yard && field.yard.bomber > 0) && !botBanned(p, 'bomber') && !planeFirst) orderAtYard(field, 'bomber', 1);
   const gun = P.gunTarget ? getE(P.gunTarget) : null;
   if (S.time - (P.lastStrike || -999) < (gun && !gun.dead ? AI_BOMB_GAP / 4 : AI_BOMB_GAP)) return;
   const u = bombers.find((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time) && planeBase(v) && v.inside === planeBase(v).id);
