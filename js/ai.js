@@ -3201,17 +3201,15 @@ function aiRaid(p, lvl) {
  * Cutting a foe's Maglev line (Medium and up): in place of a road raid, at most once every AI_MAGCUT.every seconds and
  * never two raids running, a band of a raid's size (one more when it can spare it) goes for a building of a running line (pods on it)
  * that no gun covers, clear of every garrison the raid keeps clear of (`guards`, see aiRaid) and of as many armed
- * warbots as the band within AI_MAGCUT.fort tiles (in forts or out; fewer count against it), with a free tile beside
- * it on the band's ground: a Terminal (it suspends every line it ends until one is built on its tile again) before a
- * pylon (a Worker rides out and rebuilds that), the nearer first. Its flag is planted beside the target and the band
- * shoots it first (rally.target); once it's down the flag comes in (followRallies) and the raid is over. True if sent.
+ * warbots as the band within AI_MAGCUT.fort tiles. Prefer the middle third of a long line, away from its Terminals.
+ * If a target has no safe approach, try the next. The band shoots its target first and is recalled once it falls.
  */
-const AI_MAGCUT = { every: 300, term: 12, pylon: 7, far: 0.08, fort: 8 };
+const AI_MAGCUT = { every: 300, long: MAGLEV.spacing * 4, term: 12, pylon: 7, far: 0.08, fort: 8 };
 function aiMagCut(p, guards, size, st) {
   const P = S.players[p], L = getE(P.lander);
   if (S.difficulty === 'easy' || !L || S.time - (P.magCutT ?? -999) < AI_MAGCUT.every || (P.raidN || 0) % 2 !== 1) return false;
   const z = homeZone(p), forts = S.buildings.filter((f) => !f.dead && f.built && f.owner >= 0 && foes(f.owner, p) && BDEFS[f.type].mil);
-  let best = null, bs = -Infinity;
+  const targets = [];
   for (const b of S.buildings) {
     if (b.dead || !b.built || b.owner < 0 || isWild(b.owner) || !foes(b.owner, p)) continue;
     const d = BDEFS[b.type];
@@ -3225,26 +3223,36 @@ function aiMagCut(p, guards, size, st) {
     for (const f of forts) if (f.owner === b.owner && dist2(f.x, f.y, b.x, b.y) <= AI_MAGCUT.fort * AI_MAGCUT.fort) near += armedIn(f);
     near += agFoesNear(p, b.x + 0.5, b.y + 0.5, AI_MAGCUT.fort);
     if (near >= size) continue;
-    const sc = (d.magterm ? AI_MAGCUT.term : AI_MAGCUT.pylon) - dist(b.x, b.y, L.x, L.y) * AI_MAGCUT.far - near * 4;
-    if (sc <= bs) continue;
-    let spot = null;
+    let middle = false;
+    if (d.pylon) {
+      const [A, B] = ends, length = magPathLen(magPathOf(A, B));
+      if (length >= AI_MAGCUT.long) {
+        const along = magSpotD(A, B, b.k);
+        middle = along >= length / 3 && along <= length * 2 / 3;
+      }
+    }
+    const score = (d.magterm ? AI_MAGCUT.term : AI_MAGCUT.pylon) - dist(b.x, b.y, L.x, L.y) * AI_MAGCUT.far - near * 4;
+    targets.push({ b, middle, score });
+  }
+  targets.sort((a, b) => b.middle - a.middle || b.score - a.score || a.b.id - b.b.id);
+  for (const { b } of targets) {
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
       const i = b.x + di, j = b.y + dj;
-      if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === z && !gunCovers(p, tIdx(i, j))) { spot = { i, j }; break; }
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (!walkable(t) || S.bAt[t] || S.zone[t] !== z || gunCovers(p, t)) continue;
+      const n = Math.min(size + 1, rallyAvailable(p, i, j, !!st.harass) - (st.raidKeep ?? 2));
+      if (n < size || aiRouteHot(p, i, j)) continue;
+      const { sent, rally } = sendToRally(p, i, j, n, !!st.harass);
+      if (!sent) continue;
+      rally.target = b.id;
+      P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * dist(i, j, L.x, L.y) };
+      P.raidN = (P.raidN || 0) + 1; P.magCutT = S.time;
+      P.magCuts = (P.magCuts || 0) + 1;
+      return true;
     }
-    if (!spot) continue;
-    bs = sc; best = { b, spot };
   }
-  if (!best) return false;
-  const { i, j } = best.spot, n = Math.min(size + 1, rallyAvailable(p, i, j, !!st.harass) - (st.raidKeep ?? 2));
-  if (n < size || aiRouteHot(p, i, j)) return false;
-  const { sent, rally } = sendToRally(p, i, j, n, !!st.harass);
-  if (!sent) return false;
-  rally.target = best.b.id;
-  P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * dist(i, j, L.x, L.y) };
-  P.raidN = (P.raidN || 0) + 1; P.magCutT = S.time;
-  P.magCuts = (P.magCuts || 0) + 1;
-  return true;
+  return false;
 }
 
 /**

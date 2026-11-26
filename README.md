@@ -1584,9 +1584,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   **Maglev lines** (`aiMagCut`, `AI_MAGCUT`; Medium and up): in place of every other raid, at most once every five
   minutes, a band of the raid's size (one more if it can spare it) goes for a building of a foe's line that carries
   goods (pods on it), out of every gun's reach and the garrisons a raid keeps clear of, with fewer armed warbots than
-  the band within 8 tiles of it, forts or out (each counting against it): a Terminal (its lines stand broken until one
-  is built on its tile again) before a pylon (a Worker rebuilds that in 20 s), the nearer first. Its flag goes beside
-  it and the band shoots it first (`rally.target`); once it's down the flag comes in and the raid is over (`P.magCutT`,
+  the band within 8 tiles of it, forts or out (each counting against it). On a line at least 12 tiles long, the band
+  prefers a pylon in the middle third. If it can't safely reach a target, it tries the next one. Its flag goes beside
+  the target and the band shoots it first (`rally.target`); once it's down the flag comes in and the raid is over (`P.magCutT`,
   `P.magCuts`).
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
