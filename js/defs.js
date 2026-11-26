@@ -792,6 +792,11 @@ const SHAPE_PRESETS = [
   // Murmur, no weather, no dust storm.
   { name: 'The Ring', group: 'heights', noMurmur: true, blurb: 'Out in space among the Ring\'s great asteroids: a home rock each, a rich one in the middle and stepping stones between, with empty space all round. Cross by Viaduct or Ropeway, or fly.', w: 1.15, h: 1.45, asteroids: true, flat: true,
     tip: 'The Ring: your colony stands on a home asteroid in space, with a rich rock in the middle and a chain of stepping stones between you and your rival. There is nothing in the space between: no floor, no way across on foot and no road to lay. Span a gap with a Viaduct or a Ropeway (Paths), or fly: Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers. Ring Crystal keeps craft aloft out here, so flight works as it does anywhere. Every rock has oil for your Fuel. Argos\'s ground, no weather, no Murmur.' },
+  // Half underground (the owner's idea, Nov 2026): a surface half and a cave half, joined by two or three entrances (cavesMap in
+  // world.js, CAVES in defs.js). Two to four colonies, half of them starting inside the caves and half outside. Inside: the Hollow's
+  // look, plenty of Ore and Crystal, nothing grows, nothing flies or falls in; outside: the Biome's surface with the growing goods.
+  { name: 'Half underground', group: 'heights', blurb: 'Half caves, half surface: two or three cave mouths, wide or narrow, join them. Half the colonies start inside (Ore and Crystal, no food or crops, safe from Missiles and aircraft), half out on the surface (farms and crops, little Ore).', w: 1.2, h: 1.5, caves: true, flat: true, players: 4,
+    tip: 'Half underground: the caves hold the Ore and Crystal and the surface the Fiber and Fuel crops, and each side starts with a stock of what it lacks, enough for the first minutes. Nothing grows and nothing is harvested in the caves, and no Missile, bomb or aircraft reaches in; the surface is open to all of them. Expand through the cave mouths early, or you run dry. The dividing wall is solid: the mouths are the only ways through.' },
 ];
 /** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
 function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.asteroids); }
@@ -1023,6 +1028,32 @@ const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or 
  *   stone  Stone each home asteroid holds at the start (HOME_STONE, topped up near the base)
  */
 const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, stone: HOME_STONE };
+/**
+ * Half underground (SHAPE_PRESETS caves: cavesMap in world.js). One map half is the surface (the Biome's look and rules), the
+ * other the caves (the Hollow's look, always dark, no weather); a solid wall between them is broken only by two or three
+ * entrances. S.cave tiles: 0 surface, 1 inside the caves, 2 the wall (rock nothing tunnels through).
+ *   stock     the opening stock on top of START_STOCK for a colony that starts inside (no Fiber source there) and for one
+ *             that starts outside (little Ore or Crystal there): enough for the first minutes, then it has to branch out
+ *             through the entrances; `bots` the extra Workers inside, which have no Agribot's crops to staff
+ *   mouth     entrance half-widths (tiles to each side of the middle line): a narrow gate, a middle one and a wide mouth
+ *   nests     Murmur nest sites on each half of the map (in twin pairs) by Size, only with the Murmur on
+ *   ore, crystal, stone, oil, stalk  how many fields a thousand tiles of cave (ore, crystal, stone, oil) and of surface
+ *             (stalk groves, fertile soil, a little Ore and Crystal) get: the caves hold the riches
+ */
+const CAVES = {
+  stock: { inside: { fiber: 150, stone: 20, cement: 12 }, outside: { ore: 90, crystal: 30, alloy: 20 } },
+  mouth: [1, 2.5, 5], wall: 2,
+  nests: [2, 3, 4, 5, 7, 9],
+  inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 1.3, crystal: 0.9, oil: 1 },
+};
+/** Does map type `shape` (or, with none given, the current game's) have the caves (Half underground)? */
+function cavesShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.caves); }
+/** Is tile t inside the caves of Half underground (S.cave 1)? Missiles, bombs and aircraft don't reach it, nothing grows there, the sky's weather stays out. */
+function caveTile(t) { return !!(typeof S !== 'undefined' && S && S.cave && S.cave[t] === 1); }
+/** Is the point (x, y) (tile units, anywhere on a tile) inside the caves? */
+function caveAt(x, y) { return !!(S && S.cave && x >= 0 && y >= 0 && x < S.W && y < S.H && S.cave[(y | 0) * S.W + (x | 0)] === 1); }
+/** Is tile t the wall between the caves and the surface (rock no road tunnels through)? */
+function caveWall(t) { return !!(S && S.cave && S.cave[t] === 2); }
 const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills of what was inside it
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
 const LOOT_KEEP = 1e9;    // ...or never, for crates that were always there (the Hollow's side chambers): its `until`

@@ -12,6 +12,10 @@ const AI_FUEL_TANK_PUMPS = 1; // Oil Pumps at work (and a Refinery built) before
 // toward the middle won at 0.3: a pump 18 tiles out among the nests, unstaffed and dry for minutes, while a seep 6
 // tiles from home went unused.
 const AI_HOLLOW_PUMP_FAR = 0.8;
+/** Why colony p's own ground (its Command Base's tile) won't take a `type` ('' if it will): worldBan, and in Half underground what the caves' roof rules out for a colony that starts inside. */
+function aiBan(p, type) { const L = getE(S.players[p].lander); return worldBan(type, L ? tIdx(L.x, L.y) : undefined); }
+/** Is colony p one that has no crops to grow (nothing grows in the Hollow, or in the caves of Half underground when it starts inside)? */
+function aiNoCrops(p) { const L = getE(S.players[p].lander); return hollowOn() || !!(L && caveTile(tIdx(L.x, L.y))); }
 const AI_OIL_CRUDE = 5; // Crude in storage that wants a Refinery even with no Oil Pump at work (the Hollow: see oilFirst in aiThink)
 /**
  * [building type, how many the AI wants]. Entries are tried in order. (No Missile Factory or Silo here: those
@@ -543,6 +547,8 @@ function aiThink(p) {
   // The Hollow: nothing grows (no Bio Farms or Grove Planters), so Oil Pumps for Fuel and more Harvesters on the Bloom
   // veins, and nothing that flies (see worldBan).
   if (hollowOn()) plan = plan.flatMap(([t, n]) => (t === 'farm' ? [['pump', n]] : t === 'grower' ? [['harvester', n + 3]] : worldBan(t) ? [] : [[t, n]]));
+  // A colony that starts inside the caves (Half underground): no crops, nothing that flies, nothing fired from under the roof; Oil Pumps for its Fuel.
+  else if (aiNoCrops(p)) plan = plan.flatMap(([t, n]) => (t === 'farm' ? [['pump', n]] : aiBan(p, t) ? [] : [[t, n]]));
   // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry and a
   // second Silo straight after the first Ammo Plant.
   if (st.turrets) plan = plan.map(([t, n]) => (t === 'turret' ? [t, n * 2] : [t, n]));
@@ -559,7 +565,7 @@ function aiThink(p) {
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
   // Ammo Plant running) for a single Vulcan Bomber (see aiBomber).
   // On an isolated, Ore-poor island, the first Ferry gets the construction budget before a bomber.
-  if (S.mode !== 'colony' && !firstFerry && !st.walls && S.time >= 1320 && !counts.airfield && !worldBan('airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
+  if (S.mode !== 'colony' && !firstFerry && !st.walls && S.time >= 1320 && !counts.airfield && !aiBan(p, 'airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Its planes burn Fuel (a bomber sortie BOMBER.fuel on top of its tank): with an Airfield going up, one more Fuel
   // maker, whichever fits its land (decided once, P.airFuel): a Refinery while it pumps more Crude than its Refineries
   // take, or else a Bio Farm where there's soil none of its farms works, or else a Refinery (and Oil Pump) on oil.
@@ -749,8 +755,8 @@ function aiThink(p) {
     const robots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && !isArmy(u) ? 1 : 0), 0);
     const foundry = me.some((b) => b.built && b.type === 'foundry'); // (oil costs Alloy: the Foundry's comes first)
     // (In the Hollow oil is the only Fuel: Crude waiting for a Refinery gets one, Foundry or not; see oilFirst.)
-    const add = (pumped || (hollowOn() && (playerGoods(p).crude || 0) >= AI_OIL_CRUDE)) && !counts.refinery && (foundry || hollowOn()) ? [['refinery', 1]] : [];
-    if (hollowOn()) { if (!add.length && foundry && (counts.pump || 0) < 3) add.push(['pump', (counts.pump || 0) + 1]); } // (no farms underground: oil it is)
+    const add = (pumped || (aiNoCrops(p) && (playerGoods(p).crude || 0) >= AI_OIL_CRUDE)) && !counts.refinery && (foundry || aiNoCrops(p)) ? [['refinery', 1]] : [];
+    if (aiNoCrops(p)) { if (!add.length && foundry && (counts.pump || 0) < 3) add.push(['pump', (counts.pump || 0) + 1]); } // (no farms underground: oil it is)
     else {
       if (!add.length && !farmWaiting && (counts.farm || 0) < 2 + Math.ceil(robots / 15)) add.push(['farm', (counts.farm || 0) + 1]);
       if ((!add.length || add[0][0] === 'farm') && !counts.pump && foundry) add.push(['pump', 1]); // (one Oil Pump, where there's oil)
@@ -829,7 +835,7 @@ function aiThink(p) {
   // the Refinery comes before anything else after the opening, and is started as soon as the Cement is there, its
   // Alloy delivered first (defenceNow below). Waiting for its whole price in storage, it waited for good: the Bot
   // Foundry turned every bit of Alloy into robots, and colonies ran on no Fuel from minute 4 to minute 19.
-  const oilFirst = hollowOn() && !counts.refinery &&
+  const oilFirst = aiNoCrops(p) && !counts.refinery &&
     (me.some((b) => b.built && b.type === 'pump' && !pumpDry(b)) || (playerGoods(p).crude || 0) >= AI_OIL_CRUDE);
   if (oilFirst) plan = [['refinery', 1]].concat(plan);
   if (maxSites === 1 && !counts.foundry && S.mode !== 'colony' && S.time >= AI_EASY_OPENING) plan = AI_OPENING.concat(plan);
@@ -910,7 +916,7 @@ function aiThink(p) {
       }
       // (And a Tap on a single Crystal cluster, on any map, for a colony short of Crystal with no Tap at all: on Standard
       // seed 11 a Turtle's last clusters were single ones, its Chips ran dry at minute 30 and its army never grew again.)
-      const spot = aiFindSpot(p, type, lander, ((islandWar || hollowOn() || oreLow) && type === 'mine' && starved.includes(type)) || (type === 'tap' && crLow && !counts.tap));
+      const spot = aiFindSpot(p, type, lander, ((islandWar || aiNoCrops(p) || oreLow) && type === 'mine' && starved.includes(type)) || (type === 'tap' && crLow && !counts.tap));
       const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
       if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
@@ -2189,7 +2195,7 @@ const AI_MDRIVER = { from: 600, others: 900, every: 20, near: 16, retry: 300, ce
 function aiMdMap() { const sh = SHAPE_PRESETS[S.settings.shape] || {}; return !!(sh.islands || sh.sky || /Canyon/.test(sh.name || '')); }
 function aiMassDriver(p, me, lander) {
   const P = S.players[p], A = AI_MDRIVER, M = MASSDRIVER;
-  if (S.difficulty === 'easy' || S.time < (P.style === 'tycoon' ? A.from : A.others) || worldBan('mdriver') || worldBan('catcher') || S.time - (P.lastMd || -999) < A.every) return;
+  if (S.difficulty === 'easy' || S.time < (P.style === 'tycoon' ? A.from : A.others) || aiBan(p, 'mdriver') || aiBan(p, 'catcher') || S.time - (P.lastMd || -999) < A.every) return;
   P.lastMd = S.time;
   const pair = P.mdPair;
   if (pair) {
@@ -2626,7 +2632,7 @@ function aiMega(p, me, lander, canBuild) {
   // The Warden's other answer: the Sundering Ray, when the Murmur dig toward it (aiSunder: its own pick, build and use).
   aiSunder(p, me, lander, canBuild);
   // The choice, once it has a Reactor fed with Uranium, late in the game.
-  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !worldBan('lance') && aiMegaRoom(p, 'weapon') && S.time - (P.megaTry ?? -999) >= AI_MEGA.look) {
+  if (!P.megaPick && nukeOn() && S.time >= AI_MEGA.lanceAt && aiUraniumFed(p, me) && !aiBan(p, 'lance') && aiMegaRoom(p, 'weapon') && S.time - (P.megaTry ?? -999) >= AI_MEGA.look) {
     P.megaTry = S.time; // (no choice yet, short of the Lance's half: looked at again every AI_MEGA.look s)
     const k = aiMegaPick(p);
     if (k) P.megaPick = k;
@@ -2739,7 +2745,7 @@ function aiAtmos(p, me, lander, canBuild) {
     aiAtmosStorm(p, e);
     return;
   }
-  if (aiMegaMain(p) !== 'atmos' || !canBuild || !lander || S.time < ATMOS.aiAt || megaBlocked(p, 'atmos') || worldBan('atmos') || !aiMegaRoom(p, 'main')) return;
+  if (aiMegaMain(p) !== 'atmos' || !canBuild || !lander || S.time < ATMOS.aiAt || megaBlocked(p, 'atmos') || aiBan(p, 'atmos') || !aiMegaRoom(p, 'main')) return;
   const have = playerGoods(p), k = BDEFS.atmos.cost;
   if (!me.some((b) => b.built && BDEFS[b.type].bots) || have.cement < k.cement / 2 || have.crystal < k.crystal / 2 || have.fiber < k.fiber / 2 || S.time - (P.aeLook ?? -999) < AI_MEGA.look) return;
   P.aeLook = S.time;
@@ -2910,7 +2916,7 @@ function aiLift(p, me, lander, canBuild) {
   const P = S.players[p], lift = me.find((b) => BDEFS[b.type].lift);
   if (lift) { if (!lift.built && !lift.prio) { lift.prio = 'high'; lift.sitePrio = 1; } if (lift.built) aiLiftUse(p, lift); return; }
   if (aiMegaMain(p) !== 'lift' || !canBuild || !lander || S.time < (P.style === 'rusher' ? AI_MEGA.heraldLift : AI_MEGA.liftAt)) return;
-  if (worldBan('lift') || megaBlocked(p, 'lift') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiLiftFunds(p)) return;
+  if (aiBan(p, 'lift') || megaBlocked(p, 'lift') || !aiMegaRoom(p, 'main') || !me.some((b) => b.built && BDEFS[b.type].bots) || !aiLiftFunds(p)) return;
   if (S.time - (P.liftLook ?? -999) < AI_MEGA.look) return;
   P.liftLook = S.time;
   const spot = aiLiftSpot(p, lander);
@@ -4247,7 +4253,7 @@ function aiMissileShort(p, me) {
  */
 const AI_MISSILE_CITY = 1080;
 function aiMissileFirst(p, me, placing) {
-  if (!aiStyle(p).missiles || S.difficulty === 'easy' || worldBan('silo') || S.time >= AI_ALL_IN) return false;
+  if (!aiStyle(p).missiles || S.difficulty === 'easy' || aiBan(p, 'silo') || S.time >= AI_ALL_IN) return false;
   if (me.some((b) => !b.built && (b.type === 'munitions' || b.type === 'silo'))) return true;
   return placing && S.time < AI_MISSILE_CITY && !me.some((b) => b.built && b.type === 'silo');
 }
@@ -4285,7 +4291,7 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
     : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
     (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? (counts.munitions ? 0 : 2) : 4); // (an Architect's Silos, once its Missile Factory stands, wait for no spare workers)
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
-  if (worldBan('silo')) { P.saveStart = 0; return null; } // (the Hollow: no missiles)
+  if (aiBan(p, 'silo')) { P.saveStart = 0; return null; } // (the Hollow: no missiles)
   let want = null;
   if (!counts.munitions) want = 'munitions';
   // (An Architect's next Silo, up to three, once the ones it has hold a Missile each.)
@@ -4728,7 +4734,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
         for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
           if (inMap(i + di, j + dj) && S.res[tIdx(i + di, j + dj)] === R_OIL) oil += S.amt[tIdx(i + di, j + dj)];
         }
-        s = oil * 0.2 - dHome * (hollowOn() ? AI_HOLLOW_PUMP_FAR : 0.3);
+        s = oil * 0.2 - dHome * (aiNoCrops(p) ? AI_HOLLOW_PUMP_FAR : 0.3);
       } else if (type === 'generator') {
         // Among the factories: the most buildings it can power, not beside another Generator.
         let n = 0, dg = 99;
@@ -5244,7 +5250,7 @@ function aiQuakeSpot(p, b) {
 /** Rival p and the Sundering Ray, each think: the pick (the Warden), building it and its Generators, its blows and its guard. */
 function aiSunder(p, me, lander, canBuild) {
   const P = S.players[p];
-  if (!lander || worldBan('sunder')) return;
+  if (!lander || aiBan(p, 'sunder')) return;
   const ray = me.find((b) => BDEFS[b.type].sunder);
   // (With half its cost in hand only, as the Lance: aiMegaPick. Chosen without it, 19 Wardens in 160 games gave up their
   // Nuclear Silo for a Ray none of them placed.)

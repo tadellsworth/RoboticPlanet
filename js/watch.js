@@ -96,7 +96,7 @@ function watchCount(w, shape) {
 const watchSize = (w, n = watchCount(w)) => mapSizeForPlayers(w.size ?? DEFAULT_SIZE.versus, n);
 const watchTeams = (w, n = watchCount(w)) => !!w.teams && n === 4;
 /** The map type is the Hollow (no Uplinks there; it has its own look and Murmur). */
-const watchHollow = (w) => !w.shapeRnd && !!SHAPE_PRESETS[w.shape].hollow;
+const watchHollow = (w) => !w.shapeRnd && noSkyShape(w.shape); // (the Hollow, or Half underground's caves)
 /** Can the setup have the Murmur? Not on Argos, nor a map type without room for nests (as menuMurmur). */
 const watchMurmurOk = (w) => (w.shapeRnd || murmurShape(w.shape)) && (w.biomeRnd || murmurGround(BIOME_ORDER[w.biome]));
 /** The Murmur as the setup has them ('off' where they can't be). */
@@ -221,7 +221,7 @@ function syncWatch() {
   for (const b of $('w-victory').children) {
     mark(b, b.dataset.v === vic);
     b.disabled = noUplinks && b.dataset.v === 'uplinks';
-    b.title = b.disabled ? 'No Uplinks in the Hollow: the Pathfinder never mapped it.' : '';
+    b.title = b.disabled ? noUplinksWhy(w.shape) : '';
   }
   for (const b of $('w-diff').children) mark(b, b.dataset.v === w.diff);
   // Each colony's doctrine.

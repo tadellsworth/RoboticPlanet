@@ -208,7 +208,8 @@ function applyBiome() {
   if (S && ((S.landmarks && S.landmarks.length) || S.town) && typeof ensureLandmarkArt === 'function') ensureLandmarkArt(); // (js/landmarks.js; Passenger Town's welcome signs too)
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   const primary = R.primaryRegion = biomeRegion(biome());
-  const second = R.secondRegion = S.settings?.biome2 ? biomeRegion(S.settings.biome2) : null;
+  // (Half underground: the caves are a second region of their own, the Hollow's, over S.cave's tiles; no other second biome there.)
+  const second = R.secondRegion = S.cave ? biomeRegion('hollow') : S.settings?.biome2 ? biomeRegion(S.settings.biome2) : null;
   THEME = primary.theme;
   R.biome = primary.biome;
   R.look = primary.look;
@@ -217,7 +218,7 @@ function applyBiome() {
   R.lavaGlow = null;
   R.biomeMix = second ? new Float32Array(S.W * S.H) : null;
   if (second) for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
-    R.biomeMix[tIdx(i, j)] = biomeMixAt(i, j, S.W, S.H, S.seed, S.settings.biomeBoundary);
+    R.biomeMix[tIdx(i, j)] = S.cave ? (S.cave[tIdx(i, j)] ? 1 : 0) : biomeMixAt(i, j, S.W, S.H, S.seed, S.settings.biomeBoundary);
   }
 }
 
@@ -1268,7 +1269,7 @@ function paintTile(ctx, i, j, other, blend) {
       const cx = x + 6 + hash2(i, j, 21) * 18, cy = y + 6 + hash2(i, j, 22) * 14;
       ctx.fillRect(cx, cy, 6, 2);
     }
-    if (S.hollow) hollowRockDark(ctx, i, j, x, y);
+    if (S.hollow || R.biome === 'hollow') hollowRockDark(ctx, i, j, x, y); // (R.biome is the tile's own look: the caves of Half underground too)
   }
 
   // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
@@ -1277,7 +1278,7 @@ function paintTile(ctx, i, j, other, blend) {
   if (terr !== T_WATER && S.elev[t] <= 1 && R.skyFloor) { ctx.fillStyle = S.elev[t] ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
-  if (S.hollow) { if (terr === T_GROUND) hollowWall(ctx, i, j, x, y); hollowDecorTile(ctx, i, j, x, y, t, false); }
+  if (S.hollow || R.biome === 'hollow') { if (terr === T_GROUND) hollowWall(ctx, i, j, x, y); if (S.hollow) hollowDecorTile(ctx, i, j, x, y, t, false); }
   shoreCorners(ctx, i, j, x, y);
   if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
@@ -7188,8 +7189,10 @@ function render(dtReal) {
   if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
   if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
-  todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  if (S.cave) caveGrade(ctx, ox, oy, z); else todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); } // (Half underground: the sky's light, sunset and weather stay out of the caves)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
+  if (S.cave) ctx.restore();
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
@@ -7198,7 +7201,9 @@ function render(dtReal) {
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
   if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
+  if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); }
   if (typeof natureLight === 'function') natureLight(ctx, ox, oy, z, v0, v1); // (the Ring's light and the aurora, light on the water, wet roads at night: js/nature.js)
+  if (S.cave) ctx.restore();
   drawWaterRipples(ctx, ox, oy, z, v0, v1);
   drawSeaLife(ctx, ox, oy, z, v0, v1);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
@@ -7643,8 +7648,10 @@ function render(dtReal) {
   if (typeof drawGoodsPops === 'function' && !R.clean) drawGoodsPops(ctx, ox, oy, z); // (+N where goods are made or stored: js/polish.js)
   if (typeof drawWarAir === 'function') drawWarAir(ctx, ox, oy, z, v0, v1); // (smoke columns, ash and embers, firelight, a big blast's flash: js/warfx.js)
   if (typeof drawRadAir === 'function') drawRadAir(ctx, ox, oy, z, v0, v1); // (radiation: motes, robots sickening, a hot ruin's smoke and light column, the Geiger crackle: js/radfx.js)
+  if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); } // (the sky's weather and planet events show on the surface only)
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
+  if (S.cave) ctx.restore();
   drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
   if (S.allyShips && S.allyShips.length && typeof drawAllyShips === 'function') drawAllyShips(ctx, ox, oy, z); // (goods on a supply run from a computer ally: js/ally.js)
   if ((S.crew || (typeof COOP !== 'undefined' && COOP.pings.length)) && typeof drawCoop === 'function') drawCoop(ctx, ox, oy, z); // (co-op: badges, pings, the partner's cursor: js/coop.js)
@@ -7664,6 +7671,40 @@ function render(dtReal) {
   }
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
   if (fw) fw.draw += performance.now() - began;
+}
+
+/* ------------------------------------------------------------------ Half underground */
+
+/**
+ * Clip ctx (as at the start of a frame's drawing: device-pixel transform) to the surface (`inside` false) or to the caves (true) of
+ * Half underground, S.cave's tiles; the wall between them (S.cave 2) draws as the caves' rock. The path is kept for the game.
+ */
+function caveClip(ctx, ox, oy, z, inside) {
+  if (RSP.caveFor !== S.cave || !RSP.cave) {
+    RSP.caveFor = S.cave;
+    const p = new Path2D(), W = S.W, H = S.H;
+    for (let j = 0; j < H; j++) {
+      let i0 = -1;
+      for (let i = 0; i <= W; i++) {
+        const on = i < W && S.cave[j * W + i] > 0;
+        if (on && i0 < 0) i0 = i;
+        else if (!on && i0 >= 0) { p.rect(i0, j, i - i0, 1); i0 = -1; }
+      }
+    }
+    const q = new Path2D(); q.rect(0, 0, W, H); q.addPath(p);
+    RSP.cave = p; RSP.surface = q;
+  }
+  ctx.translate(ox, oy); ctx.scale(z, z);
+  if (inside) ctx.clip(RSP.cave); else ctx.clip(RSP.surface, 'evenodd');
+  ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+}
+
+/** The light in the caves: always the same dim, cool half-light, whatever the time of day on the surface. */
+const CAVE_LIGHT = { mul: [0.46, 0.46, 0.6], add: [0.008, 0.01, 0.026] };
+/** Grade the ground: the surface for the time of day, the caves in their own dim light (they hold no daylight). */
+function caveGrade(ctx, ox, oy, z) {
+  ctx.save(); caveClip(ctx, ox, oy, z, false); todGradeGround(ctx); ctx.restore();
+  ctx.save(); caveClip(ctx, ox, oy, z, true); todGrade(ctx, 0, 0, R.w, R.h, CAVE_LIGHT.mul, CAVE_LIGHT.add, null); ctx.restore();
 }
 
 /* ------------------------------------------------------------------ the Hollow */

@@ -8,7 +8,7 @@ const files = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders
 const source = files.map((name) => readFileSync(path.join(__dirname, '..', 'js', name + '.js'), 'utf8')).join('\n');
 const check = new Function('assert', 'sfx', source + `
 
-  const fields = ['terrain', 'elev', 'ramp', 'ford', 'tidal', 'fault', 'lava', 'res', 'amt', 'fert'];
+  const fields = ['terrain', 'elev', 'ramp', 'ford', 'tidal', 'fault', 'lava', 'res', 'amt', 'fert', 'cave'];
   const failures = [];
   let exact = 0, rounded = 0, shared = 0, drizzle = 0;
 
@@ -17,6 +17,7 @@ const check = new Function('assert', 'sfx', source + `
   // Independent of the production orbit helper, including the two distinct four-colony transforms.
   function symmetry(shape, players, teams, width, height) {
     const half = (x, y) => [width - 1 - x, height - 1 - y];
+    if (shape.caves) return [(x, y) => [width - 1 - x, y]]; // (Half underground: mirrored west to east; an inside colony and an outside one differ by design)
     if (shape.haul4) return [(x, y) => [width - 1 - x, y], half, (x, y) => [x, height - 1 - y]];
     if (players === 2 || shape.twin || (shape.isles4 && teams)) return [half];
     if (shape.cross || shape.quad4 || ((shape.city || shape.walker || shape.dam || shape.std4) && players === 4)) return [(x, y) => [width - 1 - y, x], half, (x, y) => [y, height - 1 - x]];
@@ -114,7 +115,7 @@ const check = new Function('assert', 'sfx', source + `
         if (mapSizeForPlayers(size, players) !== size) continue;
         for (const teams of players === 4 ? [false, true] : [false]) {
           for (const seed of [11, 21, 37]) {
-            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids; // (The Ring is always on Argos: no second biome)
+            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids && !preset.caves; // (The Ring is always on Argos: no second biome; nor Half underground, whose caves are the second region)
             const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks',
               murmur: preset.hollow || seed === 37 ? 'active' : 'off', biome: 'desert', biome2: mixed ? 'jungle' : undefined };
             const label = [preset.name, SIZE_PRESETS[size].name, players, teams ? 'Teams' : 'Versus', 'seed ' + seed].join(' / ');
