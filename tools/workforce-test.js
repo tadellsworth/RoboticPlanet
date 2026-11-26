@@ -19,7 +19,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const files = ['util.js', 'defs.js', 'world.js', 'path.js', 'sim.js', 'ai.js', 'missions.js', 'orders.js'];
 const src = files.map((f) => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8')).join('\n') +
   '\n;globalThis.__api = { newGame, simStep, hashState, serializeGame, deserializeGame, applyOrder, getS: () => S, wfCounts, wfAutoOrder, wfOrder, wfRowOf, wfRebalance, siteReady, removeBot, wantsStaff, stallWhy, BDEFS, WF_KEYS, isIdleWorker, wfKeepFree, wfSettings, wfPresetOrders, atLimit, siteCount };';
-const seed = +(process.argv[2] || 4242), lead = +(process.argv[3] || 14);
+const seed = +(process.argv[2] || 4242), lead = +(process.argv[3] || 12); // (seed 4242's game is won at 13.3 min since the Nov 26 rival fixes)
 
 function game() {
   const ctx = { console, Math, JSON, Map, Set, Array, Object, Number, String, Infinity, Uint8Array, Uint16Array, Int8Array, Int16Array, Int32Array, Uint32Array, Float32Array, Float64Array };
@@ -52,6 +52,7 @@ const S0 = base.getS();
 const blds = (g, k) => g.getS().buildings.filter((b) => !b.dead && b.owner === P0 && b.built && g.wfRowOf(b.type) === k);
 const staffed = (g, k) => g.wfCounts(P0)[k];
 console.log(`seed ${seed}: copies at ${(S0.time / 60).toFixed(1)} min; colony 0 has ${S0.bots.filter((u) => !u.dead && u.owner === P0 && u.type === 'worker').length} Workers`);
+if (S0.winner >= 0) { console.log('the game is over by then: try another seed or fewer minutes'); process.exit(2); }
 if (!S0.bots.some((u) => !u.dead && u.owner === P0 && u.type === 'worker')) { console.log('colony 0 is out by then: try another seed or fewer minutes'); process.exit(2); }
 console.log(`  rows now: ${JSON.stringify(base.wfCounts(P0))}`);
 console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
