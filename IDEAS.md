@@ -280,6 +280,10 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   everywhere else (`T_CHASM` that no road, bridge or Sky bridge crosses): armies cross by Viaduct or Ropeway where the gaps
   are short (3½ to 6 tiles), and otherwise fly (Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers, Missiles).
   Argos's ground and rules (the biome is forced to Lunar: no Murmur, no weather), no dust storm, more oil than any other map.
+  Rival-vs-rival (Normal, Balanced both, Medium and Large, 4 seeds each, 45-minute cap): 5 of 8 games undecided on the Ring (the
+  rest won at 20, 35 and 45 minutes), against 8 of 8 on Sky islands run the same way. The long ones are the fight over the middle rock
+  (both sides land a span there by minute 8) and then a span a stone at a time; the rival's economy there matches Standard's (more Cement,
+  Alloy and Fuel at 15 minutes).
   Open: **drifting rocks** (the owner likes the idea as a later one: the asteroids stay put today, only the backdrop moves;
   a rock that drifts would change the Viaduct spans, so spans would need to hold or fail); **three and four players** (a
   home asteroid each round a rich middle one: only two now); the rival builds **no Airships or aircraft** and crosses by
