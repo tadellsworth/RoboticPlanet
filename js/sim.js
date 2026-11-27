@@ -14038,7 +14038,7 @@ function meteorImpact(E, h) {
   const spots = [];
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
-  let placed = 0;
+  let placed = S.caves ? 99 : 0; // (Half underground: a strike on the surface leaves its crater but no Ore or Crystal there)
   for (const [, i0, j0] of spots) {
     if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i0, j0)) continue;
     // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
@@ -14067,7 +14067,7 @@ function meteorImpact(E, h) {
  * Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it, and never
  * in the Hollow: it's underground, where only Ringfall reaches, through the breaches (as no Mass Driver works there).
  */
-function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow; }
+function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow && !S.caves; } // (nor on Half underground: the surface has no Ore or Crystal, the roof keeps the sky out of the caves)
 
 /** Can a drizzle deposit lie on tile t? Open, bare ground no one holds, with nothing on it or planned for it. */
 function drizzleOk(t) {

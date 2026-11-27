@@ -572,7 +572,7 @@ width). A Ropeway over the wall (14 tiles) is the only other way for Workers, Ha
 **The two halves** (`S.cave`: 0 surface, 1 inside, 2 wall; the Uint8Array is saved with the game, `checkSave` checks it and `S.caves`):
 the caves are the north half on half the seeds and the south on the rest (`S.caves.south`, from the seed: the map is made with the caves north and then
 turned over end to end, so player 0 starts inside on about half the planets and outside on the rest). The surface has the standard colony's
-fields (stalk groves, fertile soil, Stone, oil seeps) and a little Ore and Crystal (`CAVES.outside`: per thousand tiles of surface); the caves have winding
+fields (stalk groves, fertile soil, Stone, oil seeps) and **no Ore or Crystal at all** (`CAVES.outside` has `ore` and `crystal` at 0, `KIT.out` no Ore or Crystal fields, and no Ringfall strike or Ring drizzle leaves any there: `drizzleOn` is off on this map, `meteorImpact` places no deposit on it); the caves have winding
 passages, rock pillars, **plenty of Ore and Crystal** and Stone and oil (`CAVES.inside`), **no stalk groves or fertile soil**, and a small patch of Ore and Crystal just
 inside each entrance and of stalks and fertile soil just outside it. **Colonies** (`S.caves.seats`: `{ x, y, inside }`): two (one outside, one inside, on the middle
 line) or four (an outside and an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside.
@@ -581,9 +581,9 @@ the Random map pool leave this map out for three, and a 3 that arrives from a sa
 other maps do the same clamping), or **four** when three people sit in a lobby (everyone needs a place; the fourth is a computer rival). `playerCount` applies it to every game. The
 three-colony layout (an outside pair and one inside on the line) is **parked**, not removed: `cavesMap` still builds it, so an older three-player save loads and plays, and it takes one line to
 bring back (drop `evenOnly`). Each
-kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil, Stone and a little Ore and Crystal on the surface; Ore, Crystal and Stone
+kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil and Stone on the surface; Ore, Crystal and Stone
 inside, and the oil seeps in both), alike for every colony of that kind to the bit. **Opening stock**: on top of `START_STOCK`, a colony that starts inside lands with
-`CAVES.stock.inside` (+100 Fiber, +30 Fuel, +10 Stone, +12 Cement) and one that starts outside with `CAVES.stock.outside` (+60 Ore, +25 Crystal, +25 Alloy, +20 Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the
+`CAVES.stock.inside` (+140 Fiber, +30 Fuel, +12 Stone, +20 Cement) and one that starts outside with `CAVES.stock.outside` (+130 Ore, +60 Crystal, +30 Alloy, +30 Fiber: about the first eight minutes of building, as nothing on the surface makes Ore or Crystal, so it has to send Outposts and Mines in through a mouth by then; a colony inside has no Fiber source, and Alloy, Bio Farms and nearly every building need Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the
 Hollow): enough for the first few minutes of what its side lacks, then it has to branch out through the mouths for it (Outposts claim ground across the wall's far side, and the
 rival does exactly that: see below). **The look**: the caves are the Hollow's art (`BIOMES.hollow`, `art/biomes/hollow`) as a second region over the `S.cave` tiles (`applyBiome`:
 `R.secondRegion` is the Hollow, `R.biomeMix` the mask; `makeDecor` gives them the Hollow's plants; no second biome can be picked on this map), the surface the Biome the game picked.
