@@ -279,8 +279,7 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   a bridge can't be raised with a robot on it; aircraft, Airships and Missiles work as on The Ring; two players, five decks (Small, Medium) or seven
   (Large and up). Bridges start down; two control boxes per bridge, held by armed robots near or the land round; Raise warns 4 s, Lower and Raise take 3 s,
   20 s rest. Argos's rules (no Murmur, no weather, no dust storm). Open: **four players** (a deck each round a middle deck); **more layouts** (a ring of
-  decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **a roadway on a bridge**
-  (today roads stop at it; goods cross on foot or by Viaduct); **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
+  decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
   cost or a cooldown per colony; a **mission** teaching the bridges (none yet); a rival that **sends a squad to hold** a contested box.
 - **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
   js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
