@@ -104,7 +104,12 @@ shadow away from it (east at dusk, west at dawn), from half again its height in 
 as the sun sets (`duskCastShadows`): its own art as a flat silhouette (made once per building and team), sheared along
 the light, drawn in one third-size layer in the shade's colour so crossing shadows don't double up. The plants throw
 theirs too, up to about a tile long: the whole map's plant silhouettes (`duskSilBake`, now made in every biome with a
-sunset) smeared along the light into the same layer. Not on Saver, Argos or the Hollow.
+sunset) smeared along the light into the same layer. Not on Saver, Argos or the Hollow. The layer is laid over the
+screen only round the patches that have shadow in them (worked out from each silhouette's drawn part and the tiles with
+a plant), each patch with clear layer round it, and each silhouette is drawn cut to the box round its shadow, so it
+looks exactly as before at a fraction of the cost (Nov 27 2026: drawing without the graphics chip, the whole-screen pass
+and the silhouettes' empty corners were most of it). A new kind of shadow drawn into the layer has to mark where it
+falls the same way (`duskCastShadows`), or it's cut off.
 
 Dawn uses one cooler palette (violet, rose, pale gold) except the Bloom's own (violet, teal, mint), at about 60%
 strength. The Ring shows as a faint pale arc low over the top of the view when zoomed out, after the land has gone
