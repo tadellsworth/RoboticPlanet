@@ -511,7 +511,7 @@ offsets from the Command Base) and richer ones lie further out, each home astero
 Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
 the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
 crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in Cargo Planes (`aiAir`, see *The rival's aircraft* under the AI); the map is laid out so every gap on the way is
-short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only; ART_GUIDE.md, Batch 39): the space
+short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only; ART_GUIDE.md, Batch 40): the space
 behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`) is high orbit round Ithaca I, painted as pictures
 (`art/ring/`, made by `tools/ringsky/ringsky.py`): the deep sky (the galaxy's band, faint nebulae, a grain of far stars) with two
 tiles of brighter stars over it, Corvane with its glare and spikes, Ithaca I with the Ring round it (its face the Contingency
@@ -561,8 +561,12 @@ one's. So you can always raise your own end, and the other end is yours only whe
 each box, and Raise or Lower (disabled with the reason), and Hold a box with warbots. The minimap shows a square at each box in the holder's colour
 and a red stripe on a raised bridge; a message says when a bridge moves or a box changes hands; `sfx('bridge')`.
 **Look and rules**: `newGame` sets the biome to Lunar (Argos's rules: no Murmur, no weather, no Arrival City or Atmosphere Engine), no dust storm, no
-plants on the decks (`S.decor` cleared). The look is js/orbital.js (display only): `orbitalSky` (space and stars above the planet's curved limb, the
-planet far below with ocean, land, two layers of cloud and a cloud shadow, a low sun; the horizon moves with the view), `orbDeckPaint` (plating,
+plants on the decks (`S.decor` cleared). The look is js/orbital.js (display only): `orbitalSky` (Ithaca I far below, painted: art/orbital, made by
+`renderer/post/orbital_sky.py` from the Contingency globe's surface; the Rust's coast, the curved limb and its blue air, the Ring in the sky;
+a picture for day, dusk (mirrored at morning) and night with the colonies' lights, crossfaded by the time of day; stars above the limb, a near
+cloud drifting under the decks and the decks' shadow on the air drawn in code; slow parallax as the view pans; loaded only for this map,
+`ensureOrbArt`, the one-file build's `dist/orbital-art.js`; Graphics Saver and reduced motion keep it still; ART_GUIDE.md, Batch 39; till the
+pictures are in, `orbSkyCode`, the sky drawn in code), `orbDeckPaint` (plating,
 seams, rivets, kerb and railing, baked with the ground), `orbVoidPaint` (the hull under a deck's southern edge), `orbitalBridges` (the swinging
 leaves, corner lamps, the RAISING / LOWERING word) and `drawOrbBox`. **Economy**: as The Ring's: the standard colony's starter fields (Stalk, fertile
 soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`) with an
@@ -4781,7 +4785,7 @@ tools/menu-test.js        the main menu: every destination opens (two taps at mo
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when
-                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), ring-art.js (The Ring's backdrop, on that map), tod-<time>.js (each time of
+                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), orbital-art.js (Orbital platforms' backdrop, on that map), ring-art.js (The Ring's backdrop, on that map), tod-<time>.js (each time of
                           day's re-lit set) and lore.js (the Lore guide's pictures). Copied without its folder, the page
                           still runs, drawn in code.
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)

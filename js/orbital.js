@@ -3,20 +3,28 @@
  * Terrafall — Orbital platforms' look (SHAPE_PRESETS orbital, orbitalMap in js/world.js, the rules in js/sim.js: orbSet, orbTick).
  * Looks only: nothing here reads or changes anything the game decides, so it may use Math.random and the real clock.
  *
- *   - orbitalSky: what shows where there is no deck (drawn instead of the off-map land, the void tiles left clear over it): the
- *     high atmosphere. Space and its stars at the top of the view, the planet's curved limb with a glow of air, and below it the
- *     planet far down: ocean and land, two layers of cloud sliding past at different speeds, a cloud shadow. The horizon moves
- *     with the view (towards the north of the map the sky opens; towards the south the planet fills the view).
+ *   - orbitalSky: what shows where there is no deck (drawn instead of the off-map land, the void tiles left clear over it): Ithaca I
+ *     seen from the station, far below. Painted layers (art/orbital, renderer/post/orbital_sky.py; ART_GUIDE.md, Batch 39): the
+ *     planet's curved limb and its thin blue air with the Ring arcing up out of the sky, the continents of the atlas (the Rust's
+ *     coast, the archipelago, Greenreach) under two decks of cloud, one picture for each light: by day lit from the upper left
+ *     (the game's key light); at dusk the terminator across it and Corvane on the limb (mirrored at morning, the sun rising on the
+ *     other side); at night the colonies' lights. The game's time of day crossfades them. Over the picture: the stars above the
+ *     limb (drawn in code, sharp at any size), a near deck of cloud drifting under the decks, and the decks' own shadow on the air
+ *     below them (down and right, as every shadow falls). Slow parallax: the picture slides a little as the view pans (toward the
+ *     north end of the map the sky opens, toward the south the planet fills the view), the near cloud more. The pictures load
+ *     only for this map (ensureOrbArt: art/orbital/orbital-art.js, in the one-file build the bundle dist/orbital-art.js); till
+ *     they're in, the sky is drawn in code (orbSkyCode: space, the limb, ocean and land, two layers of cloud).
  *   - orbDeckPaint (baked with the ground): Accord station plating in 2 × 2 tile panels, seams, rivets, a kerb and railing along
  *     every edge that has space beyond it (a bridge's head has none while the bridge is down), hazard plating on the bridges.
  *   - orbVoidPaint (baked): the station's hull showing under a deck's southern edge, fading into the dark, instead of rock.
  *   - orbitalBridges (every frame): the drawbridge leaves. A raised bridge stands up at its hinge; one being raised flashes amber
  *     (the warning), then the leaf swings up; one being lowered swings down; lamps at its corners show red (up or moving) or green.
  *   - drawOrbBox: a control box, a console lit in the colour of the colony that holds it.
- * Graphics Saver draws one cloud layer and no motion; reduced motion holds everything still.
+ * Graphics Saver draws the picture and the stars only (no near cloud, no motion; in code, one cloud layer); reduced motion holds
+ * everything still.
  */
 
-const ORBV = { of: null, stars: null, tex: null, last: 0, t: 0, ver: -1 };
+const ORBV = { of: null, stars: null, tex: null, last: 0, t: 0, ver: -1, art: '', img: {}, tint: {}, dk: null, dkVer: -2, dkFor: null };
 
 /** A tileable noise texture (size × size): fbm of value noise whose lattice wraps, white-blue clouds over transparent (kind 'cloud') or colour patches (kind 'land'). */
 function orbTexture(kind, size, cells, seed) {
@@ -53,8 +61,169 @@ function orbitalFrame() {
   if (S.orb && ORBV.ver !== S.orb.ver) { ORBV.ver = S.orb.ver; RSP.land = null; }
 }
 
+/*
+ * The painted backdrop's numbers. cover: how much bigger than the screen the picture is drawn (the room it slides in);
+ * slide: the most it slides as the view pans across the whole map, as a share of the screen's longer side; cloud: the near
+ * cloud's size (of the screen's longer side), its slide with the view (px per px the view moves), drift (px a second) and
+ * strength by each light; stars: how bright the stars over the limb show by each light; shadow: the decks' shadow on the
+ * air below them (its offset in tiles, down and right, and its darkness).
+ */
+const ORB_SKY = {
+  cover: 1.24, slide: 0.1,
+  cloud: { size: 0.95, par: 0.06, vx: 3.2, vy: 1.1, alpha: { day: 0.3, dusk: 0.24, night: 0.16 } },
+  stars: { day: 0.45, dusk: 0.8, night: 1 },
+  shadow: { dx: 0.35, dy: 0.7, alpha: 0.42 },
+};
+/** Which picture each time of day shows (morning is dusk's, mirrored: the sun rises on the other side). */
+const ORB_TOD = { day: 'orb-day', morning: 'orb-dusk', evening: 'orb-dusk', night: 'orb-night' };
+
+/** Load the backdrop's list and pictures for an Orbital platforms map (once). */
+function ensureOrbArt() {
+  if (ORBV.art || typeof document === 'undefined') return;
+  ORBV.art = 'loading';
+  const go = () => {
+    const A = window.ORBITAL_ART;
+    if (!A) { ORBV.art = 'failed'; return; }
+    ORBV.art = 'in';
+    for (const n of A.names) {
+      const d = A.data && A.data[n];
+      loadImg(d || `art/orbital/${n}.webp`, (img) => { ORBV.img[n] = img; });
+    }
+  };
+  if (window.ORBITAL_ART) { go(); return; }
+  const s = document.createElement('script');
+  s.src = window.ORBITAL_BUNDLE ? 'orbital-art.js' : 'art/orbital/orbital-art.js';
+  s.onload = go;
+  s.onerror = () => { ORBV.art = 'failed'; }; // (no pictures: the sky drawn in code)
+  document.head.appendChild(s);
+}
+
+/** The near cloud tile tinted for a light ('day', 'dusk' or 'night'), made once each. */
+function orbCloudTint(key) {
+  if (ORBV.tint[key]) return ORBV.tint[key];
+  const src = ORBV.img['orb-cloud'];
+  if (!src) return null;
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  if (key !== 'day') {
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = key === 'dusk' ? 'rgba(150,92,70,0.62)' : 'rgba(22,30,52,0.86)';
+    g.fillRect(0, 0, c.width, c.height);
+  }
+  return (ORBV.tint[key] = c);
+}
+
+/** The decks as a small soft mask (two pixels a tile, drawn up smoothly), made again when a bridge moves: their shadow on the air. */
+function orbDeckMask() {
+  const ver = S.orb ? S.orb.ver : 0;
+  if (ORBV.dk && ORBV.dkVer === ver && ORBV.dkFor === S) return ORBV.dk;
+  ORBV.dkVer = ver; ORBV.dkFor = S;
+  const k = 2, c = ORBV.dk || document.createElement('canvas');
+  c.width = S.W * k + 4; c.height = S.H * k + 4; // (sizing it empties it)
+  const g = c.getContext('2d');
+  g.fillStyle = '#000';
+  for (let j = 0; j < S.H; j++) {
+    let i0 = -1;
+    for (let i = 0; i <= S.W; i++) {
+      const on = i < S.W && S.terrain[j * S.W + i] !== T_CHASM;
+      if (on && i0 < 0) i0 = i;
+      else if (!on && i0 >= 0) { g.fillRect(2 + i0 * k, 2 + j * k, (i - i0) * k, k); i0 = -1; }
+    }
+  }
+  return (ORBV.dk = c);
+}
+
+/** How much of the day's light is in the sky (1 by day, 0 at night) for time of day st (todNow). */
+function orbDaylight(st) {
+  const v = (n) => (n === 'day' ? 1 : n === 'night' ? 0 : 0.5);
+  return v(st.a) * (1 - st.f) + v(st.b) * st.f;
+}
+
 /** The high atmosphere behind the decks, for the frame: ox, oy the map's corner on screen (css px) and z the zoom. Called instead of drawOffMap (R.void), over the dark fill the frame starts with. */
 function orbitalSky(ctx, ox, oy, z) {
+  ensureOrbArt();
+  const A = window.ORBITAL_ART, st = typeof todNow === 'function' ? todNow() : { a: 'day', b: 'day', f: 0 };
+  const ia = A && ORBV.img[ORB_TOD[st.a] || 'orb-day'], ib = A && ORBV.img[ORB_TOD[st.b] || 'orb-day'];
+  if (ia && (ib || st.f < 0.5)) orbSkyArt(ctx, z, A, st);
+  else orbSkyCode(ctx, ox, oy, z);
+  // The decks' shadow on the air below them: down and right, as every shadow falls.
+  const m = orbDeckMask(), k = 2, sh = ORB_SKY.shadow;
+  ctx.save();
+  ctx.globalAlpha = sh.alpha * (0.6 + 0.4 * orbDaylight(st));
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(m, ox + (sh.dx - 2 / k) * z, oy + (sh.dy - 2 / k) * z, (m.width / k) * z, (m.height / k) * z);
+  ctx.restore();
+}
+
+/** The painted backdrop (ensureOrbArt's pictures in): the picture for the light (crossfaded), the stars over the limb, the near cloud. */
+function orbSkyArt(ctx, z, A, st) {
+  const now = performance.now() / 1000, dt = ORBV.last ? Math.min(0.1, now - ORBV.last) : 0;
+  ORBV.last = now;
+  const still = !!(LESS_MOTION && LESS_MOTION.matches), saver = typeof gfxStep === 'function' && gfxStep() === 'saver', calm = still || saver;
+  if (!calm) ORBV.t += dt;
+  const T = calm ? 0 : ORBV.t, d = Math.min(R.dpr || 1, 2), W = R.w, H = R.h, P = ORB_SKY;
+  // Where the picture lies: drawn to cover the screen with room to spare, slid by where the view is on the map.
+  const sc = Math.max(W / A.w, H / A.h) * P.cover, DW = A.w * sc, DH = A.h * sc;
+  const fx = clamp((R.cam.x / S.W) * 2 - 1, -1, 1), fy = clamp((R.cam.y / S.H) * 2 - 1, -1, 1), L = Math.max(W, H) * P.slide;
+  const x0 = (W - DW) / 2 - fx * Math.min((DW - W) / 2, L), y0 = (H - DH) / 2 - fy * Math.min((DH - H) / 2, L);
+  const draw = (name, alpha) => {
+    const img = ORBV.img[ORB_TOD[name] || 'orb-day'];
+    if (!img || alpha <= 0) return;
+    ctx.globalAlpha = alpha;
+    if (name === 'morning') { ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1); ctx.drawImage(img, W - x0 - DW, y0, DW, DH); ctx.restore(); }
+    else ctx.drawImage(img, x0, y0, DW, DH);
+    ctx.globalAlpha = 1;
+  };
+  ctx.imageSmoothingEnabled = true;
+  draw(st.a, 1);
+  if (st.b !== st.a && st.f > 0) draw(st.b, st.f);
+  // The limb on screen (mirrored it's the same circle: the picture is framed on it).
+  const lb = A.limb, lx = lb ? x0 + lb.cx * DW : 0, ly = lb ? y0 + lb.cy * DW : 0, lr = lb ? lb.r * DW : 0;
+  const lightOf = (n) => (n === 'day' ? 'day' : n === 'night' ? 'night' : 'dusk');
+  const la = lightOf(st.a), lz = lightOf(st.b);
+  // Stars above the limb: sharp at any size, brighter as the light goes.
+  if (lb && ly - lr > -20) {
+    if (!ORBV.stars) ORBV.stars = rspStarTile(53, 384, 120, 0.02, 0.9, d);
+    const size = ORBV.stars.width / d, camx = (R.cam.x - S.W / 2) * z, camy = (R.cam.y - S.H / 2) * z;
+    const offx = (((-camx * 0.02 - T * 1.2) % size) + size) % size, offy = (((-camy * 0.02) % size) + size) % size;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, Math.min(H, ly)); ctx.arc(lx, ly, lr + 3, 0, Math.PI * 2); ctx.clip('evenodd');
+    ctx.globalAlpha = P.stars[la] * (1 - st.f) + P.stars[lz] * st.f;
+    ctx.globalCompositeOperation = 'lighter';
+    const top = Math.min(H, ly - lr + 20);
+    for (let y = offy - size; y < top; y += size) for (let x = offx - size; x < W; x += size) ctx.drawImage(ORBV.stars, x, y, size, size);
+    ctx.restore();
+  }
+  // The near cloud drifting under the decks (not on Graphics Saver: the picture has its own): over the planet only, ramping in
+  // below the limb, where the picture's own cloud is too far off for it.
+  if (!saver && ORBV.img['orb-cloud']) {
+    const ca = P.cloud.alpha[la] * (1 - st.f) + P.cloud.alpha[lz] * st.f, tile = orbCloudTint(st.f < 0.5 ? la : lz);
+    const size = Math.max(W, H) * P.cloud.size, camx = (R.cam.x - S.W / 2) * z, camy = (R.cam.y - S.H / 2) * z;
+    const offx = (((-camx * P.cloud.par - T * P.cloud.vx) % size) + size) % size, offy = (((-camy * P.cloud.par - T * P.cloud.vy) % size) + size) % size;
+    const yTop = lb ? Math.max(0, ly - lr) : 0, fade = lb ? Math.max(60, H * 0.28) : 0, bands = lb ? 5 : 0;
+    ctx.save();
+    if (lb) { ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.clip(); }
+    for (let k = 0; k <= bands; k++) {
+      // (bands: the first few ramp the cloud in below the limb, the last is the rest of the screen at full strength)
+      const ya = yTop + (k * fade) / Math.max(1, bands), yb = k < bands ? yTop + ((k + 1) * fade) / bands : H;
+      if (yb <= 0 || ya >= H) continue;
+      const a = ca * (k < bands ? (k + 0.5) / bands : 1);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, ya, W, yb - ya); ctx.clip();
+      // (its shadow first, down and right on what's below, then the cloud)
+      ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = a * 0.35;
+      for (let y = offy - size; y < yb; y += size) { if (y + size * 1.04 < ya) continue; for (let x = offx - size; x < W; x += size) ctx.drawImage(tile, x + size * 0.03, y + size * 0.04, size, size); }
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a;
+      for (let y = offy - size; y < yb; y += size) { if (y + size < ya) continue; for (let x = offx - size; x < W; x += size) ctx.drawImage(tile, x, y, size, size); }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+}
+
+/** The sky drawn in code, while the pictures load (or if they can't be had): space and stars, the limb, ocean and land, cloud and haze. */
+function orbSkyCode(ctx, ox, oy, z) {
   const now = performance.now() / 1000, dt = ORBV.last ? Math.min(0.1, now - ORBV.last) : 0;
   ORBV.last = now;
   const still = !!(LESS_MOTION && LESS_MOTION.matches), saver = typeof gfxStep === 'function' && gfxStep() === 'saver', calm = still || saver;

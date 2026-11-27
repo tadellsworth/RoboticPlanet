@@ -161,7 +161,7 @@ rendered with `renderer/`, their ground and the plans' overlays drawn in code to
 https://claude.ai/artifact/HDT4AcWrYxcKd7Wvn1NTjU
 
 **The Ring's space backdrop** (BUILT Nov 27 2026 while the owner slept, Claude's pick of three: "Shadow pass"; ART_GUIDE
-Batch 39). Canvas: https://claude.ai/artifact/TtNr58yaFT34Bdfby21YnX. The concepts were A Shadow pass (the backdrop follows
+Batch 40). Canvas: https://claude.ai/artifact/TtNr58yaFT34Bdfby21YnX. The concepts were A Shadow pass (the backdrop follows
 the day: the rocks pass through Ithaca I's shadow, so night is an eclipse with the planet a black disc ringed with light
 and its colonies' lights), B Crescent (one still view: a big crescent low in the corner, the Ring thrown wide) and C
 Ringplane (the Ring edge-on as a bright blade across the sky, more drifting rocks). Open questions for the owner:
@@ -295,6 +295,10 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   20 s rest. Argos's rules (no Murmur, no weather, no dust storm). Open: **four players** (a deck each round a middle deck); **more layouts** (a ring of
   decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
   cost or a cooldown per colony; a **mission** teaching the bridges (none yet); a rival that **sends a squad to hold** a contested box.
+  **Backdrop** (Nov 27 2026; ART_GUIDE Batch 39, canvas https://claude.ai/artifact/TtwzU6nmnCU3uTq9GH32ZQ): installed concept A, the Limb
+  (Ithaca I's Rust coast far below, the limb and the Ring; day, dusk, night pictures). Open: whether the owner prefers B (Nadir, the Ring's shadow
+  bands) or C (Terminator); a **view that differs per planet seed** (another stretch of coast each game, from the same painter); the decks' **own
+  lights at night** spilling onto the near cloud; a **ringfall streak** now and then (as The Ring map has); the Wren or a Carrier passing over.
 - **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
   js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
   side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space

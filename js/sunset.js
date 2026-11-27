@@ -612,10 +612,18 @@ function duskWake() {
  * and sheared along the light (a silhouette made once per building and team, duskSilhouette), drawn over the ground
  * under everything standing, soft, in the shade's colour. Not on Saver; not on Argos (the terminator does that) nor
  * at full dark (the night has no sun).
+ *
+ * What it costs (Nov 27 2026): drawing without the graphics chip, laying the third-size layer over the whole screen
+ * was most of it, though the shadows cover a few percent of it. So the layer is cut into blocks, the blocks the shadows
+ * reach are worked out from where they're drawn (each building's sheared silhouette, from the part of its canvas it
+ * fills; the plants', from the tiles with a plant in the silhouette map, duskSilOcc, and how far their shadows fall),
+ * and only those are laid over, a rectangle round each patch of them (duskBlitBlocks). Each rectangle has clear layer
+ * all round its edge, so the picture comes out the same to the pixel. Each building's silhouette is drawn cut to the box
+ * round its shadow (its canvas is mostly empty), and one whose shadow is off the screen isn't drawn.
  */
-const DUSK_SIL = { z: 40, n: 8 }; // the silhouettes' scale (px a tile) and canvas (tiles)
+const DUSK_SIL = { z: 40, n: 8, blk: 16, all: 0.6, most: 48 }; // the silhouettes' scale (px a tile) and canvas (tiles); the layer's blocks (px), past what share of them in shadow it's all laid over at once, and at most how many rectangles
 
-/** A building's silhouette (its art in one flat colour), made once per type and team: { c, bx, by } or null. */
+/** A building's silhouette (its art in one flat colour), made once per type and team: { c, bx, by, ink } or null. */
 function duskSilhouette(e) {
   const C = DUSK.cast || (DUSK.cast = { sil: {}, ver: -1 });
   const ver = typeof ART === 'object' ? Object.keys(ART).length : 0;
@@ -630,7 +638,27 @@ function duskSilhouette(e) {
   } catch (err) { return (C.sil[key] = null); }
   g.globalCompositeOperation = 'source-in';
   g.fillStyle = '#000'; g.fillRect(0, 0, n, n);
-  return (C.sil[key] = { c, bx, by });
+  return (C.sil[key] = { c, bx, by, ink: duskInk(g, n, n) }); // (ink: where its shadow can fall, duskCastShadows. The canvas is drawn whole: cut down, it came out a little different shrunk a long way)
+}
+
+/**
+ * The part of a canvas (w × h) with anything drawn in it, as [x0, y0, x1, y1] (px, x1 and y1 past it): [0, 0, 0, 0]
+ * when nothing is; all of it when its pixels can't be read.
+ */
+function duskInk(g, w, h) {
+  let d;
+  try { d = g.getImageData(0, 0, w, h).data; } catch (err) { return [0, 0, w, h]; }
+  let x0 = w, y0 = -1, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0, i = y * w * 4 + 3; x < w; x++, i += 4) {
+      if (!d[i]) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y0 < 0) y0 = y;
+      y1 = y;
+    }
+  }
+  return x1 < 0 ? [0, 0, 0, 0] : [x0, y0, x1 + 1, y1 + 1];
 }
 
 /** Draw the long shadows of the buildings among the frame's items (before they are drawn). */
@@ -643,22 +671,52 @@ function duskCastShadows(ctx, ox, oy, z, items) {
   // out as the light goes: env)
   const len = (0.7 + 3.3 * duskSmooth(0.05, 0.85, D.h)) * D.dir, sq = 0.34, sc = z / DUSK_SIL.z;
   const col = duskMixRgb([16, 10, 24], duskDeep(D.pal.shade), 0.25);
-  ctx.save();
-  ctx.globalAlpha = Math.min(0.42, 0.46 * k) * (1 - 0.35 * duskSmooth(0.7, 1, D.h));
   // drawn into one layer first, so where shadows cross they don't double up
   const L = DUSK.castLayer || (DUSK.castLayer = document.createElement('canvas'));
   const q = 1 / 3, W = Math.ceil(R.w * q), H = Math.ceil(R.h * q); // (a third of the screen's size: the shadows are soft, and it's quick)
   if (L.width !== W || L.height !== H) { L.width = W; L.height = H; }
   const g = L.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  // The blocks of the layer the shadows reach, marked from what's drawn (screen px), with 3 px of the layer more all
+  // round for its smoothing.
+  const B = DUSK_SIL.blk, bw = Math.ceil(W / B), bh = Math.ceil(H / B), kx = W / R.w / B, ky = H / R.h / B, soft = 3 * R.w / W;
+  let M = DUSK.castBlocks;
+  if (!M || M.length !== bw * bh) M = DUSK.castBlocks = new Uint8Array(bw * bh);
+  else M.fill(0);
+  const mark = (x0, y0, x1, y1, pad) => {
+    x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+    if (x1 < 0 || y1 < 0 || x0 > R.w || y0 > R.h) return;
+    const i0 = Math.max(0, Math.floor(x0 * kx)), i1 = Math.min(bw - 1, Math.floor(x1 * kx));
+    const j0 = Math.max(0, Math.floor(y0 * ky)), j1 = Math.min(bh - 1, Math.floor(y1 * ky));
+    for (let j = j0; j <= j1; j++) M.fill(1, j * bw + i0, j * bw + i1 + 1);
+  };
   let any = false;
   // The plants' shadows: their silhouettes (duskSilBake: the whole map's plants, made once) smeared along the light, a
   // tree's shadow about a tile long at sunset.
-  if (DUSK.sil && DUSK.sil.ready && DUSK.sil.of === S) {
+  const Sl = DUSK.sil;
+  if (Sl && Sl.ready && Sl.of === S) {
     const n = 3, pl = 0.5 * len / 2.2; // (a tree is lower than most buildings, and its crown starts off the ground: 1.2 tiles at most)
     g.setTransform(q, 0, 0, q, 0, 0);
-    for (let k = 1; k <= n; k++) duskMapImage(g, DUSK.sil.c, ox + pl * z * k / n, oy + Math.abs(pl) * 0.22 * z * k / n, z);
+    for (let k = 1; k <= n; k++) duskMapImage(g, Sl.c, ox + pl * z * k / n, oy + Math.abs(pl) * 0.22 * z * k / n, z);
     any = true;
+    // where: the tiles with a plant in the map, their shadows falling up to pl tiles along the light (and two of the
+    // map's pixels more round them, for its smoothing)
+    const O = Sl.occ, dx = pl * z, dy = Math.abs(pl) * 0.22 * z, pad = soft + 2 * z * S.W / Sl.c.width;
+    if (O) {
+      const i0 = clamp(Math.floor((-ox - Math.max(0, dx) - pad) / z) - 1, 0, S.W - 1), i1 = clamp(Math.ceil((R.w - ox - Math.min(0, dx) + pad) / z), 0, S.W - 1);
+      const j0 = clamp(Math.floor((-oy - dy - pad) / z) - 1, 0, S.H - 1), j1 = clamp(Math.ceil((R.h - oy + pad) / z), 0, S.H - 1);
+      for (let j = j0; j <= j1; j++) {
+        let run = -1;
+        for (let i = i0; i <= i1 + 1; i++) {
+          const on = i <= i1 && O[j * S.W + i];
+          if (on && run < 0) run = i;
+          else if (!on && run >= 0) {
+            mark(ox + run * z + Math.min(0, dx), oy + j * z, ox + i * z + Math.max(0, dx), oy + (j + 1) * z + dy, pad);
+            run = -1;
+          }
+        }
+      }
+    } else M.fill(1);
   }
   for (const e of items) {
     if (e.ent !== 'b' || e.dead || !e.built) continue;
@@ -666,20 +724,96 @@ function duskCastShadows(ctx, ox, oy, z, items) {
     if (!S0) continue;
     const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null;
     const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
-    // the art's ground line stays put, its height laid along the light
+    // where its shadow falls on the screen: the part of the silhouette drawn in, sheared (x = cx + u - len v, y = cy + sq v)
+    const I = S0.ink, u0 = (I[0] - S0.bx) * sc, u1 = (I[2] - S0.bx) * sc, v0 = (I[1] - S0.by) * sc, v1 = (I[3] - S0.by) * sc;
+    if (u1 <= u0) continue; // (nothing in it)
+    const x0 = cx + Math.min(u0 - len * v0, u0 - len * v1), x1 = cx + Math.max(u1 - len * v0, u1 - len * v1), y0 = cy + sq * v0, y1 = cy + sq * v1;
+    if (x1 + soft < 0 || x0 - soft > R.w || y1 + soft < 0 || y0 - soft > R.h) continue; // (off the screen)
+    mark(x0, y0, x1, y1, soft);
+    // the art's ground line stays put, its height laid along the light; cut to the box round its shadow (2 px of the
+    // layer more round it: the shadow itself reaches a quarter of one past), as the silhouette's canvas is mostly
+    // empty and drawing it sheared cost as much as all of its empty corners
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    const cx0 = Math.floor(x0 * q) - 2, cy0 = Math.floor(y0 * q) - 2;
+    g.beginPath(); g.rect(cx0, cy0, Math.ceil(x1 * q) + 2 - cx0, Math.ceil(y1 * q) + 2 - cy0); g.clip();
     g.setTransform(q, 0, -q * len, q * sq, cx * q, cy * q);
     g.drawImage(S0.c, -S0.bx * sc, -S0.by * sc, S0.c.width * sc, S0.c.height * sc);
+    g.restore();
     any = true;
   }
-  if (any) {
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalCompositeOperation = 'source-in';
-    g.fillStyle = duskRgb(col); g.fillRect(0, 0, W, H);
-    g.globalCompositeOperation = 'source-over';
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(L, 0, 0, R.w, R.h);
-  }
+  if (!any) return;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = duskRgb(col); g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'source-over';
+  ctx.save();
+  ctx.globalAlpha = Math.min(0.42, 0.46 * k) * (1 - 0.35 * duskSmooth(0.7, 1, D.h));
+  ctx.imageSmoothingEnabled = true;
+  duskBlitBlocks(ctx, L, M, bw, bh, B);
   ctx.restore();
+}
+
+/**
+ * Lay layer L over the screen where blocks are marked in M (bw × bh blocks of B px of it): a rectangle round each patch
+ * of marked blocks touching (patches whose rectangles overlap made one). The marks reach past every shadow by more than
+ * the smoothing does, so a rectangle's edge runs through clear layer and what's outside them all is clear. Most of it
+ * marked, or too many patches: all of it at once.
+ */
+function duskBlitBlocks(ctx, L, M, bw, bh, B) {
+  let n = 0;
+  for (let i = 0; i < M.length; i++) n += M[i];
+  if (!n) return;
+  const all = () => ctx.drawImage(L, 0, 0, R.w, R.h);
+  if (n > DUSK_SIL.all * M.length) { all(); return; }
+  // the patches (blocks touching, corners too), each as [i0, j0, i1, j1] (blocks, i1 and j1 past it)
+  const seen = new Uint8Array(M.length), stack = [];
+  let boxes = [];
+  for (let s0 = 0; s0 < M.length; s0++) {
+    if (!M[s0] || seen[s0]) continue;
+    const b = [bw, bh, 0, 0];
+    seen[s0] = 1; stack.push(s0);
+    while (stack.length) {
+      const c = stack.pop(), i = c % bw, j = (c - i) / bw;
+      if (i < b[0]) b[0] = i;
+      if (j < b[1]) b[1] = j;
+      if (i + 1 > b[2]) b[2] = i + 1;
+      if (j + 1 > b[3]) b[3] = j + 1;
+      for (let y = Math.max(0, j - 1); y <= Math.min(bh - 1, j + 1); y++) for (let x = Math.max(0, i - 1); x <= Math.min(bw - 1, i + 1); x++) {
+        const t = y * bw + x;
+        if (M[t] && !seen[t]) { seen[t] = 1; stack.push(t); }
+      }
+    }
+    boxes.push(b);
+    if (boxes.length > DUSK_SIL.most * 4) { all(); return; }
+  }
+  // rectangles that overlap, made one (till none do)
+  for (let merged = true; merged;) {
+    merged = false;
+    for (let p = 0; p < boxes.length && !merged; p++) for (let q = p + 1; q < boxes.length; q++) {
+      const A = boxes[p], C = boxes[q];
+      if (A[0] >= C[2] || C[0] >= A[2] || A[1] >= C[3] || C[1] >= A[3]) continue;
+      boxes[p] = [Math.min(A[0], C[0]), Math.min(A[1], C[1]), Math.max(A[2], C[2]), Math.max(A[3], C[3])];
+      boxes.splice(q, 1);
+      merged = true;
+      break;
+    }
+  }
+  if (boxes.length > DUSK_SIL.most) { all(); return; }
+  // each the whole layer drawn as ever, clipped to the rectangle (in whole pixels of the screen: a plain cut, cheap, and
+  // the picture inside comes out exactly as before; drawn as a part of the layer, the screens whose size isn't a
+  // multiple of three came out a row out here and there)
+  const kx = R.w / L.width * B, ky = R.h / L.height * B, T = ctx.getTransform ? ctx.getTransform() : null;
+  if (!T || T.b || T.c) { all(); return; }
+  for (const b of boxes) {
+    const x0 = Math.floor(T.a * b[0] * kx + T.e), x1 = Math.ceil(T.a * b[2] * kx + T.e), y0 = Math.floor(T.d * b[1] * ky + T.f), y1 = Math.ceil(T.d * b[3] * ky + T.f);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+    ctx.setTransform(T);
+    all();
+    ctx.restore();
+  }
 }
 
 /** The colour of a robot's drop shadow now ('r,g,b'): its usual near-black, turning violet in the sunset's long light. */
@@ -739,13 +873,30 @@ function duskSilBake(D) {
     const x = c.getContext('2d'), k = px / TP;
     x.setTransform(k, 0, 0, k, 0, 0);
     x.hdScale = k;
-    L = DUSK.sil = { c, ctx: x, row: 0, ready: false, of: S };
+    L = DUSK.sil = { c, ctx: x, row: 0, ready: false, of: S, occ: null };
   }
   if (L.ready) return;
   // A few rows a frame, more while the sun is going down.
   const t0 = performance.now(), budget = D ? 6 : 2.5;
   while (L.row < S.H && performance.now() - t0 < budget) { drawPlants(L.ctx, 0, L.row, S.W - 1, Math.min(S.H - 1, L.row + 3)); L.row += 4; }
-  if (L.row >= S.H) { duskSilInk(L, 0, 0, S.W, S.H); L.ready = true; }
+  if (L.row >= S.H) { duskSilInk(L, 0, 0, S.W, S.H); duskSilOcc(L); L.ready = true; }
+}
+/**
+ * Which tiles have a plant drawn in them in the silhouette map, read back once it's made, into L.occ (1 where one is):
+ * where the plants' long shadows fall from (duskCastShadows). Null when the map can't be read (then from anywhere).
+ */
+function duskSilOcc(L) {
+  const px = L.c.width / S.W, w = L.c.width;
+  let d;
+  try { d = L.ctx.getImageData(0, 0, w, L.c.height).data; } catch (err) { L.occ = null; return; }
+  const O = L.occ = new Uint8Array(S.W * S.H);
+  for (let j = 0; j < S.H; j++) {
+    for (let i = 0; i < S.W; i++) {
+      let on = 0;
+      for (let y = j * px; y < (j + 1) * px && !on; y++) for (let x = i * px, o = (y * w + x) * 4 + 3; x < (i + 1) * px; x++, o += 4) if (d[o]) { on = 1; break; }
+      O[j * S.W + i] = on;
+    }
+  }
 }
 /** Turn the plants drawn in tiles (i, j, w, h) of the silhouette map into dark shapes. */
 function duskSilInk(L, i, j, w, h) {
@@ -769,5 +920,14 @@ function duskSilTiles(i0, j0, i1, j1) {
   x.clearRect(i0 * TP, j0 * TP, w * TP, h * TP);
   drawPlants(x, i0 - 1, j0 - 1, i1 + 1, j1 + 1);
   x.restore();
-  if (L.ready) duskSilInk(L, i0, j0, w, h);
+  if (!L.ready) return;
+  duskSilInk(L, i0, j0, w, h);
+  // (where a plant may be now: each with one, and its crown into the tiles round it and above; not read back)
+  const O = L.occ;
+  if (O) {
+    for (let j = j0 - 1; j <= j1 + 1; j++) for (let i = i0 - 1; i <= i1 + 1; i++) {
+      if (!inMap(i, j) || !S.decor || !S.decor[tIdx(i, j)]) continue;
+      for (let b = Math.max(j0, j - 2); b <= Math.min(j1, j + 1); b++) for (let a = Math.max(i0, i - 1); a <= Math.min(i1, i + 1); a++) O[b * S.W + a] = 1;
+    }
+  }
 }

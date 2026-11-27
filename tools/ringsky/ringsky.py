@@ -4,7 +4,7 @@
 #   look    'shadow' (the installed one: Shadow pass, the planet's light following the day), or the two other concepts
 #           from the design canvas, 'crescent' and 'ringplane'
 #   outDir  art/ring by default: writes the pictures (.webp) and ring-art.js (the list, sizes and where each goes)
-# Needs numpy, scipy and Pillow. About a minute on 4 cores. ART_GUIDE.md: Batch 39, The Ring's backdrop.
+# Needs numpy, scipy and Pillow. About a minute on 4 cores. ART_GUIDE.md: Batch 40, The Ring's backdrop.
 import sys, os, json, math, numpy as np
 from scipy import ndimage as nd
 from PIL import Image
@@ -444,6 +444,6 @@ elif LOOK == 'ringplane':
     }
 
 with open(os.path.join(OUT, 'ring-art.js'), 'w') as f:
-    f.write('// The Ring\'s backdrop pictures (tools/ringsky/ringsky.py writes this file; ART_GUIDE.md: Batch 39): sizes and layout.\n')
+    f.write('// The Ring\'s backdrop pictures (tools/ringsky/ringsky.py writes this file; ART_GUIDE.md: Batch 40): sizes and layout.\n')
     f.write('window.RING_ART = ' + json.dumps(art, separators=(',', ':')) + ';\n')
 print('wrote', os.path.relpath(os.path.join(OUT, 'ring-art.js'), ROOT))

@@ -4,7 +4,7 @@
  * Looks only: nothing here reads or changes anything the game decides, so it may use Math.random and the real clock.
  *
  *   - ringSpace: what shows where there is no ground (the map is drawn over it, its void tiles left clear): high orbit
- *     round Ithaca I, among the Ring's rocks (ART_GUIDE.md: Batch 39, "Shadow pass"). Painted pictures (art/ring/, made
+ *     round Ithaca I, among the Ring's rocks (ART_GUIDE.md: Batch 40, "Shadow pass"). Painted pictures (art/ring/, made
  *     by tools/ringsky/ringsky.py):
  *       the far layer: the deep sky (the galaxy's band, faint nebulae, a grain of far stars) with two tiles of brighter
  *       stars drawn crisp in code; Corvane, its glare and spikes; Ithaca I with the Ring round it, and Argos. The rocks go
