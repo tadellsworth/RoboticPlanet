@@ -2246,7 +2246,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     and on a **dead planet**, the enemy out of parts as well (`deadPlanet`, `aiThink`), with more armed warbots than the
     enemy's whole army, two at least, its attack threshold comes down to what it has (two fewer, two at least: the
     landings of `aiNaval` and `aiBeach` too, four warbots spare or the threshold), and a lead of two is enough for the
-    final push (Islands seed 21: the Ore ran out on every island by minute 40 and neither colony ever attacked again). At low Fuel, key industry Workers keep working if the available charge would not
+    final push (Islands seed 21: the Ore ran out on every island by minute 40 and neither colony ever attacked again).
+    That band (`finish`, four at least) is what the march planner (`aiMarch`) then asks for as well, where it used to
+    ask twice the enemy's army and two more again and send nobody; the target's garrison and guns (`aiTakeNeed`, the
+    guns over the flag) and its walls (the breach check) still count, so a base heavy guns cover still waits. At low Fuel, key industry Workers keep working if the available charge would not
     repay the trip. An Ore-starved rival can mine a single accessible vein and ignores distant, unclaimed veins
     when judging which nests to clear.
     **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
@@ -3267,6 +3270,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   fewest enemy guns reach with three tiles to spare (`aiStage`, on `DANGER.guns`); once three in five stand there the
   flag moves beside the base and they go in at the gun covering it first (`r.first`, the next one as each falls), then
   the base. It masses for it up to four minutes (`P.stormT`) and calls it off when under two in five are left armed.
+  (The Storm Front's own look at the weather has its own clock, `P.wxT`: sharing `P.stormT`, every look put the four
+  minutes back to the start, and the army kept massing for the base.)
   Against a crushed rival (twice its army and two more), it can storm a lightly defended base with a smaller force.
   It still wants at least eight warbots, twice the enemy's whole army and two more, and three in five of its armed
   army outside Bunkers (or the full count, if that is less). Heavy gun cover requires the full estimated force.
@@ -3347,7 +3352,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   and a site is short of it, or while a building it wants can't be started for lack of it (`P.fiberWait`): a busy
   Smelter used to burn every Fiber the Harvesters cut, and nothing that costs Fiber could go up. A site no road reaches
   yet doesn't count (it can't take any), and with no Harvester cutting they start again once there are 6 Fiber and
-  nothing waits for it, where they used to stay off while the Fiber a cut-out grove still gave piled up. On Medium,
+  nothing waits for it, where they used to stay off while the Fiber a cut-out grove still gave piled up. A Smelter
+  already holding a batch (2 Ore and 2 Fiber in its hopper, which the colony's goods don't count) finishes it while the
+  colony has under 3 Alloy, taking nothing more in (`b.drain`, see `needsOf`), whether it is going off for the Fiber
+  or kept off until there are 6, and rests again once the batch is done: resting on it, a Settler sat at 0 Alloy for
+  45 minutes with six Ore and five or six Fiber in its only Smelter. On Medium,
   Normal and Hard (`smart`; an Easy rival keeps the old habits) its Depots out toward the front (12 tiles or more from
   the Command Base) keep Cement and Ammo and take in no Ore, Crystal, Stone or Fiber (`reject`): a Depot among the far
   Mines used to collect their whole output, a long run from the Smelters waiting for it. Its Bot Foundry rests to save
@@ -3361,7 +3370,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   difficulty, once its Bot Foundry stands, with no Mine (or no Crystal Tap) at work, none on the way and under 4 Ore
   (or Crystal) in store, one goes up first, past the usual limit on sites (`starved`): a gatherer counts as at work
   while it has a node it can go to, on no rival's land and out of enemy guns (`aiGathers`), and a site as on the way
-  for 150 s or once a road reaches it. Sites stuck where its robots won't go (their road through ground where they were
+  for 150 s or once a road reaches it, but not once it has stood unsafe (`shunned`) with nothing coming in for 30 s
+  (`aiHotStalled`). Such a site of a Mine, Crystal Tap, Harvester, Quarry, Depot or Outpost (`aiHotSites`), unsafe now
+  and most of the time since anything last came in (goods, work, or goods on the way), is given up after two minutes
+  of that (`AI_HOT_SITE`, three minutes old at least) and its spot avoided for four (`P.avoid`); the haulers still
+  keep off it meanwhile (a Warlord on Standard seed 11 kept a replacement Mine like that for an hour as the answer to
+  its Ore running out, and its army never came back). With its Ore run dry (`oreLow`) its first Trade Terminal goes
+  past the usual limit on sites too, as for Crystal or Fuel (`tradeFirst`), and buys Ore (`aiTrade`). Sites stuck where its robots won't go (their road through ground where they were
   shot, see `noteDanger`) used to hold every place while the last field ran dry, and two rivals could sit at 0 Chips
   with a few warbots each for 20 minutes.
 - **The rival's roads and Ramps** (`aiRoads`, `aiRampCut` in `js/ai.js`): where its road to a site would run the long

@@ -268,8 +268,8 @@ function needsOf(b) {
     if (storeFunded(b)) return out; // paid straight from storage (settlePlans), never hauled
     const cost = siteCost(b);
     for (const g in cost) out.push([g, cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
-  } else if (b.paused || b.cut) {
-    return out; // (cut off: nothing is hauled to it)
+  } else if (b.paused || b.cut || b.drain) {
+    return out; // (cut off: nothing is hauled to it; nor to a rival's Smelter finishing what it holds, see aiThink)
   } else if (def.bots && b.mode === 'off' && !hasOrders(b)) {
     return out; // a stopped Foundry doesn't stockpile parts
   } else if (def.inp) {
@@ -8757,7 +8757,7 @@ function captureBuilding(b, by) {
     return;
   }
   releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
-  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  delete b.prio; delete b.smode; delete b.reject; delete b.drain; b.paused = false;
   if (!BDEFS[b.type].airdrop) delete b.airSupply; // (Supply by air was its old owner's choice; a Drop Outpost keeps it)
   b.fixLeft = 0; b.fixer = 0;
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
@@ -9724,7 +9724,7 @@ function eliminate(old, by, how) {
     if (e.dead || e.owner !== old) continue;
     if (!e.built) { destroyBuilding(e, true); continue; }
     releaseBotsFrom(e, true);
-    delete e.prio; delete e.smode; delete e.reject; e.paused = false;
+    delete e.prio; delete e.smode; delete e.reject; delete e.drain; e.paused = false;
     if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
     if (down && e.was === undefined) e.was = old; // (what comes back to it if its base is retaken: reinstate)
@@ -9847,7 +9847,7 @@ function reinstate(p, by) {
       if (e.owner === p) continue;
       if (!e.built) { destroyBuilding(e, true); continue; }
       releaseBotsFrom(e, false); // (whoever was inside walks out)
-      delete e.prio; delete e.smode; delete e.reject; delete e.keepW; e.paused = false;
+      delete e.prio; delete e.smode; delete e.reject; delete e.drain; delete e.keepW; e.paused = false;
       if (!BDEFS[e.type].airdrop) delete e.airSupply;
       e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
       e.owner = p; e.tgt = 0; clearFocus(e);
@@ -24632,7 +24632,7 @@ function megaSeized(b, by) {
   const def = BDEFS[b.type], old = b.owner, name = def.name;
   if (by !== old) noteLost(b, by);
   releaseBotsFrom(b, false);
-  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  delete b.prio; delete b.smode; delete b.reject; delete b.drain; b.paused = false;
   b.fixLeft = 0; b.fixer = 0; b.inc = {}; b.cut = 0; b.tgt = 0;
   b.owner = by; b.mDown = 0; b.mCap = 0; b.mBy = -1; b.mWr = 0; b.mWreck = 0;
   b.mOff = 1; b.mNeed = megaFee(b.type); b.mReady = 0;

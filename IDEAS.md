@@ -3,6 +3,30 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Rivals that peter out late (review of the two codex audits, Nov 27 2026)
+
+The four findings of `docs/standard-rival-persistence-audit.md` and `docs/warlord-recovery-audit.md` (on the codex
+branch) were checked against main and fixed in `js/ai.js` (`docs/rival-persistence-review-nov27.md`,
+`tools/ai-persistence-test.js`): a loaded Smelter finishes its batch while the colony is out of Alloy (`b.drain`), a
+depleted-economy march goes with the band `finish` allows, the Storm Front has its own clock (`P.wxT`), and unsafe
+stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Open, seen while measuring and not fixed:
+
+- **A Murmur Scuttler parked by the Harvesters.** On Standard seed 11 (Settler, rival on hold) one Scuttler about
+  nine tiles off made both Harvesters' workers turn back (`takeCover`) a hundred times in four minutes: Fiber stopped
+  at 28 for the rest of the game, and with it the Smelter and the army. Should a rival send a couple of warbots at a
+  creature that keeps its gatherers in, or should a gatherer's worker give way to the Murmur only when it is closer?
+- **Down to one Hauler.** The Warlord on the same seed kept full Mines ("Storage full, waiting for pickup") for
+  minutes with one Hauler left after a raid; triage (`few`) makes a Hauler only when there is none at all.
+- **Roads on paper through danger.** Standard seed 25, Warlord, rival on hold at 12: from minute 12 the colony mined
+  nothing (Ore 0, 88 mined all game). Its replacement Mines, Harvesters and Terminal sat "No road to storage yet" with
+  their whole road planned and 11 Workers idle: paving skips tiles where enemy warbots are about or its robots were
+  shot (`hotFor`, `dangerAt`), so a road that has to leave the network there is never laid; after four minutes the site
+  is given up and the next one goes up the same way. Should a rival escort its road crew, clear the warbots parked on
+  its land first, or plan the road round the danger?
+- **One-sided measurements.** `tools/late-attack-audit.js` holds colony 1 only; the seed that showed the Warlord
+  collapse now plays out differently (the attacker wins at 14 minutes), so each fix is checked with its own test,
+  and the holds were compared over several seeds instead.
+
 ## Space expansion, phase 1 (built Nov 27 2026: calls made, open questions for the owner)
 
 Built from the owner's picks on the space canvas (https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): the Launch Pad

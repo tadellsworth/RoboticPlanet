@@ -454,6 +454,8 @@ function aiThink(p) {
   if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type) &&
       !(needsCharge && b.type === 'charger')) demolish(b);
   if (few) me = me.filter((b) => !b.dead);
+  // A gatherer's or an Outpost's site its robots won't go near (aiHotSites), with nothing coming, is given up.
+  if (aiHotSites(p, me)) me = me.filter((b) => !b.dead);
 
   // 1) Construction
   const counts = {};
@@ -606,7 +608,9 @@ function aiThink(p) {
   // (Not where there are no Trade Posts: the Hollow, which the Pathfinder never mapped.)
   if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240 && S.posts && S.posts.length && !worldBan('terminal')) {
     plan = [['terminal', 1]].concat(plan);
-    tradeFirst = crShort || fuelTrade;
+    // (And with its Ore run dry (oreLow): aiTrade buys Ore once a Terminal stands, but waiting for a free site, the
+    // Terminal came too late for a colony whose Mines were lost: the Warlord recovery audit of Nov 27 2026.)
+    tradeFirst = crShort || fuelTrade || oreLow;
   }
   // (An Architect's second Crystal Tap with them: Chips are what its Missiles and its warbots both wait for.)
   // (Its inputs first: a third Harvester, a Grove Planter and a second Mine come before the second Smelter, and a second Bio Farm before the second Tap and Fab.
@@ -743,11 +747,13 @@ function aiThink(p) {
   // won't go (a road to pave across ground where they were just shot, see noteDanger) could hold every place for ten
   // minutes and more while the last field ran dry: no Alloy or no Chips, so the Bot Foundry made nothing, and both
   // rivals sat at 0 Chips with a few warbots each until the clock ran out. (On the way: a site placed in the last
-  // 150 s, or one a road reaches. The opening, before the Foundry, goes as it always has.)
+  // 150 s, or one a road reaches, and not one that has stood unsafe with nothing coming for AI_HOT_SITE.brief s, see
+  // aiHotSites: a road to it says nothing when the haulers won't take that road. The opening, before the Foundry, goes
+  // as it always has.)
   const haveG = playerGoods(p);
   // (Ore running dry, oreLow: a Mine on fresh Ore is starved for too, with one still at work on the last of a field.)
   const starved = !me.some((b) => b.type === 'foundry' && b.built) ? [] : ['mine', 'tap'].filter((t) => (haveG[RES[BDEFS[t].gather].good] || 0) < 4 &&
-    !me.some((b) => b.type === t && (b.built ? (t !== 'mine' || !oreLow) && aiGathers(b) : S.time - b.born < 150 || !b.unlinked)));
+    !me.some((b) => b.type === t && (b.built ? (t !== 'mine' || !oreLow) && aiGathers(b) : (S.time - b.born < 150 || !b.unlinked) && !aiHotStalled(P, b))));
   // A link of the chain that makes robots lost once it had stood (its Smelter, Chip Fab or Bot Foundry, wrecked by a raid
   // or the Murmur, with no site going up for it): put back first, past the usual limit on sites, and given a worker
   // first, as a starved Mine is. (The Hollow, Scarce, seed 25: the Murmur wrecked a colony's Foundry, Fab and Smelters
@@ -828,15 +834,27 @@ function aiThink(p) {
   // at three-quarters of its worth), and their workers go to the Taps. (Crystal-starved colonies used to sit on 60 to 90 Alloy.)
   const alloyNow = playerGoods(p).alloy || 0, resting = me.some((b) => b.alloyRest);
   const alloyPile = !few && crLow && alloyNow >= (resting ? AI_ALLOY_PILE / 2 : AI_ALLOY_PILE);
-  const sitesWantFiber = S.time - (P.fiberWait ?? -99) < 8 || me.some((b) => !b.built && !b.unlinked && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0)); // (a site no road reaches yet can't take any)
+  const sitesWantFiber = S.time - (P.fiberWait ?? -99) < 8 || me.some((b) => !b.built && !b.unlinked && !aiHotStalled(P, b) && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0)); // (a site no road reaches yet can't take any)
+  // A Smelter already loaded with a batch (its Ore and Fiber in its hopper, which playerGoods doesn't count) finishes
+  // what it holds while the colony is out of Alloy, but takes in nothing more (b.drain, see needsOf): that Fiber is
+  // no use to a site, and resting on it, a colony sat at 0 Alloy for 45 minutes with six Ore and six Fiber in its only
+  // Smelter, its Foundry waiting and its army unarmed (the rival-persistence audit of Nov 27 2026, Standard 11, Settler).
+  const inp = BDEFS.smelter.inp;
   for (const b of me) {
     if (b.type !== 'smelter' || !b.built) continue;
-    if (alloyPile) { if (!b.paused) { setPaused(b, true); b.alloyRest = true; } continue; }
+    if (alloyPile) { if (!b.paused) { setPaused(b, true); b.alloyRest = true; } delete b.drain; continue; }
     if (b.alloyRest) { delete b.alloyRest; if (b.paused) setPaused(b, false); }
-    if (!b.paused && fiberNow < 3 && (!cutting || sitesWantFiber)) setPaused(b, true);
+    const loaded = (b.stock.ore || 0) >= inp.ore && (b.stock.fiber || 0) >= inp.fiber;
+    const rest = fiberNow < 3 && (!cutting || sitesWantFiber);
     // (Back to work once there's some to spare, Harvester or not: with none cutting it used to stay off while the
     // Fiber a cut-out grove still gave piled up, and the Bot Foundry's site waited minutes for its Alloy.)
-    else if (b.paused && (cutting ? fiberNow >= 6 || !sitesWantFiber : fiberNow >= 6 && !sitesWantFiber)) setPaused(b, false);
+    const wake = cutting ? fiberNow >= 6 || !sitesWantFiber : fiberNow >= 6 && !sitesWantFiber;
+    // (Resting for the Fiber: going off now, or kept off until there are 6; not one triage rested, see below.)
+    const forFiber = rest || ((b.paused || b.drain) && !wake && !(P.triage && P.triage.includes(b.id)));
+    if (forFiber && loaded && alloyNow < BDEFS.smelter.make.alloy) { b.drain = true; if (b.paused) setPaused(b, false); continue; }
+    if (b.drain) { delete b.drain; if (!wake) { setPaused(b, true); continue; } } // (its batch done: it rests again)
+    if (rest) { if (!b.paused) setPaused(b, true); }
+    else if (b.paused && wake) setPaused(b, false);
   }
   // Goods held back for a key building we can't afford yet: nothing that needs them starts first.
   const held = new Set();
@@ -1489,8 +1507,11 @@ function aiThink(p) {
   // against none sat out the last half hour; aiMarch's own floor for a crushing march, 4, stands.)
   // (Any map since the dead-planet rule above: it was the Hollow's alone.) With the enemy out of parts as well, a lead
   // of two is enough.
-  const finish = stalledParts && ready >= Math.max(4, deadPlanet ? enemyArmy + 2 : enemyArmy * 2 + 2);
-  const crushing = (army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2) || finish;
+  // (`finish` carries the band that is enough into aiMarch, which used to ask twice the enemy's army and two more
+  // again: four armed against two on a dead planet went to march, and the march sent nobody.)
+  const finishAt = Math.max(4, deadPlanet ? enemyArmy + 2 : enemyArmy * 2 + 2);
+  const finish = stalledParts && ready >= finishAt ? finishAt : 0;
+  const crushing = (army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2) || finish > 0;
   if (P.massFor && S.time > P.massFor.until) P.massFor = null;
   if (st.push) aiPush(p, lvl, army, enemyArmy);
   const pushing = P.pushOn > S.time; // (a Warden's push: it marches then with all it can gather, see aiPush)
@@ -3160,7 +3181,7 @@ function aiAtmosBurn(p) {
 }
 
 /*
- * A rival's Storm Front (STORM): once its Engine is at Rain with power, every AI_STORM.think s it sets the storm where it
+ * A rival's Storm Front (STORM): once its Engine is at Rain with power, every AI_STORM.think s (P.wxT) it sets the storm where it
  * hurts most: a warlike rival (the Herald, the Salvager, the Warden, or any at Warlord) over the foe's guns just before
  * its next attack (AI_STORM.soon s off); the Steward and the Architect over the foe's fields; otherwise over the foe's
  * base (as anyone does when the first has nothing to hit). It moves it only to a better spot.
@@ -3168,8 +3189,11 @@ function aiAtmosBurn(p) {
 const AI_STORM = { think: 20, soon: 75 };
 function aiAtmosStorm(p, e) {
   const P = S.players[p];
-  if (!e.built || (e.aeStage || 0) < 2 || !e.aeSrc || S.time - (P.stormT ?? -999) < AI_STORM.think || S.time - (e.aeStormT ?? -1e9) < STORM.cd) return;
-  P.stormT = S.time;
+  if (!e.built || (e.aeStage || 0) < 2 || !e.aeSrc || S.time - (P.wxT ?? -999) < AI_STORM.think || S.time - (e.aeStormT ?? -1e9) < STORM.cd) return;
+  // (Its own clock, P.wxT: sharing P.stormT, the ground storm's four-minute wait for the enemy base, every look here
+  // put that wait back to the start, so the army kept massing for the base and never went for a cheaper fort instead;
+  // and every march cleared it, so the weather was looked at again at once. The audit of Nov 27 2026.)
+  P.wxT = S.time;
   const st = P.style, war = st === 'rusher' || st === 'raider' || st === 'turtle' || diffAtLeast('warlord');
   const want = war && S.mode !== 'colony' && P.nextAttack - S.time <= AI_STORM.soon ? 'guns' : st === 'balanced' || st === 'tycoon' ? 'fields' : 'base';
   const spot = aiStormSpot(p, e, want) || (want !== 'base' ? aiStormSpot(p, e, 'base') : null);
@@ -4241,7 +4265,9 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
     }
     return null;
   };
-  const pushing = P.pushOn > S.time, floor = crushing ? Math.max(4, enemyArmy * 2 + 2) : pushing ? lvl.threshold : lvl.threshold * 2;
+  // (Finishing with no parts left, `finish` is the band that does it, see aiThink: the target's own garrison, guns and
+  // walls are still counted below, aiTakeNeed, the guns over the flag, and the breach check once it has gone.)
+  const pushing = P.pushOn > S.time, floor = finish ? finish : crushing ? Math.max(4, enemyArmy * 2 + 2) : pushing ? lvl.threshold : lvl.threshold * 2;
   // What a march on b from flag spot `at` takes, with the spare army there (aiSpare) and its Bulwarks leading.
   const needAt = (b, at, sp) => Math.max(aiTakeNeed(b, lvl, sp.shields), floor + Math.ceil(aiFire(aiGuards(b.owner, at.i, at.j, 2, null).filter((e) => aiDefReach(e.b)), sp.shields) - 1e-9));
   let tgt = null, spot = null, size = 0, bs = Infinity, hard = null, hs = Infinity, storm = false;
@@ -4265,7 +4291,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing, finish) {
     if (crushing) for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && !(u.inside && BDEFS[getE(u.inside).type].bunker)) whole++;
     // A weak field army says little about fixed defences. Use the smaller assault only when the base lacks heavy gun cover.
     const heavy = crushing && n < g && aiFire(aiGuards(eb.owner, eb.x, eb.y, 2, eb).filter((e) => aiDefReach(e.b)), 0) >= AI_HEAVY;
-    const go = crushing && !heavy ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
+    const go = crushing && !heavy ? Math.max(finish || Math.max(8, enemyArmy * 2 + 2), Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
     if (n >= Math.max(4, g) || n >= go) { tgt = eb; spot = by; size = n; storm = true; }
     else if (crushing && !heavy && army >= enemyArmy * 3 + 4) { storm = true; hard = { b: eb, need: go - 2 }; } // (overwhelming: it masses for that, and marches on nothing else)
     else if (g <= army - 2 && S.time - (P.stormT || (P.stormT = S.time)) < 240) { storm = true; hard = { b: eb, need: g }; }
@@ -4691,6 +4717,47 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
  * limit they ended. See README, Road crew.)
  */
 function aiRoadCrew(p) { S.players[p].roadCrew = 0; }
+
+/**
+ * Sites the colony's robots won't go near (shunned: an enemy gun covers it, or enemy warbots stand by it): a gatherer's
+ * (a Mine, a Crystal Tap, a Harvester, a Quarry), a Depot's or an Outpost's site earns its place only by what comes in.
+ * Each is watched (P.hotSite, by id: when something last came in, `t`, and how often it was seen unsafe since): one
+ * unsafe now, unsafe most of the time since anything last came (goods delivered, work done, or goods on the way), for
+ * AI_HOT_SITE.stall s and at least AI_HOT_SITE.age s old, is given up (its goods come back), and the spot is passed
+ * over for AI_HOT_SITE.avoid s (P.avoid), so the next one goes up somewhere safe. A site with goods on the way, or under
+ * a threat that passes, keeps its place; the haulers' own care (dispatch skips a shunned building) is unchanged.
+ * (Standard seed 11, Warlord, its rival holding at minute 12: its replacement Mine stood unsafe by its road for an hour
+ * with nothing delivered, counted as the answer to its Ore running out, with its Tap's, a Depot's and an Outpost's
+ * holding the other sites, and its army never came back: the Warlord recovery audit of Nov 27 2026.)
+ * Returns how many it gave up.
+ */
+const AI_HOT_SITE = { stall: 120, age: 180, avoid: 240, brief: 30 };
+const AI_HOT_TYPES = new Set(['mine', 'tap', 'harvester', 'quarry', 'depot', 'outpost']);
+function aiHotSites(p, me) {
+  const P = S.players[p], old = P.hotSite || {}, seen = {};
+  let gone = 0;
+  for (const b of me) {
+    if (b.built || b.dead || !AI_HOT_TYPES.has(b.type)) continue;
+    const prog = (b.progress || 0) + sumValues(b.stock), hot = shunned(b);
+    let h = old[b.id];
+    if (!h || prog !== h.prog || sumValues(b.inc) > 0) h = { t: S.time, prog, n: 0, hot: 0 };
+    h.n++; if (hot) h.hot++;
+    seen[b.id] = h;
+    if (hot && h.hot * 2 >= h.n && S.time - h.t >= AI_HOT_SITE.stall && S.time - b.born >= AI_HOT_SITE.age) {
+      P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + AI_HOT_SITE.avoid }]);
+      demolish(b);
+      delete seen[b.id];
+      gone++;
+    }
+  }
+  P.hotSite = seen;
+  return gone;
+}
+/** Has site b stood unsafe with nothing coming in for AI_HOT_SITE.brief s (see aiHotSites)? Then it's no answer to a shortage. */
+function aiHotStalled(P, b) {
+  const h = P.hotSite && P.hotSite[b.id];
+  return !!h && h.hot * 2 >= h.n && S.time - h.t >= AI_HOT_SITE.brief && shunned(b);
+}
 
 /**
  * Lay roads from storage to buildings that have none, seized megastructures and then sites first,
