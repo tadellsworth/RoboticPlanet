@@ -1,6 +1,6 @@
 # Phone layout audit
 
-Status: In progress. Inspected the Custom Game screen, all build tabs, Army, pause, How to play, Workforce and Economy in the in-app browser; the coverage is not yet complete at both sizes. Touch emulation and remaining screens are unverified.
+Status: In progress. Inspected the Custom Game screen, all build tabs, Army, pause, How to play, Workforce, Economy, a Command Base and a Bot Foundry order list in the in-app browser; the coverage is not yet complete at both sizes. Touch emulation and remaining screens are unverified.
 
 | Severity | Finding | Location |
 | --- | --- | --- |
@@ -25,3 +25,6 @@ Screenshots (in-app browser, mouse pointer; not touch emulation):
 - [Army, 430 × 932](phone-audit-shots/army-430.jpg)
 - [Selected Command Base, 430 × 932](phone-audit-shots/command-base-430.jpg)
 - [How to play, 430 × 932](phone-audit-shots/help-430.jpg)
+- [Custom Game setup, 390 × 844](phone-audit-shots/setup-390.jpg)
+- [Bot Foundry order list, 390 × 844](phone-audit-shots/foundry-orders-390.jpg)
+- [Bot Foundry order list, 430 × 932](phone-audit-shots/foundry-orders-430.jpg)
