@@ -226,6 +226,23 @@ to hold, filling a channel that blocks its way to Ore or Crystal it is short of)
 never moats or banks aimed at a rival. Nothing in this audit needed it: rivals ran short for want of Mines kept at
 work on the Ore they already held, not for want of room.
 
+## After the merge with main (Nov 27 2026)
+
+Main brought terraforming stages 2 and 3, the audit-verification fixes, the Half underground cave map and LORE edits.
+Re-run on the merge (`32ba910`): `tools/economy-audit.js` on Long haul 11, 25 and 31 and Long Haul 2v2 21 gives output
+identical, byte for byte, to this pass's final runs (the "After" column above): the same winners at the same minutes
+and the same rates (Long haul 11 8.2 / 5.3 / 2.5 / 1.8, 25 8.1 / 10.8 / 4.3 / 4.5, 31 8.0 / 10.4 / 3.5 / 4.9). Nothing
+in main touches a computer-only game's economy: stage 2 and 3 make nothing until a player builds them (stage 3's seams
+are made lazily on the first Seam Drill's survey) and rivals build neither.
+
+**Stage 3 and these conclusions.** The Seam Drill (2 Ore or 1 Crystal a minute from a seam of 60 Ore or 30 Crystal)
+and the Seed Mast (six beds, about 1.6 Crystal a minute after their seed) were balanced against this audit's first
+measures (a Mine 3.7 Ore a minute, a Tap 2.2 Crystal). Long haul's ×1.5 fields (`haulRich`) make a deposit last longer,
+not a Mine or Tap work faster, so both still sit below a deposit, and with rivals now keeping more Mines, Smelters, Taps
+and Fabs at work the gap is wider, not narrower. Rivals build no stage 2 or 3 building, so the rival Chip and Crystal
+numbers above are theirs alone; for a player, stage 3 is a late supplement, and the conclusion stands: the late Chip and
+Crystal balance is the deposits' and the chain that works them.
+
 ## Open questions
 
 - **Long Haul 2v2 runs longer.** Two of the four seeded 2v2 games now reach the 60-minute cap (none did before);
