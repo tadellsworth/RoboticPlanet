@@ -377,6 +377,20 @@ const ART_MANIFEST = {
   // graded with it, their light in -glow images.
   ...biomeSet('hollow'),
   'wall-hollow': 'biomes/hollow/wall.webp', // the cave wall's face over a floor tile under rock (128 x 64, four tiles across)
+  // Half underground's cave mouths (js/mouths.js, renderer/b/cavemouth.js; ART_GUIDE Batch 41): a wall section's layers in the
+  // terrain's projection, 64 px a tile, cropped (MOUTH_ART has where), for the surface south of the wall (-s) and north (-n).
+  'mouth-floor-s-hollow': 'biomes/hollow/mouth-floor-s.webp',
+  'mouth-rock-s-hollow': 'biomes/hollow/mouth-rock-s.webp',
+  'mouth-lip-s-hollow': 'biomes/hollow/mouth-lip-s.webp',
+  'mouth-key-s-hollow': 'biomes/hollow/mouth-key-s.webp',
+  'mouth-glow-s-hollow': 'biomes/hollow/mouth-glow-s.webp',
+  'mouth-keyglow-s-hollow': 'biomes/hollow/mouth-keyglow-s.webp',
+  'mouth-floor-n-hollow': 'biomes/hollow/mouth-floor-n.webp',
+  'mouth-rock-n-hollow': 'biomes/hollow/mouth-rock-n.webp',
+  'mouth-lip-n-hollow': 'biomes/hollow/mouth-lip-n.webp',
+  'mouth-key-n-hollow': 'biomes/hollow/mouth-key-n.webp',
+  'mouth-glow-n-hollow': 'biomes/hollow/mouth-glow-n.webp',
+  'mouth-keyglow-n-hollow': 'biomes/hollow/mouth-keyglow-n.webp',
   'vein-hollow': { src: 'biomes/hollow/vein.webp', scale: 1.4, anchor: [0.5, 0.6145] }, // a Bloom vein (the Hollow's Fiber)
   'vein-glow-hollow': { src: 'biomes/hollow/vein-glow.webp', scale: 1.4, anchor: [0.5, 0.6145] },
   'floater-hollow': { src: 'biomes/hollow/floater.webp', scale: 8.3, anchor: [0.5, 0.4] }, // a floating Crystal mass: over its platform and the chasm

@@ -104,7 +104,12 @@ shadow away from it (east at dusk, west at dawn), from half again its height in 
 as the sun sets (`duskCastShadows`): its own art as a flat silhouette (made once per building and team), sheared along
 the light, drawn in one third-size layer in the shade's colour so crossing shadows don't double up. The plants throw
 theirs too, up to about a tile long: the whole map's plant silhouettes (`duskSilBake`, now made in every biome with a
-sunset) smeared along the light into the same layer. Not on Saver, Argos or the Hollow.
+sunset) smeared along the light into the same layer. Not on Saver, Argos or the Hollow. The layer is laid over the
+screen only round the patches that have shadow in them (worked out from each silhouette's drawn part and the tiles with
+a plant), each patch with clear layer round it, and each silhouette is drawn cut to the box round its shadow, so it
+looks exactly as before at a fraction of the cost (Nov 27 2026: drawing without the graphics chip, the whole-screen pass
+and the silhouettes' empty corners were most of it). A new kind of shadow drawn into the layer has to mark where it
+falls the same way (`duskCastShadows`), or it's cut off.
 
 Dawn uses one cooler palette (violet, rose, pale gold) except the Bloom's own (violet, teal, mint), at about 60%
 strength. The Ring shows as a faint pale arc low over the top of the view when zoomed out, after the land has gone
@@ -2079,6 +2084,128 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `skirmisher@0-f0`…`@1-f3` (+ morning, evening, night), `-brake`, `-boost` | A lean arrowhead body slung low between four big all-terrain tyres on swing arms (the tread rolls a quarter block a frame), team strips along its flanks, swept tail fins, a swivel with twin short autoguns, two dash thrusters in the tail glowing team colour. Smaller than the Warbot in the same frame | `drawArmyLights`: its thrusters flare (a glow and two streaks of team light) while it dashes; `'dash'`: a kick of dust and twin light streaks where it sets off |
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
+
+### Batch 41: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
+
+On Half underground (README, Half underground) the gaps in the wall between the surface and the caves were plain square
+notches: the sand met the cave floor at a hard line and nothing said "a way through". They went through Claude Design (Nov
+27 2026): the canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs showed three concepts, each at a narrow gate and
+a wide mouth, both ways the map faces, day to night, its kit and in-game screenshots with robots passing: **A, Rock
+Arch** (natural: layered rock cheeks and a span over the gap), **B, Accord Portal** (cast pylons, a lit, striped lintel, an
+apron, a stencilled ADIT 3 / UNSURVEYED BEYOND THIS MARK plate) and **C, Collapsed Breach** (tilted roof slabs, roots,
+rubble ramps, a fallen block). The owner said to go with my pick: **A** is installed (it belongs with the Hollow's stone,
+keeps the gap's floor clear, and adds no lore; B's adit would be new history, and "breach" already means the Hollow's
+shafts).
+
+**How it is made.** `renderer/b/cavemouth.js` (`c=arch|portal|breach`, `face=s|n`, `part=all|floor|rock|lip|key`, `w=` a
+gap closed up for the heroes, `nokey=1`) renders one wall section in the terrain's own projection: straight down for the
+ground, one map tile = 2 world units = 64 px after compose, so the pieces sit on the tile grid exactly, with heights shifted
+up the screen by cot 57° (the buildings' camera angle) so faces looking south show as on a building. The frame is 30 × 10
+tiles, the line where the roof begins across its middle, the cheeks' inner faces 7 tiles either side of the middle. The
+cheeks are heightfields over the wall's band, highest at the gap and fading into the flat wall over six tiles (vertex alpha),
+in the Hollow's own rock texture lifted; the span is a swept section with drips and Bloom knots. A shadow catcher keeps the
+shadows. `face=s` is the map with the surface south of the wall, `face=n` north (cavesMap turns half the seeds over end to
+end); the mouths always run east to west, so there is no other orientation. `renderer/tools/render_mouths.sh <out> arch`
+renders the ten layers (about a minute and a half), `renderer/tools/install_mouths.py <out> arch ../art` downsamples them,
+fades the lip's ends into the cheeks, crops each and prints `MOUTH_ART` (the crops' places) for `js/mouths.js`.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `mouth-floor-<s|n>-hollow` | What lies flat: scree along the wall's foot, the cheeks' and the span's shadows | With the ground, before its grade (`mouthsFloor`): graded like the tile under it |
+| `mouth-rock-<s|n>-hollow` | The cheeks: the wall rising either side of the gap | After the ground's grade, under the robots (`mouthsUnder`), in the caves' light (`CAVE_LIGHT`, a copy made once), as the wall is |
+| `mouth-lip-<s|n>-hollow` | The span over the gap, its roof faded back into the caves | Over the robots (`mouthsOver`), caves' light: robots pass under it for about a tile |
+| `mouth-key-<s|n>-hollow` | The keystone: a hanging lobe with a Bloom knot (4 × 4 tile frame) | Over the join of the two halves |
+| `mouth-glow-<s|n>-hollow`, `mouth-keyglow-<s|n>-hollow` | The Bloom knots' light, bloomed | Added, at 45 % by day and full at night |
+
+Every layer is drawn cut at the middle and closed up: the strip's left part up to w/2 tiles past the left cheek's face, its
+right part from w/2 tiles before the right one, so a gap of any width (1 to 13 tiles) gets the same art. Drawn in code: **the
+throat** (a dark gradient over the floor under the span and into the caves), a shade over a column whose surface ground runs
+on past the mouth's line (the wall's middle wanders a row across a wide mouth; the mouth's line is the one furthest out),
+**daylight** falling in onto the cave floor by day and **the caves' violet glow** spilling out onto the surface after dark (both
+off on Graphics Saver), and on the **minimap** a pale violet bar across the wall at each mouth. Looks only: `cavesMap`, `S.cave`
+and what can pass are untouched. All of it ends `-hollow`, so it loads only with the Hollow's art (`LAZY_BIOMES`).
+
+### Batch 40: The Ring's space backdrop (installed)
+
+The Ring (`SHAPE_PRESETS` asteroids) is set in high orbit round Ithaca I, among the Ring's rocks. Its backdrop was drawn
+in code (a gradient, sprites and a small turning planet); it is now painted pictures, from a Claude Design canvas of three
+concepts (https://claude.ai/artifact/TtNr58yaFT34Bdfby21YnX), installed while the owner slept as Claude's pick:
+**A, "Shadow pass"**. The rocks go round through Ithaca I's shadow once a day, so the backdrop keeps time with the map's
+day: by day Corvane stands clear in the upper left and the planet is lit gibbous from the top-left (the one key light);
+at dusk the star sinks to its left limb and the planet thins to a crescent; at night Corvane is behind it, a black disc
+ringed with lit air, the colonies' lights on its face, the Ring glowing with the light it lets through and the drifting
+rocks dark; at dawn the star comes out on the right limb. The asteroids keep the game's own day and night grade
+(`ringClipLand`; the Argos terminator's shade at dusk is clipped to them too).
+
+| File (`art/ring/`) | Size | What |
+|---|---|---|
+| `sky.webp` | 2048×1280, opaque | The deep sky: navy to near-black, the galaxy's band from upper right to lower left (mottled, crossed by dust lanes), violet, blue, teal and a faint coral wash of nebula, a grain of faint stars. Scaled to cover the view. About 60 KB |
+| `planet-day.webp`, `planet-evening.webp`, `planet-night.webp`, `planet-morning.webp` | 1804×1100, alpha | Ithaca I (radius 420 px, its middle at `cx`, `cy` in `ring-art.js`) with the Ring round it, for each time of day: the face is the Contingency globe's (`art/globe/ithaca-2048.webp`, the Rust toward you) under its clouds, lit as the menu planet is (soft terminator with a warm band, the seas' glint, blue haze toward the limb), the atlas's colonies' lights (`art/lore/ithaca-map.webp`'s alpha) on the night side, the Ring's shadow on the planet and the planet's on the Ring, the air's halo (backlit: a thin bright ring with a red foot). The Ring: nine bands with ringlets and one gap, grey dust inside and coral-cream outside, slanted −0.32 rad as everywhere else; lit face by day, glowing by the light it lets through at night. 140 to 160 KB each |
+| `argos-day.webp`, `argos-night.webp` | 224×224, alpha | Argos (radius 110), the menu planet's recipe (`mplMoonMap`, at 1024 × 512): pale highlands, darker maria, craters with bright rims, a few rayed; lit, and backlit as a thin crescent with coral planetshine. 8 and 3 KB |
+| `corvane.webp` | 384×384, additive | The star: white core, orange corona, six thin spikes, a faint anamorphic streak and halo ring. Drawn with `lighter`. 15 KB |
+| `rocks.webp` | 1024×128, alpha | Eight drifting Ring rocks (128 px cells): lumpy, grey and coral-grey regolith, lit from Corvane's side. 9 KB |
+| `ring-art.js` | | `window.RING_ART`: each picture's size (and the planet's and Argos's middle and radius) and the layout: where the planet and Argos sit and how big (a share of the view's shorter side; `wide` and `tall` for an upright phone), Corvane's place for each time of day in the planet's radii from its middle (night: behind it), its size, how many rocks |
+
+How they're drawn (`js/ring.js`): the sky, two tiles of crisp code-drawn stars, Corvane, the planet (the time of day's
+picture crossfaded into the next, by `todNow`) and Argos make one far layer (`rspFar`), a canvas 4% bigger than the view
+each side, made again only when the view's size or the backdrop's day changes (1/24 steps of a crossfade); each picture is
+scaled once to the size it shows at (`rspFit`, halving first). A frame draws that layer once, slid 2% of the pan against
+it (clamped to its margin), then while Corvane is out its flare (it flares often, LORE.md) and the lens (a long thin streak
+and four faint ghosts toward the middle of the view), seven rocks drifting and turning slowly (sliding 8 to 30% of the
+pan, darkened as the rocks go into the shadow) and the ringfall streaks. Graphics Saver: no rocks, ghosts or ringfall;
+reduced motion: nothing moves. Loaded only for The Ring (`ensureRingArt`); in the one-file build `dist/ring-art.js`. Till
+they're in (or if they fail), a plain deep sky.
+
+To change it: `python3 tools/ringsky/ringsky.py [look]` (numpy, scipy, Pillow; a minute or two) paints every picture and
+writes `ring-art.js` into `art/ring/`. The look's light directions, the planet's turn, the Ring's tilt and opening, the
+layout and Corvane's places are in its `LOOK` blocks at the end; the Ring's bands in `RING_BANDS`; the sky's band and
+nebulae in `sky_layer`. The other two concepts are looks of their own: `crescent` (one still view, a big crescent low in
+the corner with Corvane just off its limb, the Ring thrown wide) and `ringplane` (the Ring nearly edge-on, a bright blade
+across the sky, more rocks); either drops into the game with no code change.
+
+### Batch 39: Orbital platforms' backdrop, Ithaca I from the decks (installed; stars, near cloud and deck shadows drawn in code)
+
+The owner asked for "a nice background" on Orbital platforms (Nov 27 2026). It went through Claude Design: the canvas
+https://claude.ai/artifact/TtwzU6nmnCU3uTq9GH32ZQ showed three concepts, each in the game over the decks, bridges and
+bases at three zooms, by day, morning, dusk and night, on a desktop and a phone, beside the old sky. The owner asked for the
+recommended one to go in: **A, the Limb**. The old sky was a generic blue ocean world, the same by day and night; Ithaca I is the
+coral world of the atlas, and the decks hang over it.
+
+- **A · Limb** (installed): looking out over the planet toward its curved limb from about a third of its radius up: the
+  Rust's southern coast below, the sea beyond, the thin blue air along the limb (the menu planet's and the Contingency
+  globe's halo colour), the Ring rising out of the sky at the right. Lit from the upper left, the game's key light.
+- **B · Nadir**: straight down through the haze onto the Rust's east coast, the Ring's shadow bands across it. Reads most
+  like the game's own top-down camera, but flat: no horizon, no sky, nothing to say "high above".
+- **C · Terminator**: facing Corvane low behind the limb over the ash lands, the dusk line across the view and colony
+  lights below. The most dramatic, but dark by day too, and it fights the decks' top-left light.
+
+The pick keeps C's best part: at dusk A's terminator crosses the planet with Corvane on the limb, and at night the
+colonies' lights come out (the atlas's lights, `art/lore/ithaca-map.webp`'s alpha, for where the towns are).
+
+**How it's made.** `renderer/post/orbital_sky.py` ray-traces a sphere in numpy over the Contingency globe's own surface,
+`art/globe/ithaca-4096.webp`, with detail made up where the map runs out of pixels (relief lit from the sun, crinkled
+coasts, grain), two decks of cloud from `art/globe/ithaca-clouds.webp` and noise with their shadows, the sea's glint, an
+atmosphere shell (haze thickening toward the limb, warm along the terminator), the Ring as a ray-plane hit with
+`rspRing`'s five bands (lit unless in the planet's shadow; its shadow on the ground the same way), Corvane's disc and glare,
+and the night lights as streets in a town's glow. Fixed seeds: the same command makes the same pictures.
+`python3 renderer/post/orbital_sky.py art/orbital A 2560` writes them; `B` and `C` make the other concepts.
+
+| File | What | How it's drawn |
+|---|---|---|
+| `art/orbital/orb-day.webp` (2560 × 1600) | The whole view by day, opaque: space, the limb, the planet | Behind the decks, drawn to cover the screen 1.24 × over (`ORB_SKY.cover`), slid by where the view is on the map, at most a tenth of the screen's longer side (`ORB_SKY.slide`): toward the north end of the map the sky opens, toward the south the planet fills the view |
+| `orb-dusk.webp` | Dusk: the terminator across the planet, Corvane on the limb | Evening; mirrored for morning (the sun rises on the other side) |
+| `orb-night.webp` | Night: the colonies' lights, the Ring still sunlit overhead | Night; the game's time of day crossfades between them (`todNow`) |
+| `orb-cloud.webp` (1024², tileable, RGBA) | The near deck of cloud | Drifting under the decks over the planet (not above the limb), ramped in below the limb in five bands, its shadow multiplied down and right; tinted for dusk and night once (`orbCloudTint`); faster parallax than the picture (`ORB_SKY.cloud`) |
+| `orbital-art.js` | `window.ORBITAL_ART`: the size, the limb circle (as fractions of the width) and the names | The stars are clipped above the limb with it |
+
+Drawn in code (`js/orbital.js`): **the stars** above the limb (`rspStarTile`, sharp at any size, brighter as the light
+goes), and **the decks' shadow** on the air below them: the decks as a soft mask (two pixels a tile, drawn up smoothly,
+made again when a bridge moves), offset 0.35 tile right and 0.7 down, as every shadow falls. **Graphics Saver** draws the
+picture and the stars only (no near cloud, no drift); **reduced motion** holds everything still. The pictures load only for
+an Orbital platforms map (`ensureOrbArt`: `art/orbital/orbital-art.js`; in the one-file build a bundle beside the page,
+`dist/orbital-art.js`, `window.ORBITAL_BUNDLE`); till they're in, the old sky is drawn in code (`orbSkyCode`).
+The Ring map's space (js/ring.js) is a different place in the same sky: out among the asteroids with Ithaca I whole
+beside them (Batch 40); here the planet is close below and fills half the view.
 
 ### Batch 38: Terraforming stage 4, the earthworks, the Sluice and the Sap Head (installed; floods, grooves and saps drawn in code)
 

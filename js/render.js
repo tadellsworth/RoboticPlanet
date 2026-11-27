@@ -7210,6 +7210,7 @@ function render(dtReal) {
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
   if (typeof tfGround === 'function') tfGround(ctx, ox, oy, z, inView); // (the ground of Earthworks being dug and filled, fresh soil, track marks: js/terraform.js)
   if ((S.grove || S.wet) && typeof t2Ground === 'function') t2Ground(ctx, ox, oy, z, v0, v1); // (groves, sprinklers and their spray, graded with the ground: js/terraform2.js)
+  if (S.caves && typeof mouthsFloor === 'function') mouthsFloor(ctx, ox, oy, z); // (Half underground: the cave mouths' scree and shadows, graded with the ground: js/mouths.js)
   if (S.cave) caveGrade(ctx, ox, oy, z); else todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); } // (Half underground: the sky's light, sunset and weather stay out of the caves)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
@@ -7232,6 +7233,7 @@ function render(dtReal) {
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
   if (R.void) ctx.restore();
+  if (S.caves && typeof mouthsUnder === 'function') mouthsUnder(ctx, ox, oy, z); // (the cave mouths' throats, the light through them and their cheeks of rock)
 
   // Territory borders
   ctx.lineWidth = Math.max(1.5, z * 0.07);
@@ -7571,6 +7573,7 @@ function render(dtReal) {
 
   drawMaglevs(ctx, ox, oy, z, inView); // Maglev lines: pylons, guideways and pods, over the buildings and robots below them
   drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
+  if (S.caves && typeof mouthsOver === 'function') mouthsOver(ctx, ox, oy, z); // (the cave mouths' roof edges, over the robots passing under them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawLavaVents(ctx, ox, oy, z, v0, v1);
@@ -10541,6 +10544,7 @@ function renderMinimap() {
     ctx.fillStyle = WILD_COLOR; ctx.beginPath(); ctx.arc(x, y, Math.max(3.2, sx * 1.45), 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 2; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, Math.max(4, sx * 1.6) + f * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
   }
+  if (S.caves && typeof mouthsMinimap === 'function') mouthsMinimap(ctx, sx, sy); // (Half underground: the ways through the wall)
   // The Hollow's breaches: soft pools of pale gold, the only daylight down there.
   if (S.hollow) for (const b of S.hollow.breaches) {
     ctx.fillStyle = 'rgba(255,214,140,0.4)';

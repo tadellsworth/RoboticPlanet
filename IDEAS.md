@@ -160,6 +160,20 @@ Also done this way: **the Grader and the Earthworks** (BUILT Nov 26 2026: concep
 rendered with `renderer/`, their ground and the plans' overlays drawn in code to the canvas. Canvas:
 https://claude.ai/artifact/HDT4AcWrYxcKd7Wvn1NTjU
 
+**The Ring's space backdrop** (BUILT Nov 27 2026 while the owner slept, Claude's pick of three: "Shadow pass"; ART_GUIDE
+Batch 40). Canvas: https://claude.ai/artifact/TtNr58yaFT34Bdfby21YnX. The concepts were A Shadow pass (the backdrop follows
+the day: the rocks pass through Ithaca I's shadow, so night is an eclipse with the planet a black disc ringed with light
+and its colonies' lights), B Crescent (one still view: a big crescent low in the corner, the Ring thrown wide) and C
+Ringplane (the Ring edge-on as a bright blade across the sky, more drifting rocks). Open questions for the owner:
+- Is A right, or B or C (each is a `look` in `tools/ringsky/ringsky.py`: run it with `crescent` or `ringplane` and the
+  game takes the new pictures with no code change)? Or A's day picture with B's size and corner?
+- The planet no longer turns (the old one did, once in nine minutes, too slowly to see): a turn would mean a strip of
+  pictures or per-pixel shading again. Worth it?
+- The night side shows the colonies' lights but not the war on them (the menu planet's flashes and fires): add a few,
+  as a small overlay on the night picture?
+- On the phone the planet sits low on the right, behind the bottom dock at times: higher, or smaller?
+- Ringfall streaks still cross the sky in code; at night, should they show as bright sparks against the dark planet?
+
 ## The Walking Factory (built Nov 23 2026: open questions for the owner)
 
 The owner's pitch (approved): "a huge old Accord mobile factory, a dormant machine, crawling slowly around a loop through
@@ -281,6 +295,10 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   20 s rest. Argos's rules (no Murmur, no weather, no dust storm). Open: **four players** (a deck each round a middle deck); **more layouts** (a ring of
   decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
   cost or a cooldown per colony; a **mission** teaching the bridges (none yet); a rival that **sends a squad to hold** a contested box.
+  **Backdrop** (Nov 27 2026; ART_GUIDE Batch 39, canvas https://claude.ai/artifact/TtwzU6nmnCU3uTq9GH32ZQ): installed concept A, the Limb
+  (Ithaca I's Rust coast far below, the limb and the Ring; day, dusk, night pictures). Open: whether the owner prefers B (Nadir, the Ring's shadow
+  bands) or C (Terminator); a **view that differs per planet seed** (another stretch of coast each game, from the same painter); the decks' **own
+  lights at night** spilling onto the near cloud; a **ringfall streak** now and then (as The Ring map has); the Wren or a Carrier passing over.
 - **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
   js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
   side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
@@ -310,6 +328,9 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   asteroid with a cave); more than two starting kinds (a colony on the wall's top); whether an inside colony should get a Ropeway kit; the
   rival's early mouth rush on a long game (it expands through the mouths when it runs short, a few minutes after the opening stock is
   spent: it could go sooner); a mission that teaches the caves (none yet).
+  **The cave mouths' look** (Nov 27 2026; ART_GUIDE Batch 41, canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs): the Rock Arch is installed, my pick as the owner asked. Open: whether you prefer B (an Accord adit, which would add
+  history LORE.md doesn't have: vanguards surveying under the roof) or C; a different look per mouth size (an arch for narrow gates, a broken roof for wide mouths); the wall's own long faces are still
+  flat rock tiles away from the mouths (the cheeks fade into them over six tiles: a ridge along the whole wall would be the next step); and units are drawn in the surface's light inside the throat.
 
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 
