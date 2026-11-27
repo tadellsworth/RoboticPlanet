@@ -281,6 +281,10 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   20 s rest. Argos's rules (no Murmur, no weather, no dust storm). Open: **four players** (a deck each round a middle deck); **more layouts** (a ring of
   decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
   cost or a cooldown per colony; a **mission** teaching the bridges (none yet); a rival that **sends a squad to hold** a contested box.
+  **Backdrop** (Nov 27 2026; ART_GUIDE Batch 39, canvas https://claude.ai/artifact/TtwzU6nmnCU3uTq9GH32ZQ): installed concept A, the Limb
+  (Ithaca I's Rust coast far below, the limb and the Ring; day, dusk, night pictures). Open: whether the owner prefers B (Nadir, the Ring's shadow
+  bands) or C (Terminator); a **view that differs per planet seed** (another stretch of coast each game, from the same painter); the decks' **own
+  lights at night** spilling onto the near cloud; a **ringfall streak** now and then (as The Ring map has); the Wren or a Carrier passing over.
 - **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
   js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
   side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
@@ -310,7 +314,7 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   asteroid with a cave); more than two starting kinds (a colony on the wall's top); whether an inside colony should get a Ropeway kit; the
   rival's early mouth rush on a long game (it expands through the mouths when it runs short, a few minutes after the opening stock is
   spent: it could go sooner); a mission that teaches the caves (none yet).
-  **The cave mouths' look** (Nov 27 2026; ART_GUIDE Batch 39, canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs): the Rock Arch is installed, my pick as the owner asked. Open: whether you prefer B (an Accord adit, which would add
+  **The cave mouths' look** (Nov 27 2026; ART_GUIDE Batch 40, canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs): the Rock Arch is installed, my pick as the owner asked. Open: whether you prefer B (an Accord adit, which would add
   history LORE.md doesn't have: vanguards surveying under the roof) or C; a different look per mouth size (an arch for narrow gates, a broken roof for wide mouths); the wall's own long faces are still
   flat rock tiles away from the mouths (the cheeks fade into them over six tiles: a ridge along the whole wall would be the next step); and units are drawn in the surface's light inside the throat.
 

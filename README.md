@@ -551,8 +551,12 @@ one's. So you can always raise your own end, and the other end is yours only whe
 each box, and Raise or Lower (disabled with the reason), and Hold a box with warbots. The minimap shows a square at each box in the holder's colour
 and a red stripe on a raised bridge; a message says when a bridge moves or a box changes hands; `sfx('bridge')`.
 **Look and rules**: `newGame` sets the biome to Lunar (Argos's rules: no Murmur, no weather, no Arrival City or Atmosphere Engine), no dust storm, no
-plants on the decks (`S.decor` cleared). The look is js/orbital.js (display only): `orbitalSky` (space and stars above the planet's curved limb, the
-planet far below with ocean, land, two layers of cloud and a cloud shadow, a low sun; the horizon moves with the view), `orbDeckPaint` (plating,
+plants on the decks (`S.decor` cleared). The look is js/orbital.js (display only): `orbitalSky` (Ithaca I far below, painted: art/orbital, made by
+`renderer/post/orbital_sky.py` from the Contingency globe's surface; the Rust's coast, the curved limb and its blue air, the Ring in the sky;
+a picture for day, dusk (mirrored at morning) and night with the colonies' lights, crossfaded by the time of day; stars above the limb, a near
+cloud drifting under the decks and the decks' shadow on the air drawn in code; slow parallax as the view pans; loaded only for this map,
+`ensureOrbArt`, the one-file build's `dist/orbital-art.js`; Graphics Saver and reduced motion keep it still; ART_GUIDE.md, Batch 39; till the
+pictures are in, `orbSkyCode`, the sky drawn in code), `orbDeckPaint` (plating,
 seams, rivets, kerb and railing, baked with the ground), `orbVoidPaint` (the hull under a deck's southern edge), `orbitalBridges` (the swinging
 leaves, corner lamps, the RAISING / LOWERING word) and `drawOrbBox`. **Economy**: as The Ring's: the standard colony's starter fields (Stalk, fertile
 soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`) with an
@@ -4297,7 +4301,7 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 39): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 40): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
 of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
 a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
 then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),
@@ -4771,7 +4775,7 @@ tools/menu-test.js        the main menu: every destination opens (two taps at mo
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when
-                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), tod-<time>.js (each time of
+                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), orbital-art.js (Orbital platforms' backdrop, on that map), tod-<time>.js (each time of
                           day's re-lit set) and lore.js (the Lore guide's pictures). Copied without its folder, the page
                           still runs, drawn in code.
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)

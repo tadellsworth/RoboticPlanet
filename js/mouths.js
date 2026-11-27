@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Half underground's cave mouths (cavesMap in js/world.js; ART_GUIDE.md, Batch 39): the gaps in the solid wall between the
+ * Half underground's cave mouths (cavesMap in js/world.js; ART_GUIDE.md, Batch 40): the gaps in the solid wall between the
  * surface and the caves drawn as real entrances, the owner's pick of the three concepts (the natural rock arch).
  * Looks only: where the mouths are and what can pass is cavesMap's, untouched.
  *
