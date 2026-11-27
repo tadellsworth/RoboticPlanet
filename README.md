@@ -1115,7 +1115,15 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     (`ewBlast` from `scarBlast`, `EW.blast` 14 per tile of blast reach, falling off), a foe's heavy army robot shooting
     one in its way (`ewBreachHit`, `EW.breach` 2 a shot); below `EW.worn` (60%) worn, at 0 breached (kept, a gap,
     `ewAt` 0; its owner told). Repair: the same tool over a worn or breached one plans `ewfix` (`EW.fix` half the cost,
-    `EW.fixTime` 10 s). Nothing is built or paved on one (`canPlace`, `canRoad`, `tfWhere`); groves, beds and humus keep
+    `EW.fixTime` 10 s). Your own bank and teeth stop your own heavy robots too (decided by the owner, Nov 27 2026: leave
+    a gap, or a Wall and Gate). **Attack an earthwork** (`ORDERS.command` with `ew`, `orderEwShoot`, `ewShoot`,
+    `ewSpot`): with warbots selected, a right-click (or tap) on a foe's (or no one's) tile (`ewOrderAt` in
+    `js/terraform4.js`; your own or an ally's with Ctrl, Alt or Cmd held) gives them the task
+    `{ type: 'ewshoot', tile, go, acc }`: they go to the nearest tile they can stand on within `armyBldReach` (`ewSpot`)
+    and shoot it, a heavy robot at `EW.breach` (2) a shot, a light warbot at `EW.light` (0.25) of that, the fractions
+    added up on the task and taken off a whole point at a time (`ewHit`). Breached, the order ends (`ewShootDone`): a
+    group's unit goes back to its flag (`agJoin`), the rest stand free. Foes that come are fought first. In saves and
+    `checkSave`; a coral reticle on the tile with the strength left as a ring (`t4Marks`). Rivals never give it. Nothing is built or paved on one (`canPlace`, `canRoad`, `tfWhere`); groves, beds and humus keep
     off. Drawn baked with the ground (`t4PaintTile`, `ewDraw`): the rendered pieces `ew-<kind>-<piece>-<look>` (arms
     n/e/s/w for every team, the post with the team's stake, lamp or cat's-eye for both, layered as the Walls are), at
     three looks (`ewLook`), their night lights in the glow map (`t4Glow`, `ew-<kind>-glow-<look>`); drawn in code the
@@ -1154,9 +1162,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     caved in (`sapExitLost`): the sap is dead; plan it again.
   - Rivals don't terraform; they cope: their routes go round earthworks and floods, their heavy army robots shoot a way
     through a foe's earthworks in their way, their forts answer a tremor. Saves: `checkSave` checks `b.fl` and `b.sap`;
-    the layers are sparse. Art (ART_GUIDE Batch 38): `renderer/walls/b/earthwork.js` (the pieces), `renderer/b/sluice.js`
+    the layers are sparse; a warbot's `ewshoot` task (its tile, `go`, `acc` below 1, `miss`). Art (ART_GUIDE Batch 38): `renderer/walls/b/earthwork.js` (the pieces), `renderer/b/sluice.js`
     and `tunnel.js` (the Sluice and the Sap Head, the Sap Exit), `renderer/tools/render_t4.sh` then `install_t4.py`.
-    Mission: **Ground War** (First Contact, after The Murmur). Tests: `node tools/terraform4-test.js`.
+    Mission: **Ground War** (First Contact, after The Murmur; its goals: heap a bank, breach an old no one's bank
+    with the three warbots in the Command Base, cave in a tunnel, open a Sluice, dig a sap). Tests: `node tools/terraform4-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -4455,7 +4464,16 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
   it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
   `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
-  with reduce motion nothing drifts or twinkles.
+  with reduce motion nothing drifts or twinkles. **The light grade, Auto only** (`duskWatch`, called with each frame's
+  ms from main.js; `DUSK_LITE`): while a dusk or dawn shows, frames are averaged over `win` (2) s; over `slow` (33 ms)
+  the light grade is wanted, under `fast` (20 ms) the full one again, a change at most every `dwell` (6) s (doubled, up
+  to 8 times, when the last change was undone within 20 s), faded over `fade` (1.5) s (`DUSK.lite`, `D.lite`). Light:
+  one soft-light pass over the ground (`duskLiteGround`) in place of the soft light, colour dodge and multiply
+  (`duskFullGround`), no heat shimmer, and over everything standing one soft-light gradient on the sun's half in place
+  of the tint and the glare (`duskGlare`). High and Ultra always draw the full grade, Saver its flat one. Measured
+  (headless Chrome, software drawing, a 22-minute 2-colony save, the median frame drawn through to its pixels): desktop
+  1600x900 at z47, day 23 ms, dusk 65-70 ms full, 45-55 ms light; phone 390x844 with touch at z35, day 18 ms, dusk
+  60-68 ms full, 41-52 ms light.
 Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
 
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
@@ -5093,7 +5111,9 @@ node tools/terraform4-test.js
 Terraforming, stage 4: nothing of it until it's used; an Earth Bank, a Fire Trench and Dragon's Teeth built by a
 Grader along a dragged line, at their costs, nothing else planned on them; a bank and teeth closing the way to heavy
 robots and not to a Warbot, a trench to no one, the slow on each; cover behind your bank and in your trench, none from a
-foe's; blasts wearing a bank to worn and breached, a Grader repairing it; a foe's heavy army robot shooting through
+foe's; blasts wearing a bank to worn and breached, a Grader repairing it; warbots ordered to attack an earthwork tile
+(light ones at `EW.light` of a heavy robot's rate, a Bulwark at the full rate, your own with the same order) till it
+breaks, a group's going back to its flag, the order saved mid-way and played on the same, a damaged one refused; a foe's heavy army robot shooting through
 Dragon's Teeth, one of yours never planning through your own; a Sluice only on the bank, its flood through pouring,
 spreading, under water, wet mud and silt and gone, routes closed under water, robots knocked about, buildings hurt and
 knocked out, the refill; a Cave in caving a tunnel to a groove the Murmur never dig through and its cut-off exit in; a

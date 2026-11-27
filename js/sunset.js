@@ -21,7 +21,17 @@
  * the selection marks and the HUD), lighter, and fainter zoomed far in. Graphics on Saver keeps just the colour grade;
  * the glare, shafts, motes, glitter, haze and silhouettes are for Auto and up (more motes on High and Ultra). With the
  * device set to reduce motion nothing drifts or twinkles.
+ *
+ * The light grade (Auto only: duskWatch). The full grade is several full-screen blends (the ground's soft light, colour
+ * dodge and multiply, the heat shimmer, the sky's soft light and glare), about 25 ms a frame on a slow device. On Auto,
+ * while a dusk or dawn is showing and frames come slowly (over DUSK_LITE.slow ms on average across DUSK_LITE.win s), it
+ * changes to a lighter grade: one soft-light pass over the ground holding the same three colours (the sun's side, the
+ * grade, the long shade), no heat shimmer, and one soft-light pass over everything standing in place of the tint and
+ * the glare; the glints, haze, silhouettes, the Ring and the motes stay. Back to the full grade once frames come easily
+ * (under DUSK_LITE.fast), a change at most every DUSK_LITE.dwell s (longer after a change undone straight away), faded
+ * across in DUSK_LITE.fade s. High and Ultra always draw the full grade; Saver its own flat one. Looks only.
  */
+const DUSK_LITE = { slow: 33, fast: 20, win: 2, dwell: 6, fade: 1.5 };
 
 /** Where the light changes in the 12-minute day (seconds into it), from the cycle in defs.js: worked out once. */
 const DUSK_TIMES = (() => {
@@ -153,7 +163,31 @@ const DUSK_BIOMES = {
   },
 };
 
-const DUSK = { st: null, mix: 0, mixAt: 0, shafts: {}, sil: null, water: null };
+const DUSK = { st: null, mix: 0, mixAt: 0, shafts: {}, sil: null, water: null,
+  lite: 0, liteOn: false, liteT: -1e9, liteBack: 1, lw: { n: 0, sum: 0, t0: 0 } }; // (the light grade: shown 0..1, wanted, when it last changed, its wait's factor, the frames counted)
+
+/**
+ * Every frame drawn in a game (main.js, with the milliseconds since the last): on Auto, while a dusk or dawn shows,
+ * the frames are averaged over DUSK_LITE.win s; slower than DUSK_LITE.slow ms, the light grade is wanted, faster than
+ * DUSK_LITE.fast, the full grade again. A change waits DUSK_LITE.dwell s after the last (twice as long, up to 8 times,
+ * when the last was undone within 20 s). Off Auto there's none of it. Only the look changes.
+ */
+function duskWatch(ms) {
+  const W = DUSK.lw;
+  if (typeof gfxStep !== 'function' || gfxStep() !== 'auto') { DUSK.liteOn = false; DUSK.lite = 0; W.n = W.sum = W.t0 = 0; return; }
+  if (!DUSK.st || !(ms > 0) || ms > 250 || document.hidden) { W.n = W.sum = W.t0 = 0; return; } // (no dusk showing, or a hitch: start counting again)
+  const now = performance.now() / 1000;
+  if (!W.t0) W.t0 = now;
+  W.n++; W.sum += ms;
+  if (now - W.t0 < DUSK_LITE.win) return;
+  const avg = W.sum / W.n;
+  W.n = W.sum = W.t0 = 0;
+  if (now - DUSK.liteT < DUSK_LITE.dwell * DUSK.liteBack) return;
+  const want = DUSK.liteOn ? avg >= DUSK_LITE.fast : avg > DUSK_LITE.slow;
+  if (want === DUSK.liteOn) { if (now - DUSK.liteT > 60) DUSK.liteBack = 1; return; }
+  DUSK.liteBack = now - DUSK.liteT < 20 ? Math.min(8, DUSK.liteBack * 2) : 1;
+  DUSK.liteOn = want; DUSK.liteT = now;
+}
 
 /** Seconds into the day of the light as shown, or null where the light doesn't change (Always day or night, the Hollow). */
 function duskClock() {
@@ -182,7 +216,8 @@ function duskStill() { return !!(typeof LESS_MOTION !== 'undefined' && LESS_MOTI
 /**
  * Once a frame (from duskGround): the sunset now, or null. { env (0..1 how much of it shows), h (0..1 how far it's
  * gone: golden to violet at dusk, violet to gold at dawn), dawn, B (the biome's touches), pal (its colours now), dir
- * (+1 the sun in the west, -1 in the east), mute (the weather), zf (the overlay's strength at this zoom), saver }.
+ * (+1 the sun in the west, -1 in the east), mute (the weather), zf (the overlay's strength at this zoom), saver, lite
+ * (0..1 how far the light grade has come in: duskWatch) }.
  */
 function duskFrame(z) {
   DUSK.st = null;
@@ -203,6 +238,9 @@ function duskFrame(z) {
   if (b2 && R.biomeMix) { const i = clamp(Math.floor(R.cam.x), 0, S.W - 1), j = clamp(Math.floor(R.cam.y), 0, S.H - 1); want = R.biomeMix[tIdx(i, j)] >= 0.5 ? 1 : 0; }
   const dt = Math.min(0.25, Math.max(0, R.time - DUSK.mixAt));
   DUSK.mixAt = R.time;
+  // (the light grade, faded across: Auto only, see duskWatch)
+  const auto = typeof gfxStep === 'function' && gfxStep() === 'auto';
+  DUSK.lite = auto ? clamp(DUSK.lite + (DUSK.liteOn ? 1 : -1) * dt / DUSK_LITE.fade, 0, 1) : 0;
   DUSK.mix += clamp(want - DUSK.mix, -dt * 0.8, dt * 0.8);
   if (!b2) DUSK.mix = 0;
   const B1 = DUSK_BIOMES[b1], B2 = b2 ? DUSK_BIOMES[b2] : null;
@@ -220,7 +258,7 @@ function duskFrame(z) {
   }
   // Zoomed far in the grade over the buildings and robots eases off, so they read clearly.
   const zf = 1 - 0.55 * duskSmooth(36, 80, z);
-  return (DUSK.st = { env, h, dawn, B, pal, dir: dawn ? -1 : 1, mute, zf, k: B.k || 1, saver: typeof gfxStep === 'function' && gfxStep() === 'saver' });
+  return (DUSK.st = { env, h, dawn, B, pal, dir: dawn ? -1 : 1, mute, zf, k: B.k || 1, saver: typeof gfxStep === 'function' && gfxStep() === 'saver', lite: DUSK.lite });
 }
 
 /** A linear gradient across the screen from the sun's side, kept while the screen's size and the sun's side stay. */
@@ -259,7 +297,8 @@ function duskGround(ctx, ox, oy, z, v0, v1) {
   const a = D.env * D.mute * D.k, P = D.pal;
   ctx.save();
   if (D.B.terminator) { duskTerminator(ctx, ox, oy, z, D); ctx.restore(); return; }
-  if (!D.saver && D.B.shimmer && !duskStill()) duskShimmer(ctx, D);
+  const L = D.lite, full = L < 0.999 ? 1 - L : 0; // (the light grade's share, and the full grade's)
+  if (!D.saver && D.B.shimmer && !duskStill() && full) duskShimmer(ctx, D, full);
   if (D.saver) {
     // Saver: just the colour grade, one flat pass.
     ctx.globalCompositeOperation = 'soft-light';
@@ -269,6 +308,42 @@ function duskGround(ctx, ox, oy, z, v0, v1) {
     ctx.restore();
     return;
   }
+  if (L > 0.001) duskLiteGround(ctx, D, a * L);
+  if (full) duskFullGround(ctx, D, a * full);
+  // Plants silhouetted against the low sun (the Shoals' palms, the Long Grass's acacias).
+  if (D.B.sil && DUSK.sil && DUSK.sil.ready) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = a * D.B.sil * duskSmooth(0.1, 0.55, D.h);
+    ctx.imageSmoothingEnabled = true;
+    duskMapImage(ctx, DUSK.sil.c, ox, oy, z);
+  }
+  if (D.B.glitter >= 1) duskSheen(ctx, ox, oy, z, D, a); // (the Shoals' sea; elsewhere the glints alone)
+  if (D.B.glitter) duskGlitter(ctx, ox, oy, z, v0, v1, D, a);
+  if (D.B.haze) duskHaze(ctx, z, D, a);
+  ctx.restore();
+}
+
+/**
+ * The light grade over the ground (Auto, frames slow: duskWatch), at strength a: the full grade's three passes in one.
+ * One soft-light gradient across the screen from the sun's side: the sun's colour made deeper and a touch brighter
+ * there (for the colour dodge's burn), the grade's colour across the middle, the long shade beyond, darkened (for the
+ * multiply).
+ */
+function duskLiteGround(ctx, D, a) {
+  const P = D.pal, g = duskSunLine(ctx, D.dir), burn = 1 - 0.6 * duskSmooth(0.65, 1, D.h);
+  const sun = duskDeep(P.sun).map((v) => Math.min(255, v * (1 + 0.7 * burn)));
+  g.addColorStop(0, duskRgb(sun));
+  g.addColorStop(0.45, duskRgb(duskMixRgb([128, 128, 128], duskDeep(P.tint), 0.6)));
+  g.addColorStop(1, duskRgb(duskMixRgb(P.shade, [0, 0, 0], 0.3 + 0.15 * D.h)));
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.globalAlpha = Math.min(1, a * (0.95 - 0.2 * duskSmooth(0.3, 0.6, D.h)));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, R.w, R.h);
+}
+
+/** The full grade over the ground, at strength a: the long light in soft light, the sun's burn, the long shade. */
+function duskFullGround(ctx, D, a) {
+  const P = D.pal;
   // The light: warm and bright on the sun's side, the grade's colour across the middle, a cool shade beyond, in soft
   // light (so the land keeps its contrast: the lights glow and the darks deepen, nothing is washed over).
   let g = duskSunLine(ctx, D.dir);
@@ -297,17 +372,6 @@ function duskGround(ctx, ox, oy, z, v0, v1) {
   ctx.globalAlpha = a * (0.35 + 0.2 * D.h);
   ctx.fillStyle = g;
   duskFillSpan(ctx, D.dir, 0.35, 1);
-  // Plants silhouetted against the low sun (the Shoals' palms, the Long Grass's acacias).
-  if (D.B.sil && DUSK.sil && DUSK.sil.ready) {
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = a * D.B.sil * duskSmooth(0.1, 0.55, D.h);
-    ctx.imageSmoothingEnabled = true;
-    duskMapImage(ctx, DUSK.sil.c, ox, oy, z);
-  }
-  if (D.B.glitter >= 1) duskSheen(ctx, ox, oy, z, D, a); // (the Shoals' sea; elsewhere the glints alone)
-  if (D.B.glitter) duskGlitter(ctx, ox, oy, z, v0, v1, D, a);
-  if (D.B.haze) duskHaze(ctx, z, D, a);
-  ctx.restore();
 }
 
 /**
@@ -392,8 +456,8 @@ function duskGlitter(ctx, ox, oy, z, v0, v1, D, a) {
  * crawled at dusk on desert maps (the owner's game, Nov 22 2026). Bands of 10 px, and none where the nudge is tiny.
  */
 let duskHazeCv = null;
-function duskShimmer(ctx, D) {
-  const k = D.B.shimmer * D.mute * duskSmooth(0, 0.08, D.h) * (1 - duskSmooth(0.12, 0.4, D.h));
+function duskShimmer(ctx, D, f = 1) {
+  const k = f * D.B.shimmer * D.mute * duskSmooth(0, 0.08, D.h) * (1 - duskSmooth(0.12, 0.4, D.h));
   if (k < 0.05) return;
   const c = ctx.canvas, dpr = R.dpr, band = 10 * dpr, t = R.time;
   if (!duskHazeCv) duskHazeCv = document.createElement('canvas');
@@ -467,11 +531,26 @@ function duskSky(ctx, ox, oy, z) {
   if (!D) return;
   const a = D.env * D.mute * D.zf, P = D.pal;
   ctx.save();
+  const L = D.saver || D.B.terminator ? 0 : D.lite, full = L < 0.999 ? 1 - L : 0;
   // The grade: soft light, so the buildings and robots keep their contrast and their colours.
-  ctx.globalCompositeOperation = 'soft-light';
-  ctx.globalAlpha = a * 0.22 * D.k;
-  ctx.fillStyle = duskRgb(P.tint);
-  ctx.fillRect(0, 0, R.w, R.h);
+  if (full) {
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.globalAlpha = a * 0.22 * D.k * full;
+    ctx.fillStyle = duskRgb(P.tint);
+    ctx.fillRect(0, 0, R.w, R.h);
+  }
+  // (the light grade: the tint and the glare in one soft-light gradient on the sun's half of the screen, fading out to
+  // soft light's neutral grey, which changes nothing, so the rest of the screen isn't drawn at all)
+  if (L > 0.001) {
+    const g = duskSunLine(ctx, D.dir), glow = 1 - 0.5 * duskSmooth(0.7, 1, D.h);
+    g.addColorStop(0, duskRgb(duskMixRgb(P.tint, P.sun, 0.8 * glow)));
+    g.addColorStop(0.3, duskRgb(P.tint));
+    g.addColorStop(0.6, 'rgb(128,128,128)');
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.globalAlpha = Math.min(1, a * 0.42 * D.k * L);
+    ctx.fillStyle = g;
+    duskFillSpan(ctx, D.dir, 0, 0.6);
+  }
   if (D.B.terminator && D.line != null) {
     // Argos: what stands on the night side of the terminator goes into its shadow too (a little: it has its own lights).
     ctx.globalCompositeOperation = 'multiply';
@@ -484,18 +563,22 @@ function duskSky(ctx, ox, oy, z) {
     }
   }
   if (D.saver || D.B.terminator) { ctx.restore(); return; }
-  // The glare: the low sun just off the screen's edge.
-  const sx = D.dir > 0 ? -0.18 * R.w : 1.18 * R.w, sy = 0.32 * R.h, rr = 0.95 * Math.max(R.w, R.h);
+  if (full) duskGlare(ctx, D, a * full);
+  // (light shafts: off for now, the owner, Nov 21 2026; duskShafts is kept for later)
+  if (D.B.ring) duskRing(ctx, z, D);
+  if (D.B.motes) duskMotes(ctx, z, D, a);
+  ctx.restore();
+}
+
+/** The glare: the low sun just off the screen's edge, at strength a (the full grade's, over everything standing). */
+function duskGlare(ctx, D, a) {
+  const P = D.pal, sx = D.dir > 0 ? -0.18 * R.w : 1.18 * R.w, sy = 0.32 * R.h, rr = 0.95 * Math.max(R.w, R.h);
   const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, rr);
   g.addColorStop(0, duskRgb(P.sun, 0.7)); g.addColorStop(0.45, duskRgb(P.sun, 0.18)); g.addColorStop(1, duskRgb(P.sun, 0));
   ctx.globalCompositeOperation = 'screen';
   ctx.globalAlpha = a * 0.19 * (1 - 0.5 * duskSmooth(0.7, 1, D.h)); // (0.26 till Nov 21: a bit much)
   ctx.fillStyle = g;
   if (D.dir > 0) ctx.fillRect(0, 0, Math.min(R.w, sx + rr * 0.8), R.h); else ctx.fillRect(Math.max(0, sx - rr * 0.8), 0, R.w, R.h); // (beyond, it has faded)
-  // (light shafts: off for now, the owner, Nov 21 2026; duskShafts is kept for later)
-  if (D.B.ring) duskRing(ctx, z, D);
-  if (D.B.motes) duskMotes(ctx, z, D, a);
-  ctx.restore();
 }
 
 /**

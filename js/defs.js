@@ -656,7 +656,9 @@ const THERMAL = { radius: 3 };
  *  - Dragon's Teeth (teeth): concrete pyramids. Vehicles and heavy robots can't pass; small robots go between them at
  *    `slow.teeth`.
  * Shells, bombs and missiles wear them (`blast` strength a tile of blast reach, at the tile struck and those round it);
- * a heavy robot of a foe's army in the way breaks through (`breach` a shot, as a Wall). Below `worn` of `hp` a tile is
+ * a heavy robot of a foe's army in the way breaks through (`breach` a shot, as a Wall). Warbots can also be ordered to
+ * shoot one tile (an Attack order on it: ORDERS.command's `ew`, orderEwShoot): a heavy robot at `breach` a shot, a light
+ * warbot at `light` of that (they add up on the order, whole points at a time). Below `worn` of `hp` a tile is
  * worn (it looks slumped; the rules stay), at 0 it is breached: a gap anyone crosses, kept in the layers for repair. A
  * Grader repairs: drag the same tool over a worn or breached tile (`fix` of the cost, `fixTime` s). Rivals route round
  * them (no blocked tiles for a heavy robot, `path` more for a slowed step) and their heavy armies shoot a way through.
@@ -669,7 +671,7 @@ const EW = {
   },
   slow: { bank: 0.4, trench: 0.6, teeth: 0.85 }, cover: { bank: 0.6, trench: 0.5 }, coverR: 1.6, path: { bank: 4, trench: 1.5, teeth: 0.5 },
   heavy: ['truck', 'tanker', 'roadtrain', 'crawler', 'rocket', 'bulwark', 'grader', 'brute'],
-  worn: 0.6, blast: 14, breach: 2, fix: 0.5, fixTime: 10,
+  worn: 0.6, blast: 14, breach: 2, light: 0.25, fix: 0.5, fixTime: 10,
 };
 /*
  * SLUICE: a Sluice (BDEFS.sluice, two tiles: R turns it) stands on the bank of a lake, a river or a canal where the

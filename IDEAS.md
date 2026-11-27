@@ -3,6 +3,21 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## A lighter dusk on slow devices (built Nov 27 2026, Auto only: open questions)
+
+On Graphics Auto, dusk and dawn frames averaging over 33 ms across 2 s bring in a lighter grade (`duskWatch`,
+`DUSK_LITE` in js/sunset.js; ART_GUIDE "The light dusk grade"): one soft-light pass over the ground for the three, no
+heat shimmer, one soft-light gradient on the sun's half for the sky's tint and glare; back under 20 ms, at most every
+6 s, faded over 1.5 s. High and Ultra always full, Saver unchanged. Measured in headless Chrome (software drawing):
+13 to 24 ms saved a dusk frame on desktop 1600x900 and on a phone 390x844. Open:
+- The thresholds (33 and 20 ms) are a guess: a device that draws the light grade at just under 20 ms goes back to the
+  full one, slows past 33 and comes back again; the back-off (the wait doubling to 48 s) keeps that rare. Tune on a real
+  phone.
+- The light grade's sun side is a little less bright than the full grade's colour dodge (about 8% less red at the
+  height of the dusk on the Rust). Fine by eye; the owner may want it closer.
+- What's left at dusk is mostly not the grade: the long shadows and the evening's re-lit art. A lighter set of those
+  for slow devices would be the next step if dusk still drags.
+
 ## Economy balance audit to-do
 
 1. **Resource bottlenecks.** [First pass](docs/economy-balance-audit.md#resource-bottlenecks); [the Ore pickup stalls](docs/economy-balance-audit.md#why-ore-pickups-stall) were Haulers giving way to Murmur Scuttlers roaming by the road to the Mine (1,005 of 1,154 trips given up on `d9bf339`, none to guns). Done (the owner's call, [third pass](docs/economy-balance-audit.md#murmur-on-supply-roads)): turn-backs to one building back off 5 → 10 → 20 → 40 s, output pickups honour the wait (they never did), the panel says why, and a rival sends three warbots to clear the road. On `d9bf339`'s first 28 minutes Mine pickups turned back fell from 69 to 20.
@@ -3003,17 +3018,22 @@ Mine or a Tap on a deposit, so the audit's Chip and Crystal conclusions hold (do
 the Grader's **Earth Bank**, **Fire Trench** and **Dragon's Teeth** (dragged like Walls, rendered as per-tile pieces
 that join), its **Cave in** of Murmur tunnels, the **Sluice** (Radial Gates) and the **Sap Head** (Tunnel Bore A).
 Calls made, for the owner to confirm or change:
-- **Earthworks are terrain, for everyone.** Your own trucks and Bulwarks can't cross your bank either (a Gate-like
-  "your side passes" would make a bank a free Wall). The heavy set (`EW.heavy`): trucks, Tankers, Road Trains,
+- **Earthworks are terrain, for everyone.** DECIDED by the owner (Nov 27 2026): blocking stays as it is. Your own
+  trucks and Bulwarks can't cross your bank or teeth either (a Gate-like "your side passes" would make a bank a free
+  Wall): leave a gap, or build that stretch as a Wall and Gate. How to play says so. The heavy set (`EW.heavy`): trucks, Tankers, Road Trains,
   Crawlers, the Howitzer, Bulwarks, Graders and Brutes. Trucks and Tankers rarely meet one (earthworks never go on
   roads). The Murmur climb over everything but are slowed; their Brutes are heavy for routes the colony plans, not for
   the Murmur's own night routes (unchanged).
 - **Cover:** a bank covers your robots within 1.6 tiles behind it (60% of the damage) from fire from beyond a tile and
   a half; a trench halves any fire on your robots in it, shells and bombs too. A foe's earthworks give you nothing.
 - **Damage:** blasts (anything that leaves a crater: shells, bombs, missiles) and a foe's heavy army robots in the way
-  (2 a shot). Light warbots don't shoot earthworks: they climb over. Should a player be able to order warbots to shoot an
-  enemy earthwork (an Attack order on its tile)? Not built: today only a heavy army robot whose route runs through one
-  breaks it, and blasts.
+  (2 a shot). **Attack order on an earthwork: BUILT (owner's decision, Nov 27 2026).** With warbots selected, a
+  right-click or tap on a foe's Earth Bank, Fire Trench or Dragon's Teeth (Ctrl, Alt or Cmd + right-click for your own
+  or an ally's) sends them to shoot that tile till it breaches (`orderEwShoot`, task `ewshoot`): a heavy robot at the
+  full 2 a shot, a light warbot at `EW.light` (25%) of it, so heavy robots and blasts stay the real way to breach. A
+  coral reticle marks the tile; breached, the order ends and a group's units go back to their flag. Rivals don't use it.
+  Open: on a touch screen there's no way yet to order it on your own earthworks (no Ctrl); a "Force attack" toggle on
+  the selection bar would do it, if play shows it's needed. `EW.light` to tune in play-testing.
 - **The Sluice floods by its own rules, not the Dam map's:** the Dam turns the flood plain into fords and back
   (`terrainChanged` each time, about 15 ms a tile batch), which costs too much for a building a player can open again
   and again. The Sluice's flood is a layer (`S.fld`) drawn over the ground, closing routes while under water and
@@ -3027,9 +3047,9 @@ Calls made, for the owner to confirm or change:
   roughly where (2 tiles off), every 20 s a rival at most, when the head passes under or beside one of its buildings or
   Walls; a computer rival's forts answer it as a raid (`P.raided`). The exit has 20 strength. Robots go through as if
   the sap were a road 0.6 times its length, out of reach meanwhile.
-- **Rivals don't build any of it** (stage 4 is the player's, like 2 and 3). They route round earthworks and floods,
-  their heavy army robots shoot through, their forts answer a tremor. Teaching a Warden to bank its front is the next
-  step if play shows they need it.
+- **Rivals don't build any of it** (stage 4 is the player's, like 2 and 3). DECIDED by the owner (Nov 27 2026): no
+  change for now; revisit after play-testing. They route round earthworks and floods, their heavy army robots shoot
+  through, their forts answer a tremor. Teaching a Warden to bank its front is the next step if play shows they need it.
 - **Not built (follow-ups):** the canvas's runner-ups as upgrade tiers (Gabion Berm, Slit Trench), the caved-in exit's
   rendered look (`tunnel.js c=collapsed`: today the exit just goes, its groove drawn in code), the Mole (a robot bore),
   the Sluice's opening as an 8-frame loop (it switches between shut and open, the spill animated in code), and the flood

@@ -3150,7 +3150,7 @@ function initSelBar() {
   $('selbar').innerHTML = `<div class="sel-top"><div class="sel-text"><b id="sel-title"></b> <span id="sel-notes"></span></div>
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
-    <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
+    <span class="hint sel-mouse">Right-click open ground to hold it, a rival building, robot or earthwork to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
     <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl or Shift + 1–9)"></button><button class="btn small ghost" id="sel-agroup" title="Add them to an Army Group, or make a new one">Army group</button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
@@ -3495,7 +3495,9 @@ function onMapCommand(i, j, wx, wy, done) {
   // the damaged go to your Repair Station; warbots go after an enemy robot, attack a building, station in a garrison or
   // hold the ground (ORDERS.command).
   const foe = !b ? enemyBotAtTap(i, j) : null;
-  const spec = foe ? { foe: foe.id } : b ? { b: b.id } : { i, j };
+  // (an earthwork tile: a foe's is attacked; your own or an ally's with Ctrl, Alt or Cmd held: js/terraform4.js)
+  const ew = !foe && !b && typeof ewOrderAt === 'function' ? ewOrderAt(i, j, !!INPUT.force) : 0;
+  const spec = foe ? { foe: foe.id } : b ? { b: b.id } : ew ? { i, j, ew: 1 } : { i, j };
   const theirs = !!b && foes(b.owner, ME), mine = !!b && b.owner === ME, bName = b ? BDEFS[b.type].name : '', foeName = foe ? BOTS[foe.type].name : '';
   const rx = (b ? b.x : i) + 0.5, ry = (b ? b.y : j) + 0.5;
   act('command', [UI.sel.slice(), spec], (r) => {
@@ -3509,6 +3511,14 @@ function onMapCommand(i, j, wx, wy, done) {
       return;
     }
     if (r.kind === 'none') { sfx('error'); toast(where, 'warn'); return; }
+    if (r.kind === 'ewshoot') {
+      if (!r.n) { sfx('error'); toast(r.blocked ? 'None of them can get within reach of it.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn'); return; }
+      sfx('order'); addFx('ring', rx, ry, { color: '#ff5a6e' });
+      toast(`${r.n} warbot${r.n > 1 ? 's' : ''} shooting the ${EW_NAMES[ew]}${r.blocked ? ` (no way within reach for ${r.blocked})` : ''}. Light warbots wear it down slowly; heavy robots and blasts breach it fast.`, 'info');
+      if (done) done();
+      refreshSelection();
+      return;
+    }
     const n = r.n, nr = r.nr;
     const what = r.kind === 'hunt' ? `going after the rival's ${foeName}` : r.kind === 'attack' ? `attacking the ${bName}` : r.kind === 'station' ? `heading to the ${bName}` : 'moving to hold that ground';
     const blocked = r.blocked ? ` No route for ${r.blocked} warbot${r.blocked === 1 ? '' : 's'}.` : '';
@@ -9396,6 +9406,7 @@ function botActivity(u) {
       if (t.wait > S.time) return 'Waiting to set off with its squad'; // (staggered departure: paceSquad)
       if (t.type === 'attack' && t.reload) return u.type === 'torch' ? 'Tank empty: refilling it, then back to the attack' : 'Out of Ammo: reloading, then back to the attack';
       if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
+      if (t.type === 'ewshoot') return `Shooting ${ewOwner(t.tile) === u.owner ? 'our own' : ewOwner(t.tile) >= 0 && !foes(ewOwner(t.tile), u.owner) ? 'an ally\'s' : 'the rival\'s'} ${EW_NAMES[S.ewK && S.ewK[t.tile]] || 'earthwork'} (${S.ewH ? S.ewH[t.tile] : 0} strength left)`;
       if (t.type === 'defend' && t.ax !== undefined) return `Defending a building near the ${nm(t.home)}`; // (area defence: garrisonDefense)
       if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
       if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : u.grp && agById(u.grp) && agById(u.grp).flag === t.rally ? `The ${agById(u.grp).name}: ${agDoing(agById(u.grp)).replace(/^Paused: under your orders$/, 'holding (paused)')}` : 'Holding the rally point';

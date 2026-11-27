@@ -6918,6 +6918,9 @@ function checkSave(o) {
       (u.task.g != null && u.task.g !== 1) || (u.task.wall != null && !(Number.isSafeInteger(u.task.wall) && u.task.wall >= 0)) ||
       ['x', 'y'].some((k) => u.task[k] != null && !Number.isInteger(u.task[k])) || (u.task.until != null && !Number.isFinite(u.task.until)))) bad();
     if (u.task?.type === 'dammend' && (!(o.dam && Number.isInteger(u.task.d) && o.dam.d && o.dam.d[u.task.d]) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !['go', 'mend'].includes(u.task.phase))) bad(); // (The Dam: shoring one up)
+    if (u.task?.type === 'ewshoot' && (!BOTS[u.type].army || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) ||
+      !(Number.isInteger(u.task.go) && u.task.go >= -1 && u.task.go < o.W * o.H) || !(Number.isFinite(u.task.acc) && u.task.acc >= 0 && u.task.acc < 1) ||
+      (u.task.miss != null && !(Number.isInteger(u.task.miss) && u.task.miss >= 0)))) bad(); // (stage 4: shooting an earthwork tile)
     if (u.task?.type === 'recycle' && (!(Number.isSafeInteger(u.task.bld) && u.task.bld > 0) ||
       (u.task.t != null && (!Number.isFinite(u.task.t) || u.task.t < 0)))) bad();
   }

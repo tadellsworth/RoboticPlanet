@@ -13,7 +13,7 @@
  *   tap / click             : select, place, attack… (handled by ui.js via onMapTap)
  */
 
-const INPUT = { pointers: new Map(), gesture: null, onTap: null, onPaint: null, onPaintEnd: null, onHover: null, onBox: null, onCommand: null, onGrab: null, canBox: null, canPaint: null, shift: false, tap: null, boxArmed: false };
+const INPUT = { pointers: new Map(), gesture: null, onTap: null, onPaint: null, onPaintEnd: null, onHover: null, onBox: null, onCommand: null, onGrab: null, canBox: null, canPaint: null, shift: false, force: false, tap: null, boxArmed: false };
 const LONG_PRESS = 350; // ms a finger rests on the map before its drag draws a selection box (where there are warbots to select)
 
 /*
@@ -171,6 +171,7 @@ function onPointerUp(e) {
     else if (g.grab.tap) { INPUT.tap = e.pointerType === 'mouse' ? null : { at: performance.now(), x: e.clientX, y: e.clientY }; g.grab.tap(); }
   } else if (wasSingle && e.type === 'pointerup') {
     INPUT.shift = e.shiftKey;
+    INPUT.force = e.ctrlKey || e.altKey || e.metaKey; // (Ctrl, Alt or Cmd + right-click: attack your own earthwork: ewOrderAt)
     if (g.box && g.moved && R.box) {
       if (INPUT.onBox) INPUT.onBox(R.box, e.shiftKey, g.armed);
     } else if (!g.moved && g.panOnly && g.button === 2) {

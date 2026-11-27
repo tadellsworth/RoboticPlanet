@@ -18,7 +18,9 @@
  *    stage; the spill at an open Sluice. The Sluice itself, the Sap Head (its working loop while it digs) and the Sap
  *    Exit (t4DrawBuilding).
  *  - Over the graded ground (t4Marks): your saps' routes (dashed, the head ringed; only yours: sapSeen), the tremors
- *    you feel (rings where the ground shook).
+ *    you feel (rings where the ground shook), and the earthworks your warbots are ordered to shoot (a reticle, its
+ *    strength as a ring). An Attack order on an earthwork's tile: ewOrderAt (right-click a foe's; Ctrl, Alt or Cmd for
+ *    your own), the rules in sim.js (orderEwShoot, ewShoot).
  *  - The minimap's colours (t4MiniColor).
  * The look is the owner's picks from the stage 4 concept canvas (ART_GUIDE Batch 38): Earth Bank (Berm A), Fire Trench
  * (Revetted, A), Dragon's Teeth (Tank traps B), Sluice (Radial Gates, A; spillway mint), Sap Head (Tunnel Bore A;
@@ -40,6 +42,19 @@ Object.assign(TF_TOOLS_UI, {
   cave: { card: 'Collapse a Murmur tunnel.', key: 'v', name: 'Cave in', glyph: '✕',
     how: 'Tap a Murmur tunnel (the raised ridge with the veins): the Grader caves it in for a stretch, the Murmur can never dig through there again, and the exits it cuts off from their nest cave in. Or tap beside a tunnel exit, or an enemy Sap Exit, to collapse it.' },
 });
+
+/** The earthworks' names by kind (1 bank, 2 trench, 3 teeth). */
+const EW_NAMES = ['', 'Earth Bank', 'Fire Trench', 'Dragon\'s Teeth'];
+/**
+ * A right-click (or a tap) with warbots selected on tile (i, j): its earthwork's kind if it's one to attack (ORDERS.command
+ * with `ew`: orderEwShoot), else 0. A foe's (or no one's) is attacked; your own or an ally's only with `force` (Ctrl,
+ * Alt or Cmd held), since a plain right-click there moves them onto it (into your trench, say).
+ */
+function ewOrderAt(i, j, force) {
+  if (!S.ewK || !inMap(i, j)) return 0;
+  const t = tIdx(i, j), k = ewAt(t), o = ewOwner(t);
+  return k && (force || o < 0 || foes(o, ME)) ? k : 0;
+}
 
 /** Their cards on the Terraform tab, after stage 3's (openBuildMenu binds them as it does every building card). */
 function t4Cards() {
@@ -515,6 +530,25 @@ function t4Marks(ctx, ox, oy, z, v0, v1) {
       route(h, F.list, 0, true);
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.12, z * 0.08]);
       ctx.strokeRect(ox + h.x * z + z * 0.04, oy + h.y * z + z * 0.04, z * 0.92, z * 0.92); ctx.setLineDash([]);
+    }
+  }
+  // the earthworks your warbots are ordered to shoot (orderEwShoot): a coral reticle on the tile, its strength as a ring
+  if (S.ewK) {
+    const seen = new Set();
+    for (const u of S.bots) {
+      const t = u.task && u.task.type === 'ewshoot' && u.owner === ME && !u.dead ? u.task.tile : -1;
+      if (t < 0 || seen.has(t) || !ewAt(t)) continue;
+      seen.add(t);
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (i < v0.x - 1 || i > v1.x + 1 || j < v0.y - 1 || j > v1.y + 1) continue;
+      const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z, r = z * (0.42 + 0.03 * Math.sin((R.time || 0) * 4)), lw = Math.max(1.5, z * 0.06);
+      const left = S.ewH[t] / EW.kinds[EW_KINDS[S.ewK[t]]].hp;
+      ctx.strokeStyle = 'rgba(20,10,10,0.55)'; ctx.lineWidth = lw + 2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,90,110,0.95)'; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left); ctx.stroke();
+      ctx.beginPath();
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(x + a * r * 0.55, y + b * r * 0.55); ctx.lineTo(x + a * r * 1.2, y + b * r * 1.2); }
+      ctx.stroke();
+      ctx.fillStyle = '#ffe9c2'; ctx.beginPath(); ctx.arc(x, y, Math.max(1.5, z * 0.05), 0, Math.PI * 2); ctx.fill();
     }
   }
   for (const r of S.tremors || []) {

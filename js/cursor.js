@@ -203,7 +203,7 @@ function cursorTick(canvas) {
     const w = screenToWorld(R.mouse.x, R.mouse.y), i = Math.floor(w.x), j = Math.floor(w.y);
     const b = buildingAtTap(i, j, w.x, w.y);
     const army = UI.sel && UI.sel.length > 0;
-    if (army && ((b && foes(b.owner, ME)) || (!b && enemyBotAtTap(i, j)))) kind = 'attack';
+    if (army && ((b && foes(b.owner, ME)) || (!b && (enemyBotAtTap(i, j) || (typeof ewOrderAt === 'function' && ewOrderAt(i, j, false)))))) kind = 'attack';
     else if (b || S.bots.some((u) => !u.dead && !u.inside && u.owner === ME && dist2(u.x, u.y, w.x, w.y) < 0.16)) kind = 'point';
   } else CURSOR.t = now;
   if (kind !== CURSOR.kind) {

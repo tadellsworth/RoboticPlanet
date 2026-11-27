@@ -1586,7 +1586,7 @@ const MISSIONS = [
     intro: [
       'The Grader has four more jobs on <b>Build → Terraform</b> (<kbd>6</kbd>), dragged in a line like Walls and cheaper than them. They stand for everyone, your robots included.',
       'An <b>Earth Bank</b> (<kbd>K</kbd>) stops vehicles and heavy robots (Bulwarks, trucks, Graders); other robots climb over slowly, and yours behind it take less fire. A <b>Fire Trench</b> (<kbd>X</kbd>) slows anyone crossing; yours in it take half the fire. <b>Dragon\'s Teeth</b> (<kbd>Z</kbd>) stop the heavy ones and let small robots through.',
-      'Shells and bombs wear them down to a breach; drag the same tool over a worn one to repair it. <b>Cave in</b> (<kbd>V</kbd>) collapses a Murmur tunnel for good, and the exits it cuts off from their nest.',
+      'Shells and bombs wear them down to a breach, and so do warbots told to: select them and right-click (or tap) the earthwork. Drag the same tool over a worn one to repair it. <b>Cave in</b> (<kbd>V</kbd>) collapses a Murmur tunnel for good, and the exits it cuts off from their nest.',
       'A <b>Sluice</b> (<kbd>U</kbd>) on a lake shore floods the low ground beyond it when you open it. A <b>Sap Head</b> (<kbd>Q</kbd>) digs a tunnel along a route you plan from it, and your robots go through when it breaks out.',
     ],
     mode: 'colony', seed: 31, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 11, war: true, wildlife: true, murmur: 'quiet', limit: [0, 0, 30],
@@ -1599,11 +1599,26 @@ const MISSIONS = [
       // the nest nearest the colony has dug toward it overnight: a tunnel to cave in
       const near = S.buildings.filter((b) => b.type === 'nest').sort((a, b) => dist2(a.x, a.y, L.x, L.y) - dist2(b.x, b.y, L.x, L.y))[0];
       if (near) murmurPredig(near, 22, false);
+      // an old bank from before the Silence, no one's, slumped and worn, a few tiles out from the base: for the warbots
+      for (let k = 0; k < 3; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      L.stock.ammo = (L.stock.ammo || 0) + 30;
+      const open = (t) => S.terrain[t] === T_GROUND && !S.res[t] && !S.road[t] && !S.bAt[t] && !S.plan[t] && tfLevel(t) !== null;
+      for (let d = 5; d <= 12; d++) {
+        const row = [-1, 0, 1].map((o) => (inMap(L.x + d, L.y + o) ? tIdx(L.x + d, L.y + o) : -1));
+        if (!row.every((t) => t >= 0 && open(t) && S.elev[t] === S.elev[row[1]])) continue;
+        for (const n of ['ewK', 'ewO', 'ewH']) t4Layer(n);
+        for (const t of row) { S.ewK[t] = 1; S.ewO[t] = 0; S.ewH[t] = 12; }
+        S.ewVer = (S.ewVer || 0) + 1;
+        break;
+      }
     },
     goals: [
       { kind: 'ewbank', n: [5, 6, 8], text: 'Heap an Earth Bank {n} tiles long', count: (P) => P.stats.ewbank || 0,
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Terraform</b> (<kbd>6</kbd>) → <b>Earth Bank</b> (<kbd>K</kbd>): drag a line, then <b>Terraform</b> in the banner. A Grader heaps it.',
         ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='bank'], #banner-ok" },
+      { kind: 'ewBreached', n: 1, text: 'Breach an earthwork with your warbots', count: (P) => P.stats.ewBreached || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Select all warbots</b> (<kbd>F</kbd>), then right-click (or tap) the old Earth Bank east of your base.',
+        ui: '#btn-attack, #ar-select' },
       { kind: 'caveIn', n: 1, text: 'Cave in a Murmur tunnel', count: (P) => P.stats.caveIn || 0,
         hint: '<b>Terraform</b> (<kbd>6</kbd>) → <b>Cave in</b> (<kbd>V</kbd>), then tap a Murmur tunnel: the raised ridge with violet veins, toward the nest.',
         ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='cave'], #banner-ok" },

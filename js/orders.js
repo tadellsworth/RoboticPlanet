@@ -399,7 +399,7 @@ const ORDERS = {
   /* ---------------------------------------------------------------- the army */
   /**
    * A right-click with robots selected (ids), on: a Ferry (ferry), a Repair Station (repair), an enemy robot (foe),
-   * a building (b) or open ground (i, j). Howitzers in the selection shell or drive; the rest hunt, attack, station or
+   * a building (b), an earthwork to shoot (i, j with ew) or open ground (i, j). Howitzers in the selection shell or drive; the rest hunt, attack, station or
    * hold the ground. { kind, n, nr } comes back (or { why }).
    */
   command(p, ids, spec) {
@@ -412,6 +412,12 @@ const ORDERS = {
     };
     let s = spec || {};
     const out = { kind: '', n: 0, nr: 0 };
+    // (Terraforming stage 4: `ew`, an Attack order on the earthwork on tile (i, j): they shoot it till it breaks: orderEwShoot)
+    if (s.ew && !s.b && !s.foe && !s.ferry && Number.isInteger(s.i) && Number.isInteger(s.j) && inMap(s.i, s.j) && S.ewK && ewAt(tIdx(s.i, s.j))) {
+      out.kind = 'ewshoot';
+      out.n = orderEwShoot(p, ids, tIdx(s.i, s.j), out);
+      return assigned(out);
+    }
     // (Passenger Town: a building tapped, they go and stand beside it: at its sentry, they shoot it down)
     const ruin = !s.b && !s.foe && !s.ferry && S.town && inMap(s.i, s.j) ? townRuinAt(tIdx(s.i, s.j)) : null;
     // (The Dam: a dam tapped, they go and stand by it, the nearest spot within their reach of its face)
