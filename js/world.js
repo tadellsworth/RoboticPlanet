@@ -3667,6 +3667,7 @@ function newGame(opts) {
   if (opts.setup) opts.setup(S);
   clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
   S.decor = makeDecor();
+  if (S.orb) S.decor.fill(0); // (no plants on a station's decks)
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
   if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = S.town.x0; i <= S.town.x1; i++) if (townIn(i, j)) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
@@ -6479,6 +6480,15 @@ function checkSave(o) {
     if (H.ps != null && !(Array.isArray(H.ps) && H.ps.length >= 1 && H.ps.length <= 4 && H.ps.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
     if (H.laneP != null && !(Array.isArray(H.laneP) && H.laneP.length === H.lanes.length && H.laneP.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
     if (H.won != null && !['maw', 'waves'].includes(H.won)) bad();
+  }
+  // Orbital platforms (S.orb: see orbInit): decks, bridges (each strip on the map, its state) and control boxes (tile, holder).
+  if (o.orb != null) {
+    const O = o.orb, int = Number.isInteger, inM = (x, y) => int(x) && int(y) && x >= 0 && y >= 0 && x < o.W && y < o.H;
+    if (!obj(O) || !Array.isArray(O.plats) || !Array.isArray(O.br) || !Array.isArray(O.bx) || O.plats.length > 16 || O.br.length > 32 || O.bx.length > 64) bad();
+    if (!O.plats.every((P) => obj(P) && inM(P.x0, P.y0) && inM(P.x1, P.y1) && ['home', 'mid', 'deck'].includes(P.kind) && int(P.tw) && P.tw >= 0 && P.tw < O.plats.length)) bad();
+    if (!O.br.every((B) => obj(B) && inM(B.x0, B.y0) && inM(B.x1, B.y1) && B.x0 <= B.x1 && B.y0 <= B.y1 && (B.ax === 'v' || B.ax === 'h') && int(B.a) && int(B.b) && B.a >= 0 && B.b >= 0 && B.a < O.plats.length && B.b < O.plats.length
+      && (B.up === 0 || B.up === 1) && [0, 1, 2, 3].includes(B.mv) && Number.isFinite(B.t0) && Number.isFinite(B.cd) && (B.by == null || (int(B.by) && B.by >= -1 && B.by < o.players.length)))) bad();
+    if (!O.bx.every((b) => obj(b) && inM(b.x, b.y) && int(b.br) && b.br >= 0 && b.br < O.br.length && (b.end === 0 || b.end === 1) && int(b.owner) && b.owner >= -1 && b.owner < o.players.length)) bad();
   }
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   if (o.diffLow != null && !ownKey(DIFFICULTY, o.diffLow)) bad(); // (the easiest level the rivals were at: ORDERS.rivalDifficulty)

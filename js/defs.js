@@ -2751,6 +2751,7 @@ const FLAVOR = {
   // Neutral ground (not buildings anyone owns)
   post: 'Accord rates honoured. The ledger is still open.',
   uplink: 'Transmitting. No response. Transmitting.',
+  bridge: 'Span lock: obeys whoever holds the box. The station logs no rank.',
 };
 
 /** Lines for the loading screen (one at random, in index.html: keep the two lists the same). */

@@ -783,6 +783,7 @@ function bakeMap() {
   R.levelOffset = maxElev === 0 ? 1 : 0;
   R.skyFloor = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   R.void = ringShape(); // (The Ring: the void tiles are left clear over the space behind: js/ring.js)
+  R.orbital = orbitalShape(); // (Orbital platforms: station decks over the high atmosphere: js/orbital.js)
   RSP.land = null;
   applyBiome();
   // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
@@ -1191,7 +1192,8 @@ function paintTile(ctx, i, j, other, blend) {
   ctx.fillStyle = levelColor(S.elev[t], n);
   ctx.fillRect(x, y, TP, TP);
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
-  if (tex.ground) {
+  if (R.orbital && (terr === T_GROUND || terr === T_ROCK)) { orbDeckPaint(ctx, i, j, x, y, t); } // (Orbital platforms: a deck's plating and railing over the ground)
+  else if (tex.ground) {
     drawTexture(ctx, tex.ground, i, j, x, y);
     if (blend && terr === T_GROUND && other.tex.ground) blendTexture(ctx, other.tex.ground, blend, i, j, x, y);
     // Keep elevation readable on top of the texture: higher ground is lighter, canyons darker.
@@ -1273,7 +1275,7 @@ function paintTile(ctx, i, j, other, blend) {
   }
 
   // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
-  if (terr === T_GROUND && !S.road[t] && !(tex.ground && tex.ground.img.width >= 256)) drawGrain(ctx, i, j, x, y);
+  if (terr === T_GROUND && !S.road[t] && !R.orbital && !(tex.ground && tex.ground.img.width >= 256)) drawGrain(ctx, i, j, x, y);
   // Sky islands: the canyon floor lies far below the mesas, in their shade.
   if (terr !== T_WATER && S.elev[t] <= 1 && R.skyFloor) { ctx.fillStyle = S.elev[t] ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
@@ -1752,6 +1754,7 @@ function canyonArt(key) {
  */
 function drawVoidTile(ctx, i, j, x, y) {
   ctx.clearRect(x, y, TP, TP);
+  if (R.orbital) { orbVoidPaint(ctx, i, j, x, y); return; } // (Orbital platforms: a deck's hull, not rock)
   const one = terrAt(i, j - 1) === T_GROUND, two = !one && terrAt(i, j - 1) === T_CHASM && terrAt(i, j - 2) === T_GROUND;
   if (!one && !two) return;
   if (two && hash2(i, j, 771) < 0.4) return; // (a ragged bottom: not every column of the rock goes down a second tile)
@@ -7186,7 +7189,7 @@ function render(dtReal) {
   const v0 = viewToWorld(0, 0), v1 = viewToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
-  if (R.void) ringSpace(ctx, ox, oy, z); else drawOffMap(ctx, ox, oy, z); // (The Ring: space behind the asteroids)
+  if (R.orbital) { orbitalFrame(); orbitalSky(ctx, ox, oy, z); } else if (R.void) ringSpace(ctx, ox, oy, z); else drawOffMap(ctx, ox, oy, z); // (The Ring: space behind the asteroids; Orbital platforms: the high atmosphere)
   drawMapLayer(ctx, ox, oy, z);
   if (typeof natureGround === 'function') natureGround(ctx, ox, oy, z, v0, v1); // (swaying plants, wind in the grass, wet ground, frost: js/nature.js)
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
@@ -7197,6 +7200,7 @@ function render(dtReal) {
   if (S.town && typeof townGround === 'function') townGround(ctx, ox, oy, z); // (the city map's streets and lots: js/city.js)
   if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
   if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
+  if (S.orb && typeof orbitalBridges === 'function') orbitalBridges(ctx, ox, oy, z, v0, v1); // (Orbital platforms: the drawbridges' leaves and lamps)
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
   if (typeof tfGround === 'function') tfGround(ctx, ox, oy, z, inView); // (the ground of Earthworks being dug and filled, fresh soil, track marks: js/terraform.js)
   if ((S.grove || S.wet) && typeof t2Ground === 'function') t2Ground(ctx, ox, oy, z, v0, v1); // (groves, sprinklers and their spray, graded with the ground: js/terraform2.js)
@@ -7401,6 +7405,7 @@ function render(dtReal) {
   for (const g of expressGantries(v0, v1)) items.push(g); // (sign gantries over Express pairs)
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
+  if (S.orb) for (const b of S.orb.bx) if (inView(b.x, b.y, 3)) items.push({ ent: 'obox', x: b.x, y: b.y + 0.5, bx: b }); // (Orbital platforms: a bridge's control box)
   if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
   if (typeof radRuinItems === 'function') radRuinItems(items, inView); // (breached Reactors' ruins: js/radfx.js)
   if (S.landmarks && S.landmarks.length && typeof lmItems === 'function') lmItems(items, inView); // (a Contingency battle's landmark: js/landmarks.js)
@@ -7434,6 +7439,7 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
+      if (e.ent === 'obox') { pool(ox + (e.bx.x + 0.5) * z, oy + (e.bx.y + 0.5) * z, z * 1.1, e.bx.owner >= 0 ? PLAYER_COLORS[e.bx.owner] : '#dfefff'); continue; }
       if (e.ent === 'harrowdie') { const g0 = ctx.globalAlpha, age = S.time - e.h.t; ctx.globalAlpha = g0 * (hash2(Math.floor(age * 24), Math.round(e.x * 13), 5) > 0.4 ? 0.9 : 0.25) * clamp(1.2 - age / HARROW_DEATH.thud, 0.3, 1); pool(ox + e.x * z, oy + e.y * z, z * MURMUR_LOOK.harrow.light, '#a46cff'); ctx.globalAlpha = g0; continue; } // (its light stuttering as it dies)
       if (e.ent === 'gantry') {
         for (const lane of [0, 1]) {
@@ -7484,6 +7490,7 @@ function render(dtReal) {
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
+    if (e.ent === 'obox') { drawOrbBox(ctx, ox + (e.bx.x + 0.5) * z, oy + (e.bx.y + 0.5) * z, z, e.bx); continue; }
     if (e.ent === 'b') {
       const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
@@ -10557,6 +10564,15 @@ function renderMinimap() {
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(x, y, r + 2.2, 0, Math.PI * 2); ctx.stroke();
+  }
+  // Orbital platforms: a small square at each control box in its holder's colour (white while no one holds it), and a lit stripe along each raised bridge.
+  if (S.orb) {
+    for (const B of S.orb.br) if (B.up) { ctx.fillStyle = 'rgba(255,90,70,0.8)'; ctx.fillRect(B.x0 * sx, B.y0 * sy, (B.x1 - B.x0 + 1) * sx, (B.y1 - B.y0 + 1) * sy); }
+    for (const b of S.orb.bx) {
+      const x = (b.x + 0.5) * sx, y = (b.y + 0.5) * sy, r = Math.max(2.5, sx * 1.2);
+      ctx.fillStyle = b.owner >= 0 ? PLAYER_COLORS[b.owner] : '#f2f6fa'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2); ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+    }
   }
   // Howitzers: a triangle each (yours in your colour), so they're easy to find.
   for (const u of S.bots) {
