@@ -1008,6 +1008,69 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   - Art (ART_GUIDE Batch 37): `renderer/b/seamdrill.js`, `seedmast.js`, `thermal.js`, `seedbed.js` (shared `t3kit.js`),
     `renderer/tools/render_t3.sh` then `install_t3.py`. Mission: **Deep Ground** (Sea and Sky, after Topsoil; the
     Cinderlands' lava lakes). Tests: `node tools/terraform3-test.js`.
+- **Terraforming, stage 4: military earthworks** (Nov 2026; `EW`, `SLUICE`, `CAVE`, `SAP` in `js/defs.js`; the rules in
+  the stage 4 block of `js/sim.js`: `t4Job`, `t4Earthwork`, `ewAt`, `ewCover`, `ewHit`, `ewBlast`, `ewBreachHit`,
+  `t4Slow`, `t4Blocks`, `t4CaveIn`, `sluiceWhy`, `sluiceFloodPlan`, `sluiceOrder`, `sluiceTick`, `sluiceReach`,
+  `sapPlan`, `updateSapHead`, `sapTremor`, `sapBreakOut`, `sapLink`, `sapRide`; the cards, panels, the sap planner and the
+  drawing in `js/terraform4.js`). The player's alone: no rival builds or plans any of it, and a game without it has no
+  layers, nothing new saved or hashed and none of it run (seeded AI-vs-AI games keep their hashes). Layers (`T4_LAYERS`,
+  sparse in saves, hashed when present): `S.ewK` (1 Earth Bank, 2 Fire Trench, 3 Dragon's Teeth), `S.ewO` (owner + 1),
+  `S.ewH` (strength, 0 breached), `S.fld` (a flood's stage, 1..5), `S.caveIn` (a caved-in groove).
+  - **Earthworks** (Grader jobs: `TF_TOOLS` `bank`, `trench`, `teeth`; keys K, X, Z; dragged like Walls, `tfPlace`;
+    each an Earthworks site, `b.tf.k` the kind, Workers never take them). Costs and times `EW.kinds` (bank 3 Stone 18 s,
+    trench 1 Stone 16 s, teeth 1 Cement 1 Alloy 14 s); strength 60, 40, 90. Done (`t4Earthwork`), the tile keeps it in
+    the layers and stands for everyone (an earthwork is terrain): `EW.heavy` (trucks, Tankers, Road Trains, Crawlers,
+    Howitzers, Bulwarks, Graders, Brutes) can't cross a bank or teeth (`findPath` with `opts.ew` from `routeOpts`: 1
+    light, 2 heavy, 3 a heavy army robot that may plan through a foe's at `BREACH_COST` plus its strength; no diagonal
+    slip between two; `blockedStep` / `t4Blocks` for routes planned before it stood), everyone else is slowed
+    (`EW.slow` bank 0.4, trench 0.6, teeth 0.85, `t4Slow` in `speedMul`) and routes count `EW.path` more a step. Cover
+    (`ewCover` in `damageBot`): in your side's trench `EW.cover.trench` (0.5) of any fire; within `EW.coverR` (1.6) of
+    your side's bank lying toward a shooter more than a tile and a half away, `EW.cover.bank` (0.6). Damage: blasts
+    (`ewBlast` from `scarBlast`, `EW.blast` 14 per tile of blast reach, falling off), a foe's heavy army robot shooting
+    one in its way (`ewBreachHit`, `EW.breach` 2 a shot); below `EW.worn` (60%) worn, at 0 breached (kept, a gap,
+    `ewAt` 0; its owner told). Repair: the same tool over a worn or breached one plans `ewfix` (`EW.fix` half the cost,
+    `EW.fixTime` 10 s). Nothing is built or paved on one (`canPlace`, `canRoad`, `tfWhere`); groves, beds and humus keep
+    off. Drawn baked with the ground (`t4PaintTile`, `ewDraw`): the rendered pieces `ew-<kind>-<piece>-<look>` (arms
+    n/e/s/w for every team, the post with the team's stake, lamp or cat's-eye for both, layered as the Walls are), at
+    three looks (`ewLook`), their night lights in the glow map (`t4Glow`, `ew-<kind>-glow-<look>`); drawn in code the
+    same way while the art loads. A re-bake only when a tile crosses a look (`markDirty` of that tile).
+  - **Cave in** (`TF_TOOLS` `cave`, key V, `CAVE.time` 14 s, no goods): on a Murmur tunnel tile, or beside a tunnel
+    exit or a foe's Sap Exit (`t4CaveTarget`). Done (`t4CaveIn`): the tunnel caves in `CAVE.len` (3) tiles each way
+    (`S.tun` cleared, `S.caveIn` set: `tunnelable` refuses it, so the Murmur never dig through again), and the exits of
+    that nest no longer joined to it (`t4TunReach`) collapse (`collapseExit`); an exit beside the tile collapses.
+  - **Sluice** (`BDEFS.sluice`, Sluice Dam concept A "Radial Gates", accent spillway mint `#b8ffe8`; 6 Cement, 2 Alloy;
+    key U; two tiles, `long`, R turns it). Placed (`sluiceWhy` in `canPlace`) with water along one long side
+    (`sluiceSides`) and open ground no higher than it along the other. Open (`ORDERS.sluice`, `sluiceOrder`): the flood
+    plan (`sluiceFloodPlan`) runs breadth-first from the dry side over ground of its level or lower, never uphill, up to
+    `SLUICE.most` (90) or `SLUICE.perWater` (1.5) a tile of the water behind it (`sluiceWater`, up to 600). It is kept on
+    the Sluice (`b.fl`: `t0`, the tiles `ts`, their distances `d`, `top`, `n`, the recede start `rs`, each tile's stage
+    `st`); each tile's stage is worked out from the clock (`sluiceStage`: the front at `SLUICE.speed` 1.6 tiles a second;
+    pouring `pour` 3 s, spreading `spread` 8 s, under water until `stay` 45 s after opening, then going down the far end
+    first over `recede` 30 s, wet mud `mud` 40 s, dried silt `silt` 60 s, gone; `SLUICE.fert` of it fertile).
+    `sluiceTick` (every `SLUICE.every` 10 ticks, only a flood's own tiles) writes `S.fld`; where the front arrives
+    (`sluiceReach`) robots take `botHit` (3), buildings lose `hurt` (35%) of their armour (a Command Base kept at 1) and
+    are knocked out (`b.fldT`: `updateBuilding` skips them) until the water goes down, crops and Stalks wash away. Under
+    water nobody routes (`findPath` closes `S.fld` 3; a route already through it is dropped), a robot there wades at
+    `slow.water` (0.3), mud `slow.mud` (0.6), the front `slow.pour` (0.5). It shuts by itself once its flood is out (or
+    when shut: the front stops), then refills `SLUICE.refill` (120 s). No terrain changes, no `terrainChanged`: the
+    flood is drawn over the ground each frame from its own tile list (`t4Overlay`), never baked.
+  - **Sap Head** (`BDEFS.saphead`, Tunnel Bore concept A, accent tunnel-lamp salmon `#ffa38c`; 4 Cement, 3 Alloy, 1
+    Chip; key Q). Its panel's Plan sap (T) opens the Terraform mode with the tool `sap` (`sapStart`, `sapPaint`: a
+    four-way route out from it), Dig sends `ORDERS.sap` (`sapPlan`, `sapWhy`: a tile at a time, `tunnelable`, up to
+    `SAP.most` 30 tiles and `SAP.reach` 30 out, its end open ground: `sapEndWhy`). `b.sap` (`route`, `dug`, `acc`,
+    `exit`, `heard`): it digs a tile every `SAP.dig` (8) s (`updateSapHead`); a foe with a building within `SAP.hear` (1)
+    of the head feels a tremor (`sapTremor`: a message and rings near it, fuzzed `SAP.tremorFuzz` 2 tiles, once per
+    `tremorEvery` 20 s a foe; a rival's `P.raided` set, so its forts send a guard, `garrisonDefense`). At the end it
+    breaks out (`sapBreakOut`): a `sapexit` of its owner's (`SAP.exitArmor` 20, `e.head`). Its owner's robots go through
+    (`sapLink` in `findPath`, `sapLen` x `SAP.cost` a step; `passTile` lets them onto both ends; in `moveAlong`
+    `sapRide`: down at one end, `u.sapT` out of sight and out of reach (`aloft`), up at the other, or back where it went
+    down if the far end is lost). The route is its owner's alone (`sapSeen`; drawn in `t4Marks`). The exit shot down or
+    caved in (`sapExitLost`): the sap is dead; plan it again.
+  - Rivals don't terraform; they cope: their routes go round earthworks and floods, their heavy army robots shoot a way
+    through a foe's earthworks in their way, their forts answer a tremor. Saves: `checkSave` checks `b.fl` and `b.sap`;
+    the layers are sparse. Art (ART_GUIDE Batch 38): `renderer/walls/b/earthwork.js` (the pieces), `renderer/b/sluice.js`
+    and `tunnel.js` (the Sluice and the Sap Head, the Sap Exit), `renderer/tools/render_t4.sh` then `install_t4.py`.
+    Mission: **Ground War** (First Contact, after The Murmur). Tests: `node tools/terraform4-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -4929,6 +4992,21 @@ ground, powering a drill with no Fuel, powering a Maglev Terminal and a Mass Dri
 a fuelled Generator's Fuel; turned off, the Generator's half a Fuel a shot) and never a megastructure (an Orbital Lift
 not boosted, a Deep Core without power); no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
 seam refused; and the same game twice giving the same hash.
+
+```bash
+node tools/terraform4-test.js
+```
+
+Terraforming, stage 4: nothing of it until it's used; an Earth Bank, a Fire Trench and Dragon's Teeth built by a
+Grader along a dragged line, at their costs, nothing else planned on them; a bank and teeth closing the way to heavy
+robots and not to a Warbot, a trench to no one, the slow on each; cover behind your bank and in your trench, none from a
+foe's; blasts wearing a bank to worn and breached, a Grader repairing it; a foe's heavy army robot shooting through
+Dragon's Teeth, one of yours never planning through your own; a Sluice only on the bank, its flood through pouring,
+spreading, under water, wet mud and silt and gone, routes closed under water, robots knocked about, buildings hurt and
+knocked out, the refill; a Cave in caving a tunnel to a groove the Murmur never dig through and its cut-off exit in; a
+Sap Head's route rules, its route its owner's alone, its dig rate, the tremor a rival feels, the break-out, its owner's
+robots through it out of reach, a rival shooting its exit down; saves mid-flood and mid-dig playing on to the same
+hash, a damaged flood refused; the same game twice the same.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

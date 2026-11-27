@@ -931,6 +931,7 @@ function glowTiles(i0, j0, i1, j1) {
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
     drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
     if (S.res[t] && S.res[t] !== R_STALK && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (the Bloom's veins; Stalks' rings below)
+    if (S.ewK && typeof t4Glow === 'function') t4Glow(ctx, i, j, t); // (an earthwork's lamps and cat's-eyes: js/terraform4.js)
     if ((S.seams || S.sbed) && typeof t3Glow === 'function') t3Glow(ctx, i, j, t); // (a found seam's cracks and a Crystal Seedbed's pins and tips: js/terraform3.js)
     if (S.hollow) hollowTileGlow(ctx, i, j, t);
     // (rounded shores: each corner glows as what it now shows)
@@ -1296,6 +1297,7 @@ function paintTile(ctx, i, j, other, blend) {
   if (terr === T_GROUND && (S.soil || S.wet || S.tform || S.shift) && !S.ramp[t] && typeof t2PaintTile === 'function') t2PaintTile(ctx, i, j, x, y, t); // (soil, water, the biome shift: js/terraform2.js)
   if ((S.seams || S.sbed) && typeof t3PaintTile === 'function' && t3PaintTile(ctx, i, j, x, y, t)) return; // (a found seam's cracks, a Crystal Seedbed and its grown Crystal: js/terraform3.js)
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
+  if ((S.ewK || S.caveIn) && typeof t4PaintTile === 'function') t4PaintTile(ctx, i, j, x, y, t); // (an earthwork, a caved-in tunnel's groove: js/terraform4.js)
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
     if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true);
@@ -3349,6 +3351,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     drawSite(ctx, type, cx, cy, s, owner, b); return;
   }
   if (type === 'magpylon' && b && b.id) return;
+  if ((type === 'sluice' || type === 'saphead' || type === 'sapexit') && typeof t4DrawBuilding === 'function' && t4DrawBuilding(ctx, type, cx, cy, s, owner, b)) return; // (stage 4: js/terraform4.js)
   if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
   if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
   if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
@@ -7199,6 +7202,7 @@ function render(dtReal) {
   if (S.town && typeof townGround === 'function') townGround(ctx, ox, oy, z); // (the city map's streets and lots: js/city.js)
   if (S.walker && typeof walkerGround === 'function') walkerGround(ctx, ox, oy, z); // (the Walking Factory's yard and track: js/walker.js)
   if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
+  if (S.fld && typeof t4Overlay === 'function') t4Overlay(ctx, ox, oy, z, v0, v1); // (a Sluice's flood, graded with the ground: js/terraform4.js)
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
   if (typeof tfGround === 'function') tfGround(ctx, ox, oy, z, inView); // (the ground of Earthworks being dug and filled, fresh soil, track marks: js/terraform.js)
   if ((S.grove || S.wet) && typeof t2Ground === 'function') t2Ground(ctx, ox, oy, z, v0, v1); // (groves, sprinklers and their spray, graded with the ground: js/terraform2.js)
@@ -7210,6 +7214,7 @@ function render(dtReal) {
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
+  if (typeof t4Marks === 'function' && (S.tremors || R.mode === 'terra' || S.buildings.some((b) => b.sap))) t4Marks(ctx, ox, oy, z, v0, v1); // (your saps' routes, the tremors you feel: js/terraform4.js)
   if ((S.seams || S.sbed) && typeof t3Marks === 'function') t3Marks(ctx, ox, oy, z, v0, v1); // (the found seams' survey marks and a drill's line to its seam: js/terraform3.js)
   drawReedLights(ctx, ox, oy, z, v0, v1); // (zoomed in, each Stalk's rings lit: js/reedcane.js)
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
@@ -7374,7 +7379,7 @@ function render(dtReal) {
   // Buildings and bots, sorted by y so lower things overlap upper ones.
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, BDEFS[b.type].foot ? 5 : 2)) items.push(b);
-  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !(BOTS[u.type].air && u.flight) && !BOTS[u.type].magpod && inView(u.x, u.y, 1)) items.push(u); // (Maglev pods ride their guideway: drawMaglevs)
+  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !u.sapT && !(BOTS[u.type].air && u.flight) && !BOTS[u.type].magpod && inView(u.x, u.y, 1)) items.push(u); // (Maglev pods ride their guideway: drawMaglevs)
   // Planes parked at an Airfield: one waits at the head of the runway, lined up to roll; the rest are in the
   // hangar (a tag on the Airfield says how many). Nothing parks off the runway, on ground other things use.
   const hangarTags = [];
@@ -10327,6 +10332,7 @@ function rebuildMinimapBase() {
       if (key) c = mixBiomeRGB(c, R.secondRegion.mm[key], blend);
     }
     if (terr === T_GROUND && (S.grove || S.wet || S.shift) && typeof t2MiniColor === 'function') c = t2MiniColor(t, c); // (groves, irrigated and shifted land: js/terraform2.js)
+    if (terr === T_GROUND && (S.ewK || S.fld || S.caveIn) && typeof t4MiniColor === 'function') c = t4MiniColor(t, c); // (earthworks, a flood, a groove: js/terraform4.js)
     if (terr === T_GROUND && (S.seams || S.sbed) && typeof t3MiniColor === 'function') c = t3MiniColor(t, c); // (found seams and Crystal Seedbeds: js/terraform3.js)
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
     if (terr === T_WATER && ((S.lava && S.lava[t]) || renderBiomeAt(t) === 'volcanic')) c = [236, 104, 34];

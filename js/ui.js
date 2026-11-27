@@ -2623,8 +2623,9 @@ const BUILD_KEYS = {
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
   // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
   // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P);
-  // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T).
-  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't' },
+  // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T); stage 4's: the Earth banK (K),
+  // the Fire Trench (X, as Walls), Dragon's Teeth (Z), caVe in (V), the slUice (U) and the Sap Head (Q).
+  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't', 'tf-bank': 'k', 'tf-trench': 'x', 'tf-teeth': 'z', 'tf-cave': 'v', sluice: 'u', saphead: 'q' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', mega: '5', terra: '6' };
 /**
@@ -2673,6 +2674,8 @@ const SHEET_KEYS = {
   'sh-squake': ['q', 'Sundering Ray: Quake'],
   'sh-sstop': ['c', 'Stand down the Sundering Ray'],
   'sh-storm': ['f', 'Atmosphere Engine: Storm Front'],
+  'sh-sluice': ['o', 'Open or shut the Sluice'],
+  'sh-sap': ['t', 'Plan the sap'],
   'sh-stormoff': ['c', 'Call the storm off'],
   'rl-recall': ['c', 'Call back a rally'],
   'sh-land': ['l', 'Choose the beach'],
@@ -6658,6 +6661,7 @@ function onMapTap(i, j, wx, wy) {
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
       if (def.t2 && typeof t2PlaceText === 'function') extra = t2PlaceText(type, i, j); // (stage 2: js/terraform2.js)
       if (def.t3 && typeof t3PlaceText === 'function') extra = t3PlaceText(type, i, j); // (stage 3: js/terraform3.js)
+      if (def.t4 && typeof t4PlaceText === 'function') extra = t4PlaceText(type, i, j); // (stage 4: js/terraform4.js)
       if (def.burner && !def.burner.heat) {
         let n = 0;
         for (const c of S.buildings) if (!c.dead && c.owner === ME && (BDEFS[c.type].work || BDEFS[c.type].t3pow) && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
@@ -8491,6 +8495,7 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-saim-hint"></p><button class="btn" id="sh-sstop" hidden>Stand down (the blow is lost)</button>
         <button class="btn" id="sh-suser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-suser-hint"></p>`;
     }
+    if (def.t4 && b.built && b.owner === ME && typeof t4Buttons === 'function') html += t4Buttons(b); // (the Sluice's Open, the Sap Head's Plan sap: js/terraform4.js)
     if (def.atmos && b.built && b.owner === ME) {
       html += `<button class="btn primary big" id="sh-storm">Storm Front</button>
         <p class="hint" id="sh-storm-hint"></p><button class="btn" id="sh-stormoff" hidden>Call the storm off</button>`;
@@ -8563,6 +8568,7 @@ function openBuildingSheet(b) {
     if ($('sh-sdeep')) $('sh-sdeep').onclick = () => { sfx('click'); startAim(b, 'deep'); };
     if ($('sh-squake')) $('sh-squake').onclick = () => { sfx('click'); startAim(b, 'quake'); };
     if ($('sh-storm')) $('sh-storm').onclick = () => { sfx('click'); startAim(b); };
+    if (typeof t4Bind === 'function') t4Bind(b); // (stage 4: js/terraform4.js)
     if ($('sh-stormoff')) $('sh-stormoff').onclick = () => { sfx('click'); act('atmosStormOff', [b.id], () => { toast('The storm front breaks up: the sky over there clears.', 'info'); refreshSheet(); }); };
     if ($('sh-sstop')) $('sh-sstop').onclick = () => { sfx('click'); act('sunderStop', [b.id], () => { toast('The Sundering Ray stands down: the blow is lost.', 'info'); refreshSheet(); }); };
     if ($('sh-suser')) $('sh-suser').onclick = () => { sfx('click'); const on = !b.sUseR; act('sunderReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Ray winds up on it (${SUNDER.reactorCharge} s, ${SUNDER.uranium} Uranium or an Enriched Uranium a blow).` : 'Use Reactor off: with Generators in reach the Ray winds up on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
@@ -8867,6 +8873,7 @@ function refreshBuildingSheet(b) {
     if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
     if (def.t2 && typeof t2Panel === 'function') parts.push(...t2Panel(b, mine)); // (Composter, Tree Nursery, Water Pump: js/terraform2.js)
     if (def.t3 && typeof t3Panel === 'function') parts.push(...t3Panel(b, mine)); // (Seam Drill, Seed Mast, Thermal Plant: js/terraform3.js)
+    if ((def.t4 || def.sapexit) && typeof t4Panel === 'function') parts.push(...t4Panel(b, mine)); // (Sluice, Sap Head, Sap Exit: js/terraform4.js)
     if (def.farm) {
       const crops = reachableRes(b.x, b.y, def.radius, R_CROP), ripe = countResIn(b.x, b.y, def.radius, R_CROP, true, S.zone[tIdx(b.x, b.y)]);
       parts.push(`<div class="kv"><span>${S.wet ? 'Fertile or wet ground in reach' : 'Fertile soil in reach'}</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);

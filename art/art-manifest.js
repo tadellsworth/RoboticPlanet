@@ -316,6 +316,20 @@ const ART_MANIFEST = {
   ...Object.fromEntries(['seamdrill', 'seedmast', 'thermal'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
   ...Object.fromEntries([0, 1, 2, 3, 4].flatMap((g) => [1, 2, 3].map((v) => [`seedbed-${g}-${v}`, `resources/seedbed-${g}-${v}.webp`]))),
   ...Object.fromEntries([0, 1, 2, 3].map((g) => [`seedbed-${g}-glow`, `resources/seedbed-${g}-glow.webp`])),
+  // Terraforming, stage 4 (ART_GUIDE Batch 38: renderer/walls/b/earthwork.js, renderer/b/sluice.js and tunnel.js,
+  // installed by tools/install_t4.py): the earthworks' per-tile pieces on the walls' camera (an arm toward each joined
+  // side, then the post with the team's stake, lamp or cat's-eye), at three looks, baked with the ground (js/terraform4.js),
+  // and the posts' night lights; the Sluice for each side its water can be on, shut and open (the Mass Driver's frame);
+  // the Sap Head with its four-frame work loop; the Sap Exit.
+  ...Object.fromEntries(['bank', 'trench', 'teeth'].flatMap((k) => [0, 1, 2].flatMap((d) => [
+    ...['n', 'e', 's', 'w'].map((p) => [`ew-${k}-${p}-${d}`, B3D(`resources/ew/ew-${k}-${p}-${d}.webp`)]),
+    ...[0, 1].map((t) => [`ew-${k}-post-${d}@${t}`, B3D(`resources/ew/ew-${k}-post-${d}@${t}.webp`)]),
+    ...(k === 'bank' ? [0, 1].flatMap((t) => ['ew', 'ns'].map((a) => [`ew-${k}-hub-${a}-${d}@${t}`, B3D(`resources/ew/ew-${k}-hub-${a}-${d}@${t}.webp`)])) : []),
+    ...(d < 2 ? [0, 1].map((t) => [`ew-${k}-glow-${d}@${t}`, B3D(`resources/ew/ew-${k}-glow-${d}@${t}.webp`)]) : []),
+  ]))),
+  ...Object.fromEntries([0, 1].flatMap((t) => ['n', 's', 'e', 'w'].flatMap((d) => ['', '-open'].map((o) => [`sluice-${d}${o}@${t}`, { src: `buildings/sluice-${d}${o}@${t}.webp`, ...MD_FRAME }])))),
+  ...Object.fromEntries([0, 1].flatMap((t) => [0, 1, 2, 3].map((f) => [`saphead-f${f}@${t}`, B3D(`buildings/saphead-f${f}@${t}.webp`)]))),
+  'sapexit@0': B3D('buildings/sapexit@0.webp'), 'sapexit@1': B3D('buildings/sapexit@1.webp'),
   // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
   // graded with the light at dusk and night like other smoke.
   'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },

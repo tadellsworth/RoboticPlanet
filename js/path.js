@@ -63,6 +63,10 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * opts.rad: tiles in a radiation zone cost RAD.path more (a rival's army on the march); with `avoidFor` set they always do.
  * opts.grove: a player id (a rival's robot): tiles of a foe's grove cost GROVE.path more by its stage (groveCost), so it
  *   goes round where the way round is short and through where there is none. Unset (and nothing) with no groves.
+ * opts.ew: stage 4's earthworks (S.ewK): 1 a light robot (an Earth Bank, a Fire Trench or Dragon's Teeth cost EW.path more
+ *   to cross), 2 a heavy one (banks and teeth are closed to it), 3 a heavy army's (a foe's are open but dear, BREACH_COST
+ *   and their strength: it plans to shoot through, ewBreachHit). Unset with no earthworks. Water standing from a Sluice
+ *   (S.fld 3) is closed to everyone, the goal aside.
  * opts.safe: a danger map (dangerMap): a goods carrier's way round enemy guns, or none. Tiles a gun covers (bit 1) are
  *   closed, but for the first SAFE_POCKET tiles out of the cover it starts in (see safeRoute).
  * opts.maxExpanded: bound a speculative route search. Actual movement uses the full search.
@@ -85,6 +89,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const safe = (opts && opts.safe) || null, pkS = _pf.pkS, pkD = _pf.pkD;
   const cover = opts && opts.coverMap ? opts.coverMap : opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
   const grv = opts && opts.grove !== undefined && S.grove ? opts.grove : -1;
+  const ewo = opts && opts.ew && S.ewK ? opts.ew : 0, fld = S.fld || null; // (stage 4: earthworks and floods)
   const W = S.W, H = S.H, N = W * H, ov = anyOverpass();
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -157,6 +162,12 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (closed[nt] === gen) continue;
       if (!walkable(nt)) continue; // open ground, bridges and tunnels
       let wall = 0;
+      if (fld && fld[nt] === 3 && nt !== goal) continue; // (under a Sluice's flood: nobody walks there)
+      if (ewo && S.ewK[nt] && S.ewH[nt]) { // (an earthwork: EW)
+        const k = S.ewK[nt];
+        if (ewo >= 2 && k !== 2) { if (ewo < 3 || dir[2] > 1 || !foes(S.ewO[nt] - 1, who)) continue; wall = BREACH_COST + (S.ewH[nt] / EW.breach) * BREACH_PER_ARMOR; }
+        else wall = EW.path[EW_KINDS[k]];
+      }
       if (S.bAt[nt] && nt !== goal && !passTile(nt, who) && !(lineTile(nt) && getE(S.bAt[nt]).owner === who)) {
         if (!breach || dir[2] > 1 || !breachable(nt, who)) continue;
         wall = BREACH_COST + Math.max(0, getE(S.bAt[nt]).armor) * BREACH_PER_ARMOR;
@@ -171,6 +182,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         const a = cj * W + ni, b = nj * W + ci;
         if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND || S.terrain[nt] !== T_GROUND || S.terrain[cur] !== T_GROUND) continue;
         if ((S.bAt[a] && a !== goal) || (S.bAt[b] && b !== goal)) continue;
+        if (ewo >= 2 && (t4Shut(a, true) || t4Shut(b, true))) continue; // (no slipping a heavy robot diagonally through a line of earthworks)
         const e = S.elev[cur];
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
@@ -197,6 +209,18 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (nt >= 0 && closed[nt] !== gen && !(safe && (safe[nt] & 1))) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + (Math.abs(ni - ci) + Math.abs(nj - cj)) * ROAD_PREFERENCE / PAVE[1].speed;
+        if (stamp[nt] !== gen || ng < g[nt]) {
+          stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
+          heap.push(nt, ng + h(ni, nj));
+        }
+      }
+    }
+    // A Sap Head's sap (stage 4): down at one end, up at the other (its owner's ground robots), as long as its route.
+    if (S.bAt[cur] && who !== undefined) {
+      const nt = sapLink(cur, who);
+      if (nt >= 0 && closed[nt] !== gen && !(safe && (safe[nt] & 1))) {
+        const ni = nt % W, nj = (nt / W) | 0;
+        const ng = g[cur] + sapLen(cur) * SAP.cost * minStep;
         if (stamp[nt] !== gen || ng < g[nt]) {
           stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
           heap.push(nt, ng + h(ni, nj));

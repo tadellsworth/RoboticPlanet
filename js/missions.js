@@ -1579,6 +1579,42 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-attack' },
     ],
   },
+  // Terraforming, stage 4: military earthworks (EW, SLUICE, CAVE, SAP), on the Rust by its lake, the Murmur quiet.
+  {
+    id: 'groundwar', name: 'Ground War', chapter: 'First Contact',
+    brief: 'Earth: the one material the Accord never rationed. Bank it, cut it, flood it and tunnel through it: the Dozer\'s war.',
+    intro: [
+      'The Grader has four more jobs on <b>Build → Terraform</b> (<kbd>6</kbd>), dragged in a line like Walls and cheaper than them. They stand for everyone, your robots included.',
+      'An <b>Earth Bank</b> (<kbd>K</kbd>) stops vehicles and heavy robots (Bulwarks, trucks, Graders); other robots climb over slowly, and yours behind it take less fire. A <b>Fire Trench</b> (<kbd>X</kbd>) slows anyone crossing; yours in it take half the fire. <b>Dragon\'s Teeth</b> (<kbd>Z</kbd>) stop the heavy ones and let small robots through.',
+      'Shells and bombs wear them down to a breach; drag the same tool over a worn one to repair it. <b>Cave in</b> (<kbd>V</kbd>) collapses a Murmur tunnel for good, and the exits it cuts off from their nest.',
+      'A <b>Sluice</b> (<kbd>U</kbd>) on a lake shore floods the low ground beyond it when you open it. A <b>Sap Head</b> (<kbd>Q</kbd>) digs a tunnel along a route you plan from it, and your robots go through when it breaks out.',
+    ],
+    mode: 'colony', seed: 31, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 11, war: true, wildlife: true, murmur: 'quiet', limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT8, 4);
+      const P = S.players[0], L = getE(P.lander);
+      L.stock.stone += 60; L.stock.cement += 40; L.stock.alloy += 20; L.stock.chip += 6;
+      for (let k = 0; k < 2; k++) addBot(0, 'grader', L.x + k, L.y + 2);
+      P.stats.startBots = P.stats.bots;
+      // the nest nearest the colony has dug toward it overnight: a tunnel to cave in
+      const near = S.buildings.filter((b) => b.type === 'nest').sort((a, b) => dist2(a.x, a.y, L.x, L.y) - dist2(b.x, b.y, L.x, L.y))[0];
+      if (near) murmurPredig(near, 22, false);
+    },
+    goals: [
+      { kind: 'ewbank', n: [5, 6, 8], text: 'Heap an Earth Bank {n} tiles long', count: (P) => P.stats.ewbank || 0,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Terraform</b> (<kbd>6</kbd>) → <b>Earth Bank</b> (<kbd>K</kbd>): drag a line, then <b>Terraform</b> in the banner. A Grader heaps it.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='bank'], #banner-ok" },
+      { kind: 'caveIn', n: 1, text: 'Cave in a Murmur tunnel', count: (P) => P.stats.caveIn || 0,
+        hint: '<b>Terraform</b> (<kbd>6</kbd>) → <b>Cave in</b> (<kbd>V</kbd>), then tap a Murmur tunnel: the raised ridge with violet veins, toward the nest.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='cave'], #banner-ok" },
+      { kind: 'sluiceOpen', n: 1, text: 'Open a Sluice', at: 'sluice', count: (P) => P.stats.sluiceOpen || 0,
+        hint: '<b>Terraform</b> → <b>Sluice</b> (<kbd>U</kbd>) on the lake shore (<kbd>R</kbd> turns it), then tap it → <b>Open the Sluice</b> (<kbd>O</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='sluice'], #sh-sluice" },
+      { kind: 'sapOpen', n: 1, text: 'Dig a sap and break out', at: 'saphead', count: (P) => P.stats.sapOpen || 0,
+        hint: '<b>Terraform</b> → <b>Sap Head</b> (<kbd>Q</kbd>); tap it → <b>Plan sap</b> (<kbd>T</kbd>), drag a route out from it, then <b>Dig</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='saphead'], #sh-sap, #banner-ok" },
+    ],
+  },
   // The Hollow (the Murmur's cavern lair: its own map). No raids yet: the Murmur's night system will bring them.
   {
     id: 'hollow', name: 'Into the Hollow', chapter: 'First Contact',

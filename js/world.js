@@ -3654,6 +3654,7 @@ function passTile(t, who) {
   if (!b) return false;
   if (b.type === 'viaduct') return true;
   if (BDEFS[b.type].pylon) return !!S.road[t];
+  if (b.type === 'saphead' || b.type === 'sapexit') return who !== undefined && who === b.owner; // (stage 4: its owner's robots go down and up a sap through it)
   return (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
 
@@ -4419,6 +4420,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
     const r2 = canPlace(owner, type, i2, j2, skipBlockCheck, '_');
     if (!r2.ok) return { ok: false, reason: `It is two tiles long, and its other end won't go there: ${r2.reason}` };
     if (S.elev[tIdx(i, j)] !== S.elev[tIdx(i2, j2)]) return { ok: false, reason: 'It is two tiles long and needs level ground under both.' };
+    if (def.sluice) { const sw = sluiceWhy(i, j, axis); if (sw) return { ok: false, reason: sw }; } // (stage 4: on the bank, water on one side, low ground on the other)
     return r;
   }
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
@@ -4432,6 +4434,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
   if (S.walker && walkerYard(i, j)) return { ok: false, reason: 'The Walking Factory\'s yard: it walks here, so nothing can be built on it.' };
+  if (S.ewK && S.ewK[t]) return { ok: false, reason: 'An earthwork stands here (an Earth Bank, a Fire Trench or Dragon\'s Teeth).' };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
@@ -4769,6 +4772,7 @@ function canRoad(owner, i, j) {
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
+  if (S.ewK && S.ewK[t]) return false; // (stage 4: an earthwork stands here)
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -5986,6 +5990,9 @@ function destroyBuilding(b, burn, quiet) {
   // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
   if (typeof dropLoot === 'function' && (b.built || !burn) && !shaft) dropLoot(b); // (a Deep Core's stock is lost with it)
   if (BDEFS[b.type].magterm) magTermDown(b);
+  // (stage 4: a Sap Exit gone shuts its sap; a Sap Head gone takes its exit with it)
+  if (BDEFS[b.type].sapexit && typeof sapExitLost === 'function') sapExitLost(b, b.lastHitBy ?? -1);
+  if (BDEFS[b.type].saphead && b.sap && b.sap.exit) { const e = getE(b.sap.exit); b.sap.exit = 0; if (e && !e.dead) { e.head = 0; destroyBuilding(e, false, true); } }
   releaseBotsFrom(b, !!burn);
   // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
   // destroyed by force (P.avoid, see aiSearchSpot): it used to put the next one up in the same crater.
@@ -6205,7 +6212,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
+const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS', 'ewK', 'ewO', 'ewH', 'fld', 'caveIn']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -6394,7 +6401,7 @@ function checkSave(o) {
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     // an Earthworks site's job (TERRA): raise or lower to a level, fill or dig
-    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig', 'soil', 'clear'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
+    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig', 'soil', 'clear', 'bank', 'trench', 'teeth', 'ewfix', 'cave'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
     if (b.type === 'earthwork' && b.tf == null) bad();
     if (b.keepStaff != null && b.keepStaff !== 1) bad(); // (Keep staffed: ORDERS.keepStaff)
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
@@ -6423,6 +6430,11 @@ function checkSave(o) {
     for (const k of ['mdAt', 'mdNext']) if (b[k] != null && !(Number.isSafeInteger(b[k]) && b[k] >= 0)) bad();
     if (b.mdFar != null && b.mdFar !== 0 && b.mdFar !== 1) bad();
     // a Catcher kit to throw (its tile), a Catcher kit assembling itself, the land a Port or a kit's Catcher claims
+    // (Terraforming stage 4: a Sluice's flood, a Sap Head's sap, a Sap Exit's head; tiles on the map, times as numbers)
+    if (b.fl != null && !(b.type === 'sluice' && obj(b.fl) && Array.isArray(b.fl.ts) && b.fl.ts.length <= 400 && b.fl.ts.every(tileOk) && Array.isArray(b.fl.d) && b.fl.d.length === b.fl.ts.length && b.fl.d.every((v) => Number.isInteger(v) && v > 0 && v < 1e5) &&
+      Array.isArray(b.fl.st) && b.fl.st.length === b.fl.ts.length && b.fl.st.every((v) => Number.isInteger(v) && v >= 0 && v <= 5) && ['t0', 'top', 'n', 'rs'].every((k) => Number.isFinite(b.fl[k])))) bad();
+    if (b.sap != null && !(b.type === 'saphead' && obj(b.sap) && Array.isArray(b.sap.route) && b.sap.route.length <= SAP.most && b.sap.route.every(tileOk) && Number.isInteger(b.sap.dug) && b.sap.dug >= 0 && b.sap.dug <= b.sap.route.length &&
+      Number.isFinite(b.sap.acc) && Number.isSafeInteger(b.sap.exit) && (b.sap.heard == null || obj(b.sap.heard)))) bad();
     if (b.mdKit != null && !(b.type === 'mdriver' && Array.isArray(b.mdKit) && b.mdKit.length === 2 && Number.isInteger(b.mdKit[0]) && Number.isInteger(b.mdKit[1]) && b.mdKit[0] >= 0 && b.mdKit[1] >= 0 && b.mdKit[0] < o.W && b.mdKit[1] < o.H)) bad();
     if (b.kitT != null && !(b.type === 'catcher' && b.kitT === 1)) bad();
     if (b.claim != null && !(Number.isInteger(b.claim) && b.claim >= 0 && b.claim <= 8)) bad();

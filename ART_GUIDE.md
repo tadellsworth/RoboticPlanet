@@ -2080,6 +2080,63 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 38: Terraforming stage 4, the earthworks, the Sluice and the Sap Head (installed; floods, grooves and saps drawn in code)
+
+Stage 4 of terraforming (Nov 2026; README, "Terraforming, stage 4") went through Claude Design: the concept canvas
+https://claude.ai/artifact/XFAcyN9iEgNpPoSe4mMitp showed two or three concepts for each earthwork, three Sluice Dams,
+two tunnel bores, the flood and the cave-in. The owner said "your picks for all": **Earth Bank** (Berm concept A, the
+rounded bank of turned earth), **Fire Trench** (concept A, Revetted), **Dragon's Teeth** (Tank traps concept B, concrete
+pyramids), **Sluice** (Sluice Dam concept A, Radial Gates), **Sap Head** (Tunnel Bore concept A). The canvas rendered
+whole dioramas; the game needs pieces:
+
+- **The earthworks** are per-tile pieces that join like the Walls (`renderer/walls/b/earthwork.js`, the walls'
+  orthographic 57° camera, so a tile's arms meet the next tile's on screen): a **post** (the middle of the tile, with the
+  team's colour: the bank's survey stake, the trench's lamp post, the tooth's cat's-eye) and four **arms** (n, e, s, w,
+  out to the tile's edge; the same for every team), each at three looks: **intact**, **worn** (slumped by a quarter,
+  cratered, sandbags and sheets gone, teeth chipped and leaning) and **breached** (the bank's middle gone to slumped ends,
+  the trench filled with spoil, the teeth toppled to rubble). The ground is left out (transparent, shadows on a catcher):
+  the game bakes them over its own ground and grades them with it, so there are no time-of-day renders; the posts' glow
+  pass is their night light. A bank's bumps repeat every tile (sines of whole periods), so the arms of neighbours meet
+  without a seam. The Fire Trench is cut below the ground: an invisible occluder stands for the ground round the cut.
+- **Sluice** (`renderer/b/sluice.js`, shipped without the concept's land and water, which the game draws): the concrete
+  sill and apron, three piers, two curved steel radial gates on trunnion arms, the deck with its railings, a hoist house
+  over each bay (the team strip; the accent lamps lit while it runs), a floodlight and a beacon; for each side its water
+  can be on (`dir=n|s|e|w`), shut and open (the gates swung up, the spill sheet and its foam), both teams, every time of
+  day, framed like the Mass Driver (two tiles).
+- **Sap Head** (`renderer/b/tunnel.js` `c=sap`, the canvas's scene): a steel-arched adit ramping into the ground under an
+  A-frame headframe, skips on rails tipping spoil onto a conveyor to a heap, a vent fan, a winch house; four frames of its
+  work (the skip's run, the fan, the spoil), both teams, every time of day. Its break-out, the **Sap Exit** (`c=exit f=1`):
+  heaved slabs round a ragged hole, a ring segment showing, lights rigged on two posts, the team strip.
+
+`renderer/tools/render_t4.sh` renders them all (54 earthwork pieces, 104 building renders, about ten minutes),
+`renderer/tools/install_t4.py` installs them as WebP.
+
+**Accents.** Every accent was checked on the canvas as distance in Lab colour space against all the others, the team
+colours, the Murmur's violet, lava, Ring Crystal and the lamps:
+- **Sluice: spillway mint `#b8ffe8`** (pale foam green), nearest the Harvester and Grower (ΔE 26) and the Uplink (27),
+  far from the Water Pump's blue.
+- **Sap Head: tunnel-lamp salmon `#ffa38c`**, nearest the window glow (29), the Composter (33), Vermilion (35): warm
+  like work lamps underground, not the Murmur's violet.
+- **Earthworks: team colour only**, like Walls and every defence: stakes, lamps and cat's-eyes in the owner's colour.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `ew-<kind>-post-<d>@0`, `@1` (kind bank, trench, teeth; d 0 intact, 1 worn, 2 breached) | The tile's middle: a mound with a survey stake (bank), a square of the cut with a lamp post at its lip (trench), one big tooth with a cat's-eye (teeth); 256 px | Baked with the map (`t4PaintTile`, `ewDraw`) after the arms north, west and east and before the south arm, as the Walls are layered; 1.4 tiles across (`B3D`) |
+| `ew-<kind>-<n|e|s|w>-<d>` | An arm out to that edge: the bank's profile, the trench's cut with steel sheets, duckboards and sandbag lips, two staggered teeth on footings | One for each side joined to an earthwork of the same kind; a lone tile gets east and west |
+| `ew-<kind>-glow-<d>@0`, `@1` (d 0, 1) | The post's lights: the stake's tip, the lamp, the cat's-eye, from its glow pass, softened, 128 px | In the night glow map (`t4Glow`); none when breached |
+| `sluice-<dir>@0`, `@1`, `sluice-<dir>-open@0`, `@1` (+ times of day) | The Sluice with its water on side `dir`, shut and open | At its two tiles' middle (`bCentre`), the side from `sluiceDir`; the open look while it pours |
+| `saphead-f0`…`f3` `@0`, `@1` (+ times of day) | The Sap Head and its work | `f0` standing, the four in turn (3 a second) while it digs |
+| `sapexit@0`, `@1` (+ times of day) | A sap's break-out | As any building |
+
+Drawn in code (`js/terraform4.js`): **the flood** over the ground each frame (only a flood's own tiles, graded with the
+ground): pouring (pale foam), spreading (brown-blue water), under water (deep blue, slow ripples), wet mud (dark, a
+gloss), dried silt (pale, cracked), streaks running away from the Sluice, the mint foam at an open Sluice's gates;
+**the groove** of a caved-in tunnel, baked: the ridge slumped to a trough along the tunnel with its spoil either side and
+dead grey veins across it; **your saps** over the graded ground: the route dashed in salmon, solid where dug, the head
+ringed and pulsing, the end boxed; **a tremor** you feel: amber rings spreading where the ground shook. While the
+earthwork pieces load (and if one is missing) they are drawn in code in the same layout and looks. The minimap shows
+earthworks as dark earth (the teeth pale), a flood blue, mud brown, a groove dark.
+
 ### Batch 37: Terraforming stage 3, the Seam Drill, Seed Mast, Thermal Plant and the Crystal Seedbed (installed; seams drawn in code)
 
 Stage 3 of terraforming (Nov 2026; README, "Terraforming, stage 3") went through Claude Design: the concept canvas
