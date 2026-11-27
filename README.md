@@ -4429,7 +4429,16 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   Hollow has none. The Ring shows as a faint arc over the top of the view zoomed out. A storm, fog or dust storm mutes
   it. Two passes: `duskGround` after `todGradeGround` (under the buildings, so team colours keep their light) and
   `duskSky` after the sky's beacons (lighter, and fainter zoomed far in). Graphics Saver keeps just the colour grade;
-  with reduce motion nothing drifts or twinkles.
+  with reduce motion nothing drifts or twinkles. **The light grade, Auto only** (`duskWatch`, called with each frame's
+  ms from main.js; `DUSK_LITE`): while a dusk or dawn shows, frames are averaged over `win` (2) s; over `slow` (33 ms)
+  the light grade is wanted, under `fast` (20 ms) the full one again, a change at most every `dwell` (6) s (doubled, up
+  to 8 times, when the last change was undone within 20 s), faded over `fade` (1.5) s (`DUSK.lite`, `D.lite`). Light:
+  one soft-light pass over the ground (`duskLiteGround`) in place of the soft light, colour dodge and multiply
+  (`duskFullGround`), no heat shimmer, and over everything standing one soft-light gradient on the sun's half in place
+  of the tint and the glare (`duskGlare`). High and Ultra always draw the full grade, Saver its flat one. Measured
+  (headless Chrome, software drawing, a 22-minute 2-colony save, the median frame drawn through to its pixels): desktop
+  1600x900 at z47, day 23 ms, dusk 65-70 ms full, 45-55 ms light; phone 390x844 with touch at z35, day 18 ms, dusk
+  60-68 ms full, 41-52 ms light.
 Ground light follows each structure’s footprint. Mass Drivers and Catchers have local status lights, and the checked megastructures and newer ground units have lights attached to their own art. Express gantries light their two lanes independently.
 
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that

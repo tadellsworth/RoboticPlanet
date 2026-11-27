@@ -3,6 +3,21 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## A lighter dusk on slow devices (built Nov 27 2026, Auto only: open questions)
+
+On Graphics Auto, dusk and dawn frames averaging over 33 ms across 2 s bring in a lighter grade (`duskWatch`,
+`DUSK_LITE` in js/sunset.js; ART_GUIDE "The light dusk grade"): one soft-light pass over the ground for the three, no
+heat shimmer, one soft-light gradient on the sun's half for the sky's tint and glare; back under 20 ms, at most every
+6 s, faded over 1.5 s. High and Ultra always full, Saver unchanged. Measured in headless Chrome (software drawing):
+13 to 24 ms saved a dusk frame on desktop 1600x900 and on a phone 390x844. Open:
+- The thresholds (33 and 20 ms) are a guess: a device that draws the light grade at just under 20 ms goes back to the
+  full one, slows past 33 and comes back again; the back-off (the wait doubling to 48 s) keeps that rare. Tune on a real
+  phone.
+- The light grade's sun side is a little less bright than the full grade's colour dodge (about 8% less red at the
+  height of the dusk on the Rust). Fine by eye; the owner may want it closer.
+- What's left at dusk is mostly not the grade: the long shadows and the evening's re-lit art. A lighter set of those
+  for slow devices would be the next step if dusk still drags.
+
 ## Economy balance audit to-do
 
 1. **Resource bottlenecks.** [First pass](docs/economy-balance-audit.md#resource-bottlenecks); [the Ore pickup stalls](docs/economy-balance-audit.md#why-ore-pickups-stall) were Haulers giving way to Murmur Scuttlers roaming by the road to the Mine (1,005 of 1,154 trips given up on `d9bf339`, none to guns). Done (the owner's call, [third pass](docs/economy-balance-audit.md#murmur-on-supply-roads)): turn-backs to one building back off 5 → 10 → 20 → 40 s, output pickups honour the wait (they never did), the panel says why, and a rival sends three warbots to clear the road. On `d9bf339`'s first 28 minutes Mine pickups turned back fell from 69 to 20.

@@ -126,7 +126,7 @@ function step(now) {
   stage('draw', now, () => {
     _drawDt += dt;
     if (!drawNeeded(now)) return;
-    if (UI.inGame) watchFrameRate(ms);
+    if (UI.inGame) { watchFrameRate(ms); if (typeof duskWatch === 'function') duskWatch(ms); } // (duskWatch: Auto's lighter dusk grade when frames come slowly, js/sunset.js)
     const dtDraw = Math.min(0.1, _drawDt); // (the time since the last frame drawn, so what moves by the clock keeps its pace)
     if (UI.photo) photoRender(dtDraw); else render(dtDraw); // (photo mode: the picture without the interface's marks, js/photo.js)
     _drawAt = now; _drawDt = 0; R.dirty = false;

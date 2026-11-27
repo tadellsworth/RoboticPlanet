@@ -81,7 +81,19 @@ different per biome. `js/sunset.js` lays a render-only layer over the day-and-ni
 re-render. Corvane sets in the west and rises in the east (the evening shadows fall east), so the land is lit from that
 side of the screen and falls into a cool shade on the far side. The grade is soft light (the land keeps its contrast:
 nothing is washed pale), a colour-dodge glow brightens the lit side's light tones, a multiply deepens the far side, and
-over everything standing goes a lighter soft-light grade and the low sun's glare. The rules a new biome's palette
+over everything standing goes a lighter soft-light grade and the low sun's glare.
+
+**The light dusk grade (Auto only).** On a slow device those full-screen blends cost about 25 ms a frame. On Graphics
+Auto, when frames at dusk or dawn average over 33 ms across 2 s, `duskWatch` brings in a lighter grade, faded across in
+1.5 s: one soft-light pass over the ground with the same three colours along the sun line (the `sun` made deeper and a
+touch brighter on the sun's side for the colour dodge's burn, the `tint` across the middle, the `shade` darkened beyond
+for the multiply), no heat shimmer, and over everything standing one soft-light gradient from the `sun` into the `tint`
+on the sun's half of the screen in place of the tint and the glare. Glints, haze, silhouettes, the Ring and motes stay.
+It goes back to the full grade under 20 ms, a change at most every 6 s (longer after one undone at once). High and
+Ultra always draw the full grade; Saver keeps its one flat pass. A new palette must read in both: check a biome's dusk
+with `DUSK.liteOn = true; DUSK.lite = 1` too (`DUSK_LITE` holds the numbers).
+
+The rules a new biome's palette
 should keep (`DUSK_BIOMES`: three stops, `sun`, `tint`, `shade`, for golden hour, fire and violet):
 
 | Biome | Sunset | Touches |
