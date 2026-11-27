@@ -4778,6 +4778,22 @@ function thermalHeat(t) {
   return n;
 }
 function thermalHot(b) { return thermalHeat(tIdx(b.x, b.y)) > 0; }
+/**
+ * A Thermal Plant of b's owner whose reach (THERMAL.radius) covers building b, built, on, not cut by the Murmur and on
+ * hot ground: power with no Fuel, or null. A Maglev Terminal and a Mass Driver end take it as a Generator's
+ * (magPowered; a shot on it costs no Fuel: mdShotPower). The megastructures never do: they read only a Generator's
+ * Fuel (megaGens, atmosGens), and updateGenerator leaves them out of a Thermal Plant's reach (the owner, Nov 27 2026:
+ * a Fuel-free Deep Core on volcanic maps would be too strong).
+ */
+function thermalNear(b) {
+  if (!b || b.dead || !b.built) return null;
+  const r2 = THERMAL.radius * THERMAL.radius;
+  for (const g of S.buildings) {
+    if (g.dead || g.owner !== b.owner || !g.built || g.type !== 'thermal' || g.paused || murmurCutOn(g)) continue;
+    if (dist2(g.x, g.y, b.x, b.y) <= r2 && thermalHot(g)) return g;
+  }
+  return null;
+}
 
 /* -- seams */
 
@@ -5656,7 +5672,7 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || BDEFS[c.type].t3pow || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || BDEFS[c.type].t3pow || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !G.heat && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds; a Thermal Plant powers no megastructure: thermalNear)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '') || (BDEFS[c.type].t3pow && c.t3want && !c.paused)) busy++; // (a Seam Drill or Seed Mast asking for power: stage 3)
@@ -20749,9 +20765,13 @@ function magPairCut(a, o) { const K = magKey(a, o); return magCut(K, K === a ? o
 /** Is any of Terminal b's lines cut? */
 function magLineCut(b) { return magPartners(b).some((o) => magPairCut(b, o)); }
 
-/** A Generator of Terminal b's owner within its radius with Fuel to burn (not off, not cut by the Murmur): the Terminal has power. */
+/**
+ * A Generator of Terminal (or Mass Driver end) b's owner within its radius with Fuel to burn, or a Thermal Plant's
+ * reach (thermalNear), not off, not cut by the Murmur: it has power.
+ */
 function magPowered(b) {
   if (!b || b.dead || !b.built || murmurCutOn(b)) return false;
+  if (thermalNear(b)) return true;
   const G = BDEFS.generator.burner, r2 = G.radius * G.radius;
   for (const g of S.buildings) {
     if (g.dead || g.owner !== b.owner || !g.built || g.type !== 'generator' || g.paused || murmurCutOn(g)) continue;
@@ -21119,7 +21139,7 @@ function updateMagTerm(b, dt) {
   const cutTo = ps.find((o) => magPairCut(b, o)), hub = ps.length > 1 ? `Hub of ${ps.length} lines. ` : '', lost = magMiss(b).length ? ' (a line suspended: rebuild its lost Terminal)' : '';
   if (cutTo) { const K = magKey(b, cutTo); b.status = hub + (K.magFix && K.magFix.u ? 'Line cut: a Worker is rebuilding the pylon' : K.magFix && !K.magFix.paid ? `Line cut: waiting for ${costText(magLineCost(MAGLEV.spacing))} to rebuild the pylon` : 'Line cut: a pylon is down'); }
   else if (!pods.length) b.status = hub + 'On a line, no pods yet: order them below (4 Alloy, 2 Chips each)';
-  else if (!magLinePowered(b)) b.status = hub + (flareOn() ? 'Solar flare: the pods crawl' : !magPowered(b) ? 'No power: build a Generator (with Fuel) within 4 tiles; the pods crawl' : 'No power at the other end: the pods crawl');
+  else if (!magLinePowered(b)) b.status = hub + (flareOn() ? 'Solar flare: the pods crawl' : !magPowered(b) ? `No power: build a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles, or a Thermal Plant within ${THERMAL.radius}; the pods crawl` : 'No power at the other end: the pods crawl');
   else { const n = pods.filter((u) => u.magTo).length; b.status = hub + (running || n ? `Line running: ${n} pod${n === 1 ? '' : 's'} on the way` : 'Line powered: pods loading'); }
   b.status += lost;
 }
@@ -22046,7 +22066,13 @@ function mdHeld(p, g) {
 }
 
 /** The reserve end b keeps at home of good g it sends (its goods list's, else MASSDRIVER.reserve), or undefined if it doesn't send it. */
-function mdReserveOf(b, g) { return b.mdSend ? b.mdSend[g] : mdAutoN(b, g) > 0 ? MASSDRIVER.reserve : undefined; }
+function mdReserveOf(b, g) {
+  if (b.mdSend) return b.mdSend[g];
+  if (!(mdAutoN(b, g) > 0)) return undefined;
+  // (Fuel for the far end's own Generator, which powers its shots home, goes from a smaller reserve; and a rival's
+  // Alloy and Chips never sit in storage, so it ships from a smaller one: the economy audit of Nov 26 2026.)
+  return g === 'fuel' ? MASSDRIVER.fuelReserve : S.players[b.owner] && S.players[b.owner].ai ? MASSDRIVER.aiReserve : MASSDRIVER.reserve;
+}
 
 /** How much more of good g Haulers should bring end b (the near end only): up to its hopper (or what it ships), from what the colony holds beyond the reserve. */
 function mdWant(b, g) {
@@ -22162,7 +22188,7 @@ function updateMassDriver(b, dt) {
   }
   if (drv && b.mdKit && mdKitLoaded(b)) {
     // A Catcher kit loaded comes first.
-    if (!magPowered(b)) b.status = `A Catcher kit is loaded: waiting for power (a Generator with Fuel within ${BDEFS.generator.burner.radius} tiles)`;
+    if (!magPowered(b)) b.status = `A Catcher kit is loaded: waiting for power (a Generator with Fuel within ${BDEFS.generator.burner.radius} tiles, or a Thermal Plant within ${THERMAL.radius})`;
     else if (b.mdCd > 0) b.status = `A Catcher kit is loaded: it flies in ${Math.ceil(b.mdCd)}s`;
     else {
       b.mdFire = S.time + MASSDRIVER.charge;
@@ -22195,7 +22221,7 @@ function updateMassDriver(b, dt) {
     if (L.n >= M.load || (S.time - (b.mdLast || 0) >= M.partWait && L.n >= Math.min(M.partMin, whole))) { to = o; n = L.n; break; }
   }
   const pow = magPowered(b);
-  if (!pow) b.status = best ? `Waiting for power: it fires only with a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles` : `Catching${drv ? '' : ' canisters'}; it fires only with a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles`;
+  if (!pow) { const need = `a Generator (with Fuel) within ${BDEFS.generator.burner.radius} tiles or a Thermal Plant within ${THERMAL.radius}`; b.status = best ? `Waiting for power: it fires only with ${need}` : `Catching${drv ? '' : ' canisters'}; it fires only with ${need}`; }
   else if (b.mdCd > 0) b.status = `Reloading: next shot in ${Math.ceil(b.mdCd)}s`;
   else if (to) {
     b.mdFire = S.time + M.charge;
@@ -22234,11 +22260,39 @@ function mdLaunch(b) {
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: C.id, goods, t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
     x0: o.x, y0: o.y, x1: C.x + 0.5, y1: C.y + 0.5, hp: M.hp });
   b.mdCd = mdReload(b, C) - M.charge; // (a shot every `reload` s, `reloadLand` s over land, its coils' charge included)
+  mdShotPower(b);
   b.mdLast = S.time;
   b.mdShot = S.time; // (the muzzle flash and the guidance beam: see drawMassDrivers)
   b.mdSent = (b.mdSent || 0) + n;
   b.working = true;
   sfx('mdlaunch', b.x + 0.5, b.y + 0.5);
+}
+
+/**
+ * A shot's power (MASSDRIVER.shot): `shot` seconds of a Generator's work taken from the one in reach with the most
+ * Fuel (its b.energy, a Fuel burned for more when it runs out): half a Fuel a shot at today's numbers. (The economy
+ * audit of Nov 26 2026: a line's Generators burned 0.2 Fuel a minute, next to nothing, against about 2 for a Maglev
+ * line's and 1 to 2 for four Freight Trucks: now about 3 a minute at each end at full rate.)
+ */
+function mdShotPower(b) {
+  if (thermalNear(b)) return; // (a Thermal Plant in reach powers the shot with no Fuel; it comes first)
+  const G = BDEFS.generator.burner, r2 = G.radius * G.radius;
+  let g = null;
+  for (const o of S.buildings) {
+    if (o.dead || o.owner !== b.owner || !o.built || o.type !== 'generator' || o.paused || murmurCutOn(o) || dist2(o.x, o.y, b.x, b.y) > r2) continue;
+    if (!g || (o.energy || 0) + (o.stock.fuel || 0) * G.perFuel > (g.energy || 0) + (g.stock.fuel || 0) * G.perFuel) g = o;
+  }
+  if (!g) return;
+  let need = MASSDRIVER.shot;
+  while (need > 0) {
+    if ((g.energy || 0) <= 0) {
+      if (!((g.stock.fuel || 0) >= 1)) break;
+      bump(g.stock, 'fuel', -1); usedGood(g.owner, 'fuel', 1);
+      g.energy = (g.energy || 0) + G.perFuel;
+    }
+    const k = Math.min(need, g.energy);
+    g.energy -= k; need -= k;
+  }
 }
 
 /** Canister m's height (tiles) at fraction k of its flight: an arc over everything, higher the further it flies. */

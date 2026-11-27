@@ -2609,11 +2609,11 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 
 /**
  * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
- * 4 Defend, 5 All, 6 Mega (the megastructures, shown after All), 7 Terraform (its five tools, not buildings); Tab steps through them), then a building's letter on that tab starts placing it. Letters
+ * 4 Defend, 5 Mega (the megastructures), 6 Terraform (its tools and buildings); Tab steps through them), then a building's letter on that tab starts placing it. Letters
  * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
  * map, and B closes the menu except on the Make tab, where B is the Bot Foundry (Build, 2, B). R lays roads (the Move tab's Roads card) except on a tab with a
  * building on R (Gather: Ore Mine; Make: Refinery), where R picks that building; the
- * Defend tab's Walls card is X, as in Paths. On the All tab each card shows its tab's number and letter.
+ * Defend tab's Walls card is X, as in Paths.
  */
 const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
@@ -2626,7 +2626,7 @@ const BUILD_KEYS = {
   // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T).
   terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't' },
 };
-const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6', terra: '7' };
+const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', mega: '5', terra: '6' };
 /**
  * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
@@ -2911,11 +2911,11 @@ function renderKeys() {
   };
   const tabs = Object.entries(BUILD_TAB_KEYS).map(([group, key]) => {
     const def = BUILD_GROUPS.find(({ key }) => key === group);
-    const title = `${caps([key])} ${def ? def.name : group === 'terra' ? 'Terraform' : 'All'}`;
+    const title = `${caps([key])} ${def ? def.name : 'Terraform'}`;
     const rows = Object.entries(BUILD_KEYS[group] || {}).map(([type, letter]) => [[letter], BDEFS[type] ? BDEFS[type].name : TF_TOOLS_UI[type.slice(3)].name]);
     if (def?.roads) rows.unshift([['r'], 'Roads']);
     if (def?.walls) rows.unshift([['x'], 'Walls']);
-    return rows.length ? sub(title, rows) : `<h4>${title}</h4><p>Use a card’s tab number, then its letter.</p>`;
+    return sub(title, rows);
   });
   const col = (...sections) => `<div class="ks-column">${sections.join('')}</div>`;
   $('keys-body').innerHTML = col(
@@ -2999,7 +2999,7 @@ function initKeyboard() {
     // selected warbots and Howitzers as a group, 1–9 selects it again (press twice to jump to it). Shift always reaches the game;
     // a browser tab on a Mac may keep Cmd+1–9 for itself (it switches tabs).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
-    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All, 6 Mega).
+    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 Mega, 6 Terraform).
     if (digit && UI.sheetKind === 'build' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       const g = Object.keys(BUILD_TAB_KEYS).find((t) => BUILD_TAB_KEYS[t] === digit[1]);
       const tab = g && $('build-tabs') && $('build-tabs').querySelector(`[data-g="${g}"]`);
@@ -3085,11 +3085,6 @@ function initKeyboard() {
       const type = keys && Object.keys(keys).find((t) => keys[t] === k);
       const card = type && $('sheet-body').querySelector(type.startsWith('tf-') ? `.bcard[data-tf="${type.slice(3)}"]` : `.bcard[data-t="${type}"]`);
       if (card && !card.hidden) { e.preventDefault(); if (card.disabled) sfx('error'); else card.click(); return; }
-      if (!keys && Object.values(BUILD_KEYS).some((m) => Object.values(m).includes(k))) {
-        e.preventDefault();
-        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend, 6 Mega, 7 Terraform.`, 'info');
-        return;
-      }
     }
     // Placing a blueprint: R turns it.
     if (R.mode === 'bpplace' && k === 'r') { e.preventDefault(); bpRotate(); return; }
@@ -4627,8 +4622,8 @@ function coachTargetAll(g, sel) {
   for (const part of sel.split(',')) {
     for (const [re, to] of COACH_OPENERS) { const opener = typeof to === 'function' ? to() : to; if (re.test(part) && !open.includes(opener)) open.push(opener); }
     // (A card on another tab of the open build menu: that tab.)
-    const card = part.match(/\.bcard\[data-t=['"]?(\w+)/), grp = card && BUILD_GROUPS.find((gr) => gr.types.includes(card[1]));
-    if (grp && !open.includes(`#build-tabs [data-g="${grp.key}"]`)) open.push(`#build-tabs [data-g="${grp.key}"]`);
+    const card = part.match(/\.bcard\[data-t=['"]?(\w+)/), tab = card && ((BUILD_GROUPS.find((gr) => gr.types.includes(card[1])) || buildKeyOf(card[1]) && { key: buildKeyOf(card[1]).tab }) || {}).key;
+    if (tab && !open.includes(`#build-tabs [data-g="${tab}"]`)) open.push(`#build-tabs [data-g="${tab}"]`);
     if (/#sh-/.test(part)) panel = true;
   }
   return { sel: open.join(', ') || sel, ring: panel ? coachBuilding(g) : null };
@@ -5289,7 +5284,7 @@ function renderMagSection(b) {
     }
     const cut = lines.find((l) => l.cut);
     if (cut) h += `<p class="hint">${cut.fix && cut.fix.u ? 'A Worker is riding out to rebuild the pylon.' : cut.fix && !cut.fix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods keep off that line until then.</p>`;
-    else if (lines.some((l) => !l.powered)) { const o = lines.find((l) => !l.powered).o; h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : `The Terminal ${dirText(b, o)}`} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles: build one, and keep it fuelled. Both ends of a line need power.`}</p>`; }
+    else if (lines.some((l) => !l.powered)) { const o = lines.find((l) => !l.powered).o; h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : `The Terminal ${dirText(b, o)}`} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles (or Thermal Plant within ${THERMAL.radius}): build one, and keep a Generator fuelled. Both ends of a line need power.`}</p>`; }
     const bent = ps.map((o) => { const K = magKey(b, o); return (K.magBends || []).length; }).reduce((a, n) => a + n, 0);
     if (bent) h += `<div class="kv"><span>Bends</span><span>${bent} (pods slow round the sharp ones)</span></div>`;
     if (ps.length > 1) h += `<div class="kv"><span>Pods through without stopping</span><span>${b.magThrough || 0}</span></div>`;
@@ -5682,8 +5677,8 @@ function renderMdSection(b) {
     const land = rates[k] === M.reloadLand, who = ps.length > 1 ? ` to the Driver ${dirText(b, o)}` : '';
     h += `<div class="kv"><span>Rate${who}</span><span>a shot every ${rates[k]} s each way: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
   });
-  h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach' : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
-  if (!pow) h += `<p class="hint">It burns no Fuel itself, but it fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles. Fuel can fly here by canister, in sealed drums.</p>`;
+  h += `<div class="kv"><span>Power</span><span>${pow ? (thermalNear(b) ? 'A Thermal Plant in reach: no Fuel a shot' : 'A Generator in reach: half a Fuel a shot') : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
+  if (!pow) h += `<p class="hint">It fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles, and each shot draws half a Fuel from it, or a <b>Thermal Plant</b> within ${THERMAL.radius} on hot ground, which needs none. Fuel can fly here by canister, in sealed drums.</p>`;
   if (fort) {
     h += `<p class="hint">One way: it keeps the ${BDEFS[live.type].name}'s Ammo${live.type === 'keep' ? ' and its cannon\'s Crystal' : ''} topped up for the warbots stationed there, out of what your colony holds beyond ${M.reserve} at home.${ships.length ? ` On its way: ${gl(Object.fromEntries(ships))}.` : ''}</p>`;
   } else if (ps.length) {
@@ -5691,7 +5686,7 @@ function renderMdSection(b) {
     if (far && b.auto) h += `<div class="kv"><span>Keeps here</span><span>${gl(b.auto)}</span></div>`;
     h += `<div class="section-label">Goods to send <span class="label-note">${manual ? `a goods list: up to ${M.goods}; the number is what stays home` : 'Auto: what the other end needs'}</span></div>`;
     h += `<div class="seg" id="sh-mdmode"><button data-v="auto" class="${manual ? '' : 'on'}">Auto</button><button data-v="list" class="${manual ? 'on' : ''}">Goods list</button></div>`;
-    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each.`}</p>`;
+    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each (Fuel beyond ${M.fuelReserve}, for the far end's Generator).`}</p>`;
     else {
       const gs = Object.keys(list || {});
       h += gs.length ? `<div class="keep-list" id="sh-mdlist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name} <small>(${Math.floor(b.stock[g] || 0)} loaded)</small></span><b class="n">${list[g]}</b>
@@ -7903,7 +7898,6 @@ function openSheet(kind, id, html) {
   $('sheet').classList.toggle('compact-supply', type === 'dropost' || type === 'crawlerbase');
   document.body.classList.add('sheet-open');
   document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
-  if (kind !== 'build') document.body.classList.remove('sheet-build-all'); // (its All tab: wider still on a desktop)
   document.body.dataset.sheet = kind; // (the Command Deck look lights the tool whose panel is open)
   $('banner').hidden = true;
   markSheetKeys();
@@ -8097,7 +8091,7 @@ function closeSheet() {
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
   sheetColsOff();
-  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-build-all', 'sheet-wf', 'sheet-econ');
+  document.body.classList.remove('sheet-open', 'sheet-build', 'sheet-wf', 'sheet-econ');
   delete document.body.dataset.sheet;
   UI.sheetKind = null;
   UI.sheetFor = 0;
@@ -8116,7 +8110,7 @@ function costInline(cost, have) {
 }
 
 /**
- * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, then All, then Mega), the
+ * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, Mega, then Terraform), the
  * last one used remembered, each with its number key. Every card is in the page whichever tab is showing
  * (the others are just hidden); a letter picks a building on the tab that's showing (BUILD_KEYS).
  */
@@ -8126,16 +8120,15 @@ function openBuildMenu() {
   const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
-  if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
+  if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'gather'; } catch (e) { UI.buildTab = 'gather'; } }
   const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
-  if (UI.buildTab !== 'all' && UI.buildTab !== 'terra' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
-  // (A tab marked `late`, Mega, comes after All, in the order of the number keys.)
+  // (An unknown tab, or an old saved "all" from when there was an All tab, opens on the first one.)
+  if (UI.buildTab !== 'terra' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = groups.length ? groups[0].key : 'terra';
   const tabBtn = (g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`;
-  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.filter((g) => !g.late).map(tabBtn).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button>${groups.filter((g) => g.late).map(tabBtn).join('')}${tfTabButton()}</div>`; // (Terraform last: tools, not buildings, js/terraform.js)
+  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.map(tabBtn).join('')}${tfTabButton()}</div>`; // (Terraform last: tools, not buildings, js/terraform.js)
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
-  // The cards in tab order, each tab's under its name (shown on All on a desktop, where All is a wide grid of columns):
-  // Roads and Blueprints lead Move, Walls lead Defend. (Elsewhere the grid's CSS order puts the next step, then Roads,
-  // Blueprints and Walls first, as before.)
+  // The cards in tab order: Roads and Blueprints lead Move, Walls lead Defend (the grid's CSS order puts the next step,
+  // then Roads, Blueprints and Walls first).
   const card = (t) => { const ban = worldBan(t); return `<button class="bcard${ban ? ' banned' : ''}" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES || ban ? 'disabled' : ''}${ban ? ` title="${ban}"` : ` title="${BDEFS[t].name}"`}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`; };
@@ -8149,8 +8142,7 @@ function openBuildMenu() {
     ${tabs}
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
-      <div class="bhave">${ownedText(t)}</div></button>`).join('')}${groups.map((g) => `<div class="b-grp" data-grp="${g.key}" aria-hidden="true"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}</div>`
-      + (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}${tfCards()}</div>`;
+      <div class="bhave">${ownedText(t)}</div></button>`).join('')}${groups.map((g) => (g.roads ? roads : '') + (g.walls ? walls : '') + ordered.filter((t) => groupOf(t) === g.key).map(card).join('')).join('')}${tfCards()}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
@@ -8163,11 +8155,7 @@ function openBuildMenu() {
     UI.buildTab = g;
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
-    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard, .build-grid .tf-note')) el.hidden = el.dataset.g === 'terra' || g === 'terra' ? el.dataset.g !== g : g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
-    $('sheet-body').querySelector('.build-grid').classList.toggle('all', g === 'all'); // (on a desktop: grouped, in columns: style.css)
-    document.body.classList.toggle('sheet-build-all', g === 'all');
-    // On All, a card's key reads "2 K": its tab's number, then its letter.
-    for (const el of $('sheet-body').querySelectorAll('.build-grid kbd[data-tab]')) el.textContent = g === 'all' ? `${el.dataset.tab} ${el.dataset.key}` : el.dataset.key;
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard, .build-grid .tf-note')) el.hidden = el.dataset.g === 'terra' || g === 'terra' ? el.dataset.g !== g : el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
   };
   for (const btn of $('build-tabs').children) btn.onclick = () => { sfx('click'); show(btn.dataset.g); };
   show(UI.buildTab);

@@ -4,7 +4,7 @@
  * js/sim.js (the stage 3 block: t3SeamsMake, seamSurvey, updateSeamDrill, updateSeedMast, thermalHot) and the numbers
  * in SEAM, SEED and THERMAL (js/defs.js).
  *
- *  - Build → Terraform (key 7) holds them after stage 2's: the Seam Drill (I), the Seed Mast (G) and the Thermal Plant
+ *  - Build → Terraform (key 6) holds them after stage 2's: the Seam Drill (I), the Seed Mast (G) and the Thermal Plant
  *    (T) (t3Cards), with what each would reach shown while placing (t3Ranges, t3PlaceText) and their panels (t3Panel).
  *  - A found seam (yours: the seams a drill of yours surveyed): glowing cracks in the ground, orange for Ore and violet
  *    for Crystal, inside a dashed outline, baked with the map (t3PaintTile) and glowing at night (t3Glow); its survey
@@ -84,10 +84,10 @@ function t3Panel(b, mine) {
     out.push(`<div class="kv"><span>Beds</span><span>${n[4]} ripe · ${n[3]} sprouting · ${n[2]} seeded · ${n[1]} prepared (up to ${SEED.most})</span></div>`);
     if (starved) out.push(`<div class="kv"><span>Starved</span><span class="err">${starved} bed${starved === 1 ? '' : 's'}: no power, not growing</span></div>`);
     if (mine) out.push(`<div class="section-label">Seed Crystal</div><div class="goodlist">${goodTag('crystal', `${b.stock.crystal || 0}/${SEED.hopper}`, !(b.stock.crystal > 0))}</div>`);
-    out.push(`<p class="hint">A bed takes a Crystal to seed and about ${Math.round((SEED.ripe * SEED.step) / 60)} minutes of power to ripen into ${SEED.yield} Crystal, which a Crystal Tap within reach gathers; then it is seeded again. Without power the beds starve and stop. A growing field draws the Murmur.</p>`);
+    out.push(`<p class="hint">A bed takes a Crystal to seed and about ${Math.round((SEED.ripe * SEED.step) / 60)} minutes of power to ripen into ${SEED.yield} Crystal, which a Crystal Tap within reach gathers; then it is seeded again. A ripe bed is Crystal on the ground like any other: a rival's Tap nearby gathers it too, so defend your beds. Without power the beds starve and stop. A growing field draws the Murmur.</p>`);
   } else if (def.burner && def.burner.heat) {
     out.push(`<div class="kv"><span>Heat</span><span>${thermalHot(b) ? `${thermalHeat(tIdx(b.x, b.y))} hot tile${thermalHeat(tIdx(b.x, b.y)) === 1 ? '' : 's'} beside it` : '<span class="err">cold: nothing hot beside it</span>'}</span></div>`);
-    out.push(`<p class="hint">A Generator that burns no Fuel: factories within ${THERMAL.radius} tiles work a third faster while it runs, and it powers a Seam Drill or a Seed Mast. It runs only while something in reach is working.</p>`);
+    out.push(`<p class="hint">A Generator that burns no Fuel: factories within ${THERMAL.radius} tiles work a third faster while it runs, and it powers a Seam Drill, a Seed Mast, a Maglev Terminal or a Mass Driver end (whose shots then cost no Fuel). It never powers a megastructure: those want a Generator's Fuel. It runs only while something in reach is working.</p>`);
   }
   return out;
 }

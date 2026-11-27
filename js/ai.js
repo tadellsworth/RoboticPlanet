@@ -94,6 +94,8 @@ const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL
  * fresh fields in their own land and more out on open ground, and the game ran past an hour.)
  */
 const AI_ORE_FIELD = 3, AI_ORE_REACH = 30, AI_ORE_AT = 900;
+/** A chain too thin for what it makes, from `at` s (see aiThink): `mines` Mines at work a Smelter (`minesMax` at most), another Smelter with `ore` Ore piled up (`smelters` at most), another Chip Fab with `crystal` Crystal piled up and every Fab busy (`fabs` at most), another Harvester with under `fiber` Fiber and fewer than `harvesters` cutting. */
+const AI_THIN = { at: 360, mines: 2, minesMax: 4, ore: 16, smelters: 3, crystal: 16, fabs: 3, fiber: 8, harvesters: 2 };
 const AI_CAVE_OUT_ORE = 16; // Half underground: Ore or Crystal tiles a colony on the surface holds before it stops counting them short (see aiThink)
 const AI_CAVE_REACH = 110; // Half underground: how far off (tiles) a deposit it lacks still pulls a colony's Outposts toward it (see aiSearchSpot)
 const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300, AI_TRADE_AT = 480;
@@ -103,6 +105,8 @@ const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300, AI_TRADE_AT = 480;
  * AI_FUEL_TRADE s it docks its Terminal before anything else.
  */
 const AI_FUEL_DRY = 60, AI_FUEL_TRADE = 180;
+/** Fiber deadlocked this long (no Harvester cutting, too little Fiber for a new one): an idle Harvester is taken down for its Fiber (see aiThink). */
+const AI_FIBER_DRY = 90;
 /**
  * Bio Farms go by the patch: a farm works about AI_FARM_TILES fertile tiles (its Agribot keeps up with no more), so
  * each farm of ours claims its nearest AI_FARM_TILES in reach, and a new one counts only the tiles none has claimed;
@@ -599,7 +603,11 @@ function aiThink(p) {
     tradeFirst = crShort || fuelTrade;
   }
   // (An Architect's second Crystal Tap with them: Chips are what its Missiles and its warbots both wait for.)
-  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['tap', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
+  // (Its inputs first: a third Harvester, a Grove Planter and a second Mine come before the second Smelter, and a second Bio Farm before the second Tap and Fab.
+  // With the Smelter, Tap and Fab straight after the Ammo Plant, its second Smelter stood "Waiting for Ore" and its Fab
+  // "Waiting for Alloy" from ten minutes in, Fiber at 0 with one Harvester, and its Fuel at 2 or 3 while the Missiles
+  // and the Generators wanted it: the economy audit of Nov 26 2026.)
+  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['harvester', 3], ['grower', 1], ['mine', 2], ['smelter', 2], ['farm', 2], ['tap', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
   if (nukeOn()) {
     const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
@@ -739,6 +747,30 @@ function aiThink(p) {
   // first, as a starved Mine is. (The Hollow, Scarce, seed 25: the Murmur wrecked a colony's Foundry, Fab and Smelters
   // at 25 minutes, an Outpost and a Refinery waiting for goods held both its sites, and it never made a robot again.)
   if ((P.opened || (!smart && S.time > AI_EASY_OPENING * 2)) && !few) for (const t of ['smelter', 'fab', 'foundry']) if (!me.some((b) => b.type === t)) starved.push(t);
+  // A chain too thin for what it makes (AI_THIN): past the opening, Fiber under AI_THIN.fiber with fewer Harvesters cutting
+  // than AI_THIN.harvesters, another Harvester; the Smelters waiting for Ore with fewer Mines at work
+  // than AI_THIN.mines a Smelter, and Ore left in its land, another Mine; Ore piling up past AI_THIN.ore with every
+  // Smelter busy, another Smelter; Crystal piling up past AI_THIN.crystal with every Chip Fab busy, another Fab; Crystal running low (crLow) with fewer Taps at work than its Chip Fabs and one, and
+  // Crystal left in its land, another Tap: each goes first, past the usual limit on sites, as a starved one does. (The
+  // economy audit of Nov 26 2026, Long haul: rivals ran one Mine and one Smelter for most of a 40-minute game, 3 to 5 Ore
+  // a minute, with hundreds of Ore in their own land, while a Reactor's, a Terminal's and Outposts' sites held both
+  // their places; the Foundry and the Chip Fab sat "Waiting for Alloy", and the Chips ran out for want of Alloy.)
+  if (P.opened && !few && S.time >= AI_THIN.at && me.some((b) => b.type === 'foundry' && b.built)) {
+    const built = (t) => me.filter((b) => b.type === t && b.built), site = (t) => me.some((b) => b.type === t && !b.built);
+    const smelters = built('smelter'), mining = built('mine').filter((b) => aiGathers(b, AI_ORE_FIELD)).length;
+    const oreWait = smelters.some((b) => /^Waiting for Ore/.test(b.status || ''));
+    if (oreWait && (haveG.ore || 0) < 4 && mining < Math.min(AI_THIN.minesMax, smelters.length * AI_THIN.mines) && !site('mine') &&
+        (inLand[R_ORE] || 0) >= 2 && !starved.includes('mine')) starved.push('mine');
+    if ((haveG.ore || 0) >= AI_THIN.ore && smelters.length < AI_THIN.smelters && !site('smelter') &&
+        smelters.every((b) => /^Working|^Output full/.test(b.status || '')) && !starved.includes('smelter')) starved.push('smelter');
+    const cutters = built('harvester').filter((b) => aiGathers(b, 3)).length;
+    if ((haveG.fiber || 0) < AI_THIN.fiber && cutters < AI_THIN.harvesters && !site('harvester') && !starved.includes('harvester')) starved.push('harvester');
+    const fabs = built('fab');
+    if ((haveG.crystal || 0) >= AI_THIN.crystal && fabs.length && fabs.length < AI_THIN.fabs && !site('fab') &&
+        fabs.every((b) => /^Working|^Output full/.test(b.status || '')) && !starved.includes('fab')) starved.push('fab');
+    const tapping = built('tap').filter((b) => aiGathers(b)).length;
+    if (crLow && tapping < Math.min(AI_CRYSTAL_TAPS, built('fab').length + 1) && !site('tap') && (inLand[R_CRYSTAL] || 0) >= 2 && !starved.includes('tap')) starved.push('tap');
+  }
   // Recover charging as a critical link even when other construction occupies the normal slots.
   const replaceCharger = needsCharge && !counts.charger;
   if (replaceCharger) starved.push('charger');
@@ -746,6 +778,9 @@ function aiThink(p) {
   if (starved.length) siteCap = Math.max(siteCap, sites + 1);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
   if (fiberStarved) siteCap = Math.max(siteCap, maxSites + 1) + (cementStarved ? 1 : 0);
+  // (With none cutting, a Harvester site gets its Fiber and Cement first: on Standard 11 an Architect's waited behind a
+  // Deep Core's, an Airfield's and a Reactor's for ten minutes, Fiber in storage, and its Smelters and Mines with it.)
+  if (!cutting) for (const b of me) if (b.type === 'harvester' && !b.built && !b.prio) { b.prio = 'high'; b.sitePrio = 1; }
   // (Crystal running out: the Terminal that buys more doesn't wait for a free site either. It waited minutes behind
   // Outposts and Mines while the last Crystal went, and with no Chips left there was no Road Train to serve it.)
   if (tradeFirst) siteCap = Math.max(siteCap, maxSites + 1);
@@ -977,13 +1012,18 @@ function aiThink(p) {
   }
   // A seized megastructure of its own still owed Alloy or Chips to come online (megaFeeOwed; or a Mass Driver pair's
   // sites or kit it put first, aiMassDriver): the Ammo Plant rests at
-  // once, and the Bot Foundry too once the fee has waited AI_SEIZE.rest s, so what the Smelters and Chip Fabs make
-  // reaches it (they ate it all, and a seized Lance sat a few Alloy and Chips short for ten minutes). Not in triage.
-  const owe = !few && (megaFeeOwed(p, 'alloy') >= 1 || megaFeeOwed(p, 'chip') >= 1);
-  if (owe) P.feeT = P.feeT ?? S.time; else delete P.feeT;
+  // once, and the Bot Foundry too once the fee has waited a while, so what the Smelters and Chip Fabs make reaches it
+  // (they ate it all, and a seized Lance sat a few Alloy and Chips short for ten minutes). The wait scales with the
+  // fee's Alloy and Chips (P.feeN, the most owed since it began): AI_SEIZE.rest s for AI_SEIZE.restFee or more (an
+  // Orbital Lift's or a Great Uplink's), twice that for half as much (a Shield Dome's 9: 90 s), and a fee of under
+  // AI_SEIZE.restMin never rests it at all (the economy audit of Nov 26 2026: a Dome's small fee came in within the
+  // minute with the Foundry running, and resting it cost the army a warbot or two for nothing). Not in triage.
+  const owedN = few ? 0 : megaFeeOwed(p, 'alloy') + megaFeeOwed(p, 'chip'), owe = owedN >= 1;
+  if (owe) { P.feeT = P.feeT ?? S.time; P.feeN = Math.max(P.feeN || 0, owedN); } else { delete P.feeT; delete P.feeN; }
+  const feeWait = owe && P.feeN >= AI_SEIZE.restMin ? AI_SEIZE.rest * Math.max(1, AI_SEIZE.restFee / P.feeN) : Infinity;
   for (const b of me) {
     if (!b.built) continue;
-    if (owe && (b.type === 'armory' || (b.type === 'foundry' && S.time - P.feeT >= AI_SEIZE.rest))) { if (!b.paused) { setPaused(b, true); b.feeRest = 1; } }
+    if (owe && (b.type === 'armory' || (b.type === 'foundry' && S.time - P.feeT >= feeWait))) { if (!b.paused) { setPaused(b, true); b.feeRest = 1; } }
     else if (b.feeRest) { delete b.feeRest; if (b.paused) setPaused(b, false); }
   }
 
@@ -1017,6 +1057,16 @@ function aiThink(p) {
     } else if (b.built && def.pump && pumpSeep(b) < 0 && !(b.stock.crude > 0)) {
       demolish(b);
     }
+  }
+  // Fiber deadlocked: no Harvester cutting and too little Fiber for a new one (or a Grove Planter) for AI_FIBER_DRY s.
+  // A Harvester waiting on half-grown stalks is taken down, its Fiber back in crates for the Haulers, so a new one can
+  // go up where stalks are ripe. (The economy audit of Nov 26 2026: an Architect on Standard 11 sat at 0 Fiber from 20
+  // minutes to the end with one idle Harvester, so no Smelter, Mine or Harvester could ever be paid for again.)
+  if (!few && !cutting && (playerGoods(p).fiber || 0) < BDEFS.harvester.cost.fiber) P.fiberDryT = P.fiberDryT ?? S.time;
+  else delete P.fiberDryT;
+  if (P.fiberDryT !== undefined && S.time - P.fiberDryT >= AI_FIBER_DRY) {
+    const idle = me.find((b) => b.built && b.type === 'harvester' && !b.dead && !aiGathers(b, 3) && !((b.stock.fiber || 0) >= 1));
+    if (idle) { demolish(idle); P.fiberDryT = S.time; }
   }
 
   // 2b) Pipelines: an Oil Pump gets pipe to the nearest Refinery (cheap, and its Crude never waits
@@ -4540,8 +4590,12 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   // with its rival's, it spent the Alloy on Silos early and was stormed. Waiting for an army two up on its rival's, under
   // pressure it put its Silos up at 24 minutes on average, after most games were over, and fired 6 Missiles in 40
   // games: the balance audit of Nov 2026. Its description promises them 8 to 16 minutes in.)
+  // (And only with its economy running: a Mine and a Harvester at work. Saving from nine minutes or so, just as its
+  // first Mine and Harvesters worked out, its new ones waited behind the Missile Factory's site for minutes, Ore and
+  // Fiber stood still and its army melted away: the economy audit of Nov 26 2026, Standard 11.)
+  const running = !st.missiles || (me.some((b) => b.type === 'mine' && aiGathers(b, AI_ORE_FIELD)) && me.some((b) => b.type === 'harvester' && aiGathers(b, 3)));
   const ready = (st.missiles
-    ? S.time >= Math.max(base.grace * 0.8, AI_MISSILE_FROM) && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(4, foeArmy - AI_MISSILE_GAP)
+    ? S.time >= Math.max(base.grace * 0.8, AI_MISSILE_FROM) && running && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(4, foeArmy - AI_MISSILE_GAP)
     : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
     (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? (counts.munitions ? 0 : 2) : 4); // (an Architect's Silos, once its Missile Factory stands, wait for no spare workers)
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
@@ -5659,7 +5713,7 @@ function aiWalker(p, lvl) {
  * it back, with a band under a flag by its walls (P.megaHold: { rid, id, t }), called home once it's taken or after
  * AI_SEIZE.stay s. Bringing one online is its Haulers' work (needsOf), as far as its goods go.
  */
-const AI_SEIZE = { every: 5, stay: 180, reach: 45, own: 4, foe: 6, rest: 45 };
+const AI_SEIZE = { every: 5, stay: 180, reach: 45, own: 4, foe: 6, rest: 45, restFee: 18, restMin: 6 };
 /** Is a band of rival p's seizing a knocked-out megastructure near flag r (its clock theirs)? */
 function aiSeizing(p, r) { return S.buildings.some((b) => !b.dead && b.mDown && b.mBy === p && dist2(bCentre(b).x, bCentre(b).y, r.x, r.y) <= 100); }
 /** A free tile by megastructure b's walls (within MEGA.reach) that rival p's robots can walk to, nearest its base; -1 if none. */
