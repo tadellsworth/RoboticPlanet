@@ -9055,6 +9055,7 @@ function drawAim(ctx, ox, oy, z) {
   if (BDEFS[silo.type].lance) { const sp = R.aim || R.aimHover; if (sp && !lanceAimBlocked(silo, sp.i, sp.j)) drawLanceLine(ctx, ox, oy, z, silo, sp.i, sp.j, true); return; }
   if (BDEFS[silo.type].sunder) { drawSunderAim(ctx, ox, oy, z, silo); return; }
   if (BDEFS[silo.type].atmos) { drawStormAim(ctx, ox, oy, z, silo); return; }
+  if (BDEFS[silo.type].lvl) { drawRanges(ctx, silo.type, silo.x, silo.y, ox, oy, z, silo.owner); return; } // (a Leveller's aim: its reach and the hill under the pointer or tapped, t5Ranges in js/terraform5.js; not a missile's reticle)
   const nuke = !!BDEFS[silo.type].nukeSilo;
   const md = nuke ? { range: NUKE.range, splash: NUKE.radius } : BDEFS.silo.missile;
   const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;

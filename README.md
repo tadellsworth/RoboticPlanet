@@ -974,7 +974,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   each site in the road plans' language (`tfPlanTile`: a dashed amber outline, faint red for a rival's, the job's
   glyph, a sparser orange dash and a Stone pip while `tfReady` says no, a grey bar and a rising tint as `b.progress`
   grows), the ground being worked drawn with the ground before the time-of-day grading (`tfGround`), and the Grader's
-  rendered frames by `graderPose` (idle, driving, cutting, pushing, filling, finishing; ART_GUIDE Batch 35). Numbers: a level of earth is `TERRA.time` (24) s;
+  rendered frames by `graderPose` (idle, driving, cutting, pushing, filling, finishing; ART_GUIDE Batch 35). While
+  planning, `tfDrawPointer` marks the tile under the mouse (or a finger down, not yet dragging: `tfPointer`) with the job
+  the tool would plan there (`tfJob`, every tool, the earthworks too), crossed in red where refused. Numbers: a level of earth is `TERRA.time` (24) s;
   raising costs `TERRA.stone` (4) Stone a level, lowering yields `TERRA.dug` (2) a level (about 5 Stone a minute a Grader,
   so it's no better a Quarry); Fill costs `TERRA.fill` (8) Stone, 40 s; Dig yields `TERRA.dig` (3) Stone, 36 s. Stone
   supply (the owner's split): a Raise site's comes by Hauler where a road reaches it, and from storage as the goods come
@@ -1261,7 +1263,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     minutes on Medium, Large and Huge maps.
   - Interface (`js/terraform5.js`): the placing banner's line and the basin outlined teal (or what's in the way red,
     `t5Ranges`); the Reservoir's panel (three teal stage lamps, the banks, power) and the Leveller's (Level a hill `F`,
-    the aim mode `startAim`/`t5AimBanner`/`t5AimFire`, the hill outlined tan; Raise a ridge `H`, `ridgeStart`,
+    the aim mode `startAim`/`t5AimBanner`/`t5AimFire`, drawn by `t5Ranges` from `drawAim`: its reach, and the hill under the
+    pointer dashed tan, tapped solid, a spot it can't cut red; Raise a ridge `H`, `ridgeStart`,
     `ridgePaint`/`ridgeTap`/`ridgeBanner`/`ridgeConfirm`: the preview tints each tile tan by its rise with its new level,
     the line dashed, what's left out crossed in red; Stop `C`; its hopper, the ridge's levels and Stone); the hill, the
     ridge (outlined tan, each tile's level when selected) and the dust at the work, and the spoil falling onto a ridge
