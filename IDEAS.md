@@ -2864,17 +2864,35 @@ owner:
   (placing over one clears it).
 - **The biome shift moves tiles one at a time** (each by its own soil, water and grove cover), so a region shifts as its
   tiles do; a step takes 10 minutes with everything, 20 with two of the four. Long Grass ground counts as improving
-  soil; Greenreach grows groves twice as fast. The Polar Caps thaw straight to Greenreach; forests, swamps and the
-  Shoals don't shift.
+  soil; Greenreach grows groves half as fast again. Forests, swamps and the Shoals don't shift.
 - **Ditches are Dig channel**: a canal dug from the pump's water carries it. No separate ditch tool.
 - **Stage 2 is banned on Argos, in the Hollow and under the caves' roof**, and the Water Pump in the Cinderlands (lava).
 
-**Stage 2, still open:**
-- Rivals don't use stage 2 (the owner's call); they cope with groves slowing them and with shifted ground. Should the
-  AI route round a foe's mature groves?
-- Should the shift bring the new biome's animals (wildlife.js reads the map's biome, not the tile's)?
-- Water and the Atmosphere Engine's rain don't interact yet (rain could count as wet).
-- A Composter's inputs could be other wastes later (Crude sludge, scrap) once the economy has them.
+**Stage 2, the owner's decisions on the open questions (Nov 27 2026, "go with your recs for all"):**
+- **Grove Fiber stays with the Nursery's own Agribot** (no Harvester).
+- **Water keeps the shared pipe** (the oil network); no separate water pipe.
+- **Napalm and a Torch's Scorch the earth still ruin rich soil**, and **Reclaim brings it back**: the scorch cleared, the
+  rich soil under it is farmland again (How to play says so plainly, under soil and under Fuel's farmland burning).
+  Farmland that was never composted comes back as plain ground (a Composter or Spread soil makes it farmland again).
+- **The Polar Caps thaw to the Long Grass first, then Greenreach** (`SHIFT.chain.polar`), not straight to Greenreach.
+  Forests, swamps and the Shoals stay non-shifting. (With it, the groves' Greenreach speed-up now reads the tile's
+  biome, `t2TileBiome`, rather than "the second step", so ground that was the Long Grass to start gets it too.)
+- **Rivals route round a foe's groves, a light nudge**: a rival's robots (`P.ai`) pay `GROVE.path` [0, 1, 2] more a step
+  into a foe's young or mature grove (`groveCost`, `opts.grove` from `routeOpts`), so they go round where the way round
+  is short and through where there is none. The player's own robots and allies are unaffected. Nothing changes with no
+  groves on the map (seeded AI-vs-AI games hash as before). Rivals still don't build stage 2.
+- **The Atmosphere Engine's rain counts as wet ground**: from Rain, while it has power, its circle is wet for crops
+  (`IRR.crop`) and the biome shift (`rainWetAt`, worked out from the Engines; nothing new stored or hashed). Not drawn
+  as irrigated ground (the Engine's own greening shows there).
+- **A Composter keeps Fiber + Stone**, no scrap.
+
+**Stage 2, later:**
+- **Wildlife on shifted land** (the shift bringing the new biome's animals; `wildlife.js` reads the map's biome, not
+  the tile's): with the living-world rework.
+- A Composter's inputs could be other wastes (Crude sludge, scrap) once the economy has them; the owner's call for now
+  is Fiber + Stone only.
+- Rain wetness is the whole circle day and night (the rain falls at night; the ground stays damp). Only if it reads
+  oddly: wet only at night, or a drying lag.
 
 ## Done: Argos on the main menu (owner, Nov 26)
 

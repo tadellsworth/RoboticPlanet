@@ -4,7 +4,9 @@
 // lanes left open, the groves growing from saplings to young to mature, bearing Fiber the Agribot gathers, and slowing a
 // foe's robots (not their owner's); napalm burning a grove to scorched ground; a Water Pump's water going along a pipe
 // (green fringe, a sprinkler at its end) and along a dug canal, and a Bio Farm planting on wet desert with no fertile soil;
-// the biome shift reaching its next step; the Grader's Reclaim clearing a crater and Spread soil enriching a tile; the
+// the biome shift reaching its next step (the Polar Caps by the Long Grass to Greenreach); a rival's robots routing round
+// a foe's mature groves where the way round is short, through where there is none; an Atmosphere Engine's rain counting as
+// wet ground; the Grader's Reclaim clearing a crater and Spread soil enriching a tile; the
 // stage 2 buildings refused to a rival's land and on Argos; a save made mid-process passing checkSave and playing on
 // exactly as the game it came from; and the same game played twice coming out the same. Run: node tools/terraform2-test.js
 const fs = require('node:fs');
@@ -197,6 +199,91 @@ const shift = run(c4, `
 `);
 check('the biome shift: rich soil, water and groves take the Rust a step, to the Long Grass, in about ten minutes',
   shift.score === 4 && shift.next === 'savanna' && shift.shifted === 1 && shift.now === 'savanna' && shift.minutes >= 8 && shift.minutes <= 15, shift);
+
+// ---- the Polar Caps thaw to the Long Grass first, then to Greenreach; forests, swamps and the Shoals don't shift
+const cP = mk();
+const polar = run(cP, `
+  ${colony('', 5, 'polar')}
+  const c = open(L.x, L.y, 1, 5, 14), ci = c % S.W, cj = (c / S.W) | 0;
+  for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) { const t = tIdx(i, j); t2Layer('soil')[t] = SOIL.rich; t2Layer('wet')[t] = 1; }
+  for (const [i, j] of [[ci - 1, cj - 1], [ci + 1, cj + 1], [ci + 1, cj - 1]]) { const t = tIdx(i, j); t2Layer('grove')[t] = GROVE.mature; t2Layer('grvF')[t] = 0; t2Layer('grvO')[t] = 1; }
+  const steps = [t2TileBiome(c), t2NextBiome(c)];
+  for (let k = 0; k < 400 && !(S.shift && S.shift[c] >= 1); k++) t2Shift();
+  steps.push(t2TileBiome(c), t2NextBiome(c));
+  for (let k = 0; k < 400 && !(S.shift && S.shift[c] >= 2); k++) t2Shift();
+  steps.push(t2TileBiome(c), t2NextBiome(c));
+  return { base: t2BaseBiome(c), steps, still: ['jungle', 'swamp', 'tropical'].map((b) => SHIFT.chain[b] || null) };
+`);
+check('the Polar Caps thaw to the Long Grass, then to Greenreach (and forests, swamps and the Shoals stay as they are)',
+  polar.base === 'polar' && JSON.stringify(polar.steps) === JSON.stringify([null, 'savanna', 'savanna', 'jungle', 'jungle', null]) && polar.still.every((v) => v === null), polar);
+
+// ---- a rival's robots route round a foe's mature groves where the way round is short, and through where there is none
+const cR = mk();
+const detour = run(cR, `
+  newGame({ seed: 5, mode: 'versus', size: 1, rough: 0 });
+  ${HELP}
+  const fp = S.players.findIndex((P, p) => p !== 0 && foes(0, p) && P.ai);
+  // a square of open, level ground (no buildings, roads, ramps, pipe or track; its resources cleared), side 2R + 1
+  const R = 7, L0 = getE(S.players[0].lander);
+  const okSq = (x, y) => { const e = S.elev[tIdx(x, y)]; for (let j = y - R; j <= y + R; j++) for (let i = x - R; i <= x + R; i++) { if (!inMap(i, j)) return false; const t = tIdx(i, j); if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.ramp[t] || S.elev[t] !== e || (S.pipe && S.pipe[t]) || (S.rail && S.rail[t])) return false; } return true; };
+  let at = null;
+  for (let d = 4; d < 60 && !at; d++) for (let j = L0.y - d; j <= L0.y + d && !at; j++) for (let i = L0.x - d; i <= L0.x + d; i++) if (Math.max(Math.abs(i - L0.x), Math.abs(j - L0.y)) === d && okSq(i, j)) { at = [i, j]; break; }
+  const [cx, cy] = at;
+  for (let j = cy - R; j <= cy + R; j++) for (let i = cx - R; i <= cx + R; i++) { const t = tIdx(i, j); S.res[t] = 0; S.amt[t] = 0; } // (resources are dearer to cross: none, so the sums are plain)
+  const groveAt = (i, j, owner) => { const t = tIdx(i, j); t2Layer('grove')[t] = GROVE.mature; t2Layer('grvF')[t] = 0; t2Layer('grvO')[t] = owner + 1; };
+  const route = (u) => findPath(cx - 6, cy, cx + 6, cy, undefined, routeOpts(u));
+  const inGrove = (p) => p ? [p.length, p.filter((t) => S.grove && S.grove[t]).length] : null; // (counted at once: the band below plants more)
+  const rival = addBot(fp, 'warbot', cx - 6, cy), rWorker = addBot(fp, 'worker', cx - 6, cy);
+  const optsBare = routeOpts(rival);
+  const pBare = route(rival).length;
+  // a block of player 0's mature groves, 5 wide and 7 tall, square across the way
+  for (let j = cy - 3; j <= cy + 3; j++) for (let i = cx - 2; i <= cx + 2; i++) groveAt(i, j, 0);
+  const pRival = inGrove(route(rival));
+  const pWorker = inGrove(findPath(cx - 6, cy, cx + 6, cy, fp, routeOpts(rWorker)));
+  // (one of ours on the same spot, once the rival's have gone: an armed foe beside them would put them under its cover)
+  for (const u of [rival, rWorker]) { u.dead = true; S.byId.delete(u.id); }
+  const ours = addBot(0, 'warbot', cx - 6, cy), pOurs = inGrove(route(ours)), oursGrove = 'grove' in routeOpts(ours);
+  ours.dead = true; S.byId.delete(ours.id);
+  const rival2 = addBot(fp, 'warbot', cx - 6, cy);
+  // the rival's own groves don't turn it
+  for (let j = cy - 3; j <= cy + 3; j++) for (let i = cx - 2; i <= cx + 2; i++) S.grvO[tIdx(i, j)] = fp + 1;
+  const pOwn = inGrove(route(rival2));
+  // a band of player 0's groves right across the map, 5 wide: no way round, so it goes through
+  for (let j = 0; j < S.H; j++) for (let i = cx - 2; i <= cx + 2; i++) if (walkable(tIdx(i, j))) groveAt(i, j, 0);
+  const pBand = inGrove(route(rival2));
+  const out = { at, ai: S.players[fp].ai, bareGrove: 'grove' in optsBare, rivalGrove: routeOpts(rival2).grove, oursGrove,
+    bare: pBare, rival: pRival, ours: pOurs, worker: pWorker, own: pOwn, band: pBand };
+  rival2.dead = true; S.byId.delete(rival2.id);
+  return out;
+`);
+check('with no groves on the map a rival\'s route plans as before (no grove cost at all)', !detour.bareGrove && detour.bare === 12, detour);
+check('a rival\'s warbot and worker go round a foe\'s mature groves where the way round is short', detour.ai && detour.rivalGrove >= 0 && detour.rival[1] === 0 && detour.rival[0] <= 14 && detour.worker[1] === 0, detour);
+check('the player\'s own robots, and a rival in its own groves, go straight through', !detour.oursGrove && detour.ours[0] === 12 && detour.ours[1] === 5 && detour.own[0] === 12 && detour.own[1] === 5, detour);
+check('with no way round (groves right across the map) the rival goes through them', detour.band[0] === 12 && detour.band[1] === 5, detour);
+
+// ---- an Atmosphere Engine's rain counts as wet ground: crops grow faster, and the biome shift scores it
+const cA2 = mk();
+const rain = run(cA2, `
+  ${colony('', 5, 'desert')}
+  const c = open(L.x, L.y, 2, 8, 30), ci = c % S.W, cj = (c / S.W) | 0;
+  const ae = addBuilding(0, 'atmos', ci - 1, cj - 1, true);
+  ae.aeStage = 1; ae.aeP = ATMOS.r[0]; ae.working = true; S.tick++;
+  const ctr = bCentre(ae), near = tIdx(Math.floor(ctr.x) + 4, Math.floor(ctr.y)), far = tIdx(Math.min(S.W - 1, Math.floor(ctr.x) + ATMOS.r[1] + 4), Math.floor(ctr.y));
+  const calm = { wet: wetAt(near), rate: cropRate(near) };
+  ae.aeStage = 2; ae.aeP = ATMOS.r[1]; S.tick++;
+  const wetRain = wetAt(near), wetFar = wetAt(far), rate = cropRate(near), noLayer = !S.wet;
+  t2Layer('soil')[near] = SOIL.improving; t2Layer('soil')[far] = SOIL.improving;
+  const scoreNear = t2Score(near), scoreFar = t2Score(far);
+  for (const t of [near, far]) { S.res[t] = R_CROP; S.amt[t] = 1; S.grow[t] = 0; }
+  growStalks(30);
+  const gNear = S.grow[near], gFar = S.grow[far];
+  ae.working = false; S.tick++;
+  const off = wetAt(near);
+  return { calm, wetRain, wetFar, rate, noLayer, scoreNear, scoreFar, gNear, gFar, off };
+`);
+check('an Atmosphere Engine\'s rain (from Rain, with power) makes the ground in its circle wet; Calm doesn\'t, nor ground outside',
+  !rain.calm.wet && rain.wetRain && !rain.wetFar && !rain.off && rain.noLayer, rain);
+check('crops in the rain grow faster (IRR.crop) and the biome shift scores the rain as water', rain.calm.rate === 1 && Math.abs(rain.rate - 1.2) < 1e-9 && rain.scoreNear === 2 && rain.scoreFar === 1 && rain.gNear > rain.gFar * 1.15, rain);
 
 // ---- Reclaim on a crater, and Spread soil
 const c5 = mk();

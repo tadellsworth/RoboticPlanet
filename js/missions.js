@@ -1468,7 +1468,7 @@ const MISSIONS = [
       'A <b>Tree Nursery</b> (<kbd>N</kbd>) has an Agribot plant groves, leaving lanes. They grow from saplings to young trees to a mature grove that bears Fiber, and enemy robots crawl through them.',
       'A <b>Water Pump</b> (<kbd>P</kbd>) goes beside water. Its water runs along the pipe joined to it and along canals a Grader digs; wet ground turns green, and Bio Farms plant on it, desert or not.',
       'Soil, water and groves together slowly shift the land itself: the Rust to the Long Grass, then to Greenreach.',
-      'The Grader has two new jobs: <b>Spread soil</b> (<kbd>O</kbd>) and <b>Reclaim</b> (<kbd>E</kbd>), which clears craters and burned ground.',
+      'The Grader has two new jobs: <b>Spread soil</b> (<kbd>O</kbd>) and <b>Reclaim</b> (<kbd>E</kbd>), which clears craters and burned ground: rich soil napalm or a Torch burned is farmland again.',
     ],
     mode: 'colony', seed: 31, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 11, limit: [0, 0, 30],
     setup(S) {

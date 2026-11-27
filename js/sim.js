@@ -120,7 +120,7 @@ function checkMilestones() {
 
 /** Planted stalk groves and energy crops grow until they are ripe (grow = 1); Bloom veins cut down grow back (VEIN). */
 function growStalks(dt) {
-  const N = S.W * S.H, crop = CROP_GROW_TIME / modFuelRate(), t2 = !!(S.soil || S.wet || S.shift); // (Half Fuel: crops ripen slower)
+  const N = S.W * S.H, crop = CROP_GROW_TIME / modFuelRate(), t2 = !!(S.soil || S.wet || S.shift || rainHolds().length); // (Half Fuel: crops ripen slower) (t2: soil, water and an Engine's rain: cropRate)
   for (let t = 0; t < N; t++) {
     const r = S.res[t];
     if ((r !== R_STALK && r !== R_CROP && r !== R_VEIN) || S.grow[t] >= 1) continue;
@@ -1246,6 +1246,7 @@ function routeOpts(u) {
   if (isArmy(u) && !u.fight) o.cover = u.owner; // and out of the enemy's guns
   if (isArmy(u) && !u.fight && u.task && u.task.type === 'hold') { const r = rallyById(u.task.rally); if (r && r.safe) o.safe = dangerMap(u.owner); } // (an Army Group's raid: round them, both ways, see agRaid)
   if (isArmy(u) && !u.fight && S.players[u.owner] && S.players[u.owner].ai && S.rads && S.rads.length) o.rad = true; // (a rival's army marches round radiation where it can)
+  if (S.grove && S.players[u.owner] && S.players[u.owner].ai && !bt.air && !bt.sea && !bt.rail) o.grove = u.owner; // (a rival's robots go round a foe's groves where the way round is short: GROVE.path)
   if (bt.wild && u.task && u.task.night && !u.fight && murmurSmart()) o.coverMap = murmurGunMap(); // (Active: the Murmur keep out of the colonies' guns where they can)
   return o;
 }
@@ -4413,10 +4414,22 @@ function soilLv(t) {
   const v = S.soil ? S.soil[t] : 0, lv = v >= SOIL.rich ? 2 : v >= SOIL.improving ? 1 : 0;
   return lv < 1 && S.shift && S.shift[t] ? 1 : lv;
 }
-/** Is tile t wet (a Water Pump's water reaches it)? */
-function wetAt(t) { return !!(S.wet && S.wet[t]); }
-/** How much faster a crop on tile t grows: its soil, and water. 1 without stage 2. */
-function cropRate(t) { return (S.soil || S.shift ? SOIL.crop[soilLv(t)] : 1) * (S.wet && S.wet[t] ? IRR.crop : 1); }
+/** Is tile t wet (a Water Pump's water reaches it, or an Atmosphere Engine's rain: rainWetAt)? */
+function wetAt(t) { return !!(S.wet && S.wet[t]) || rainWetAt(t); }
+/**
+ * Is tile t in an Atmosphere Engine's rain: in the circle of a standing one at Rain or later, with power (rainHolds)?
+ * Its ground counts as wet for crops and the biome shift, like a Water Pump's (worked out from the Engines, not stored).
+ */
+function rainWetAt(t) {
+  if (!S.buildings.length) return false;
+  const L = rainHolds();
+  if (!L.length) return false;
+  const x = (t % S.W) + 0.5, y = ((t / S.W) | 0) + 0.5;
+  for (const h of L) if (dist2(x, y, h.x, h.y) <= h.r * h.r) return true;
+  return false;
+}
+/** How much faster a crop on tile t grows: its soil, and water (a pump's or an Engine's rain). 1 without either. */
+function cropRate(t) { return (S.soil || S.shift ? SOIL.crop[soilLv(t)] : 1) * (wetAt(t) ? IRR.crop : 1); }
 
 /** A grove's stage on tile t: 0 none, 1 saplings, 2 young, 3 mature. */
 function groveStage(t) { const g = S.grove ? S.grove[t] : 0; return !g ? 0 : g < GROVE.young ? 1 : g < GROVE.mature ? 2 : 3; }
@@ -4556,7 +4569,7 @@ function grovePlant(b, t) {
   if (P) P.stats.grovesPlanted = (P.stats.grovesPlanted || 0) + 1;
 }
 
-/** Every GROVE.step s: the groves grow (faster on Greenreach ground), and mature ones bear Fiber. */
+/** Every GROVE.step s: the groves grow (faster on ground shifted to Greenreach), and mature ones bear Fiber. */
 function t2Groves() {
   const G = S.grove, F = t2Layer('grvF');
   let changed = false;
@@ -4565,7 +4578,7 @@ function t2Groves() {
     if (!g) continue;
     if (g < GROVE.mature) {
       const before = groveStage(t);
-      G[t] = Math.min(GROVE.mature, g + (S.shift && S.shift[t] >= 2 ? GROVE.forest : 1));
+      G[t] = Math.min(GROVE.mature, g + (S.shift && S.shift[t] && t2TileBiome(t) === 'jungle' ? GROVE.forest : 1));
       if (groveStage(t) !== before) changed = true;
     } else if (F[t] < GROVE.fiberEvery) F[t]++;
   }
@@ -4638,13 +4651,13 @@ function t2BaseBiome(t) {
 function t2TileBiome(t) { const k = S.shift ? S.shift[t] : 0; return k ? (SHIFT.chain[t2BaseBiome(t)] || [])[k - 1] || null : null; }
 function t2NextBiome(t) { return (SHIFT.chain[t2BaseBiome(t)] || [])[S.shift ? S.shift[t] : 0] || null; }
 
-/** Tile t's biome-shift score: improving soil, rich soil, water, grove cover (young or mature groves on it and round it). */
+/** Tile t's biome-shift score: improving soil, rich soil, water (a pump's or an Engine's rain), grove cover (young or mature groves on it and round it). */
 function t2Score(t) {
   let s = 0;
   const v = S.soil ? S.soil[t] : 0;
   if (v >= SOIL.improving) s++;
   if (v >= SOIL.rich) s++;
-  if (S.wet && S.wet[t]) s++;
+  if (wetAt(t)) s++;
   if (S.grove) {
     const i = t % S.W, j = (t / S.W) | 0;
     let c = 0;
@@ -24448,6 +24461,22 @@ function atmosHolds() {
   }
   for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0, p: f.p ?? -1, on: false }); }
   ATMOS_HOLD = { of: S, tick: S.tick, list, storms };
+  return list;
+}
+/**
+ * The standing Engines raining this tick (Rain or later, with power: b.working), { x, y, r }: their ground is wet
+ * (rainWetAt). Kept apart from atmosHolds (worked out once a tick on its own) so asking it never moves when that is made.
+ */
+let RAIN_HOLD = { of: null, tick: -1, list: [] };
+function rainHolds() {
+  if (RAIN_HOLD.of === S && RAIN_HOLD.tick === S.tick) return RAIN_HOLD.list;
+  const list = [];
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].atmos || (b.aeStage || 0) < 2 || !b.working) continue;
+    const r = atmosReach(b), c = bCentre(b);
+    if (r > 0) list.push({ x: c.x, y: c.y, r });
+  }
+  RAIN_HOLD = { of: S, tick: S.tick, list };
   return list;
 }
 /** The Storm Fronts up this tick (see atmosHolds). */

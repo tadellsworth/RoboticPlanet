@@ -582,24 +582,28 @@ const SOIL = { reach: 4, every: 15, batch: { fiber: 1, stone: 1 }, hopper: 4, ga
  * after a biome shift, `forest` times as fast). A mature grove bears a Fiber every `fiberEvery` steps, which the
  * Nursery's Agribot gathers (`gatherTime` s) and Haulers take from the Nursery. A foe's robots in a grove move at `slow`
  * of their speed (saplings, young, mature); groves burn (Torches, napalm) and can be cleared (Reclaim, or built over).
+ * A rival's robots plan their routes round a foe's groves where the way round is short: each step into one costs `path`
+ * more (saplings, young, mature; routeOpts sets opts.grove, findPath adds it). With no way round they go through.
  */
-const GROVE = { reach: 4, most: 18, plantTime: 4, step: 2, young: 40, mature: 120, fiberEvery: 45, gatherTime: 3, slow: [0.85, 0.7, 0.55], forest: 1.5 };
+const GROVE = { reach: 4, most: 18, plantTime: 4, step: 2, young: 40, mature: 120, fiberEvery: 45, gatherTime: 3, slow: [0.85, 0.7, 0.55], forest: 1.5, path: [0, 1, 2] };
 /*
  * IRR (irrigation): every `every` s each working Water Pump (BDEFS.wpump, built beside water) sends water along the
  * pipes joined to it (its owner's) and along canals a Grader dug (water tiles in S.tfTiles), up to `reach` tiles of them.
  * The ground within `fringe` of a watered pipe or canal is wet, and within `spray` of a pipe's end (a sprinkler) or the
  * pump. Wet ground (S.wet) turns green, lets Bio Farms plant crops on any ground (desert too), and crops on it grow `crop`
- * times as fast.
+ * times as fast. An Atmosphere Engine's rain counts too: from Rain, while it has power, the ground in its circle is wet for
+ * crops and the biome shift (rainWetAt; worked out from the Engine, nothing stored).
  */
 const IRR = { every: 4, reach: 60, fringe: 1, spray: 2, crop: 1.2 };
 /*
  * SHIFT (the biome shift): every `every` s each tile scores a point for improving soil, one more for rich, one if wet
  * and one if `cover` groves (young or mature) stand on it and round it. With `need` points or more, its terraform level
  * (S.tform) rises by its score; at `full` the tile shifts a step along its biome's `chain` (S.shift): the Rust to the
- * Long Grass to Greenreach. Long Grass ground counts as improving soil, Greenreach's grows groves faster. Slow: a
+ * Long Grass to Greenreach (the Polar Caps thaw to the Long Grass first, then Greenreach; forests, swamps and the Shoals
+ * stay as they are). Long Grass ground counts as improving soil, Greenreach's grows groves faster. Slow: a
  * long-game reward (about 10 to 20 minutes a step). Drawn with the two biomes' blend (biomeMixAt's look).
  */
-const SHIFT = { every: 10, need: 2, cover: 2, full: 240, chain: { desert: ['savanna', 'jungle'], volcanic: ['savanna', 'jungle'], alien: ['savanna', 'jungle'], springs: ['savanna', 'jungle'], savanna: ['jungle'], polar: ['jungle'] } };
+const SHIFT = { every: 10, need: 2, cover: 2, full: 240, chain: { desert: ['savanna', 'jungle'], volcanic: ['savanna', 'jungle'], alien: ['savanna', 'jungle'], springs: ['savanna', 'jungle'], savanna: ['jungle'], polar: ['savanna', 'jungle'] } };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };

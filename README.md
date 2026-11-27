@@ -904,13 +904,19 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     ripe groves first, then plants (`groveNode`) open ground within `GROVE.reach` (4), up to `GROVE.most` (18), never on
     a lane (`groveLane`: every third row and column from the Nursery), farmland, scorched ground, roads, plans, pipes,
     track, resources or a rival's land, `GROVE.plantTime` (4) s a grove. Every `GROVE.step` (2) s each grove grows a
-    step (`t2Groves`; twice as fast on Greenreach ground after a shift, `GROVE.forest`): saplings below `GROVE.young`
+    step (`t2Groves`; half as fast again (`GROVE.forest` 1.5) on ground shifted to Greenreach): saplings below `GROVE.young`
     (40 steps, 80 s), young below `GROVE.mature` (120, 4 minutes), then mature; a mature grove bears a Fiber every
     `GROVE.fiberEvery` (45 steps, 90 s: `S.grvF`), which the Agribot gathers (`GROVE.gatherTime` 3 s) into the Nursery's
     stock (`out.fiber` 6) for Haulers. A foe's ground robot in a grove moves at `GROVE.slow` [0.85, 0.7, 0.55] of its
     speed by stage (`groveSlow`, in `speedMul`; the owner's and allies' at full speed; leaves swirl round it:
-    `t2SlowTell`); rivals simply cope. Building, a road, track or pipe on a grove clears it (`clearDecor`), and a Grader's
-    earthworks there too. Napalm and a foe's Torch flame burn it (`groveBurn`): gone, the tile scorched (`S.burnt`).
+    `t2SlowTell`). A rival's robots (`P.ai`; not the player's nor its allies') plan their routes round a foe's groves:
+    `routeOpts` sets `opts.grove` (only while `S.grove` exists) and `findPath` adds `GROVE.path` [0, 1, 2] a step by the
+    grove's stage (`groveCost` in `js/path.js`: saplings nothing, young 1, mature 2), so they go round where the way round
+    is short and through where there is none; with no groves on the map nothing changes (seeded AI-vs-AI games hash as
+    before). Building, a road, track or pipe on a grove clears it (`clearDecor`), and a Grader's earthworks there too.
+    Napalm and a foe's Torch flame burn it (`groveBurn`): gone, the tile scorched (`S.burnt`). Napalm and Scorch the
+    earth burn rich soil as any farmland (`scorchSoil`); Reclaim brings it back: the scorch cleared, rich soil under it
+    (`S.soil` kept) is farmland again (`t2Earthwork`).
   - **Water Pump** (`BDEFS.wpump`, concept B "Screw Lift"; art key `wpump`, as the Oil Pump has `pump`; 3 Cement, 1 Alloy;
     key P): only right beside water (`canPlace`), never lava. Every `IRR.every` (4) s (`t2Water`) each working pump
     sends its water along its owner's pipe joined to it (`S.pipe`, the same network as Crude and Fuel: `pipeEnd` joins it)
@@ -918,6 +924,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     `IRR.fringe` (1) of them is wet, within `IRR.spray` (2) of the pump or of a pipe's open end (`pipeSprinkler`: a
     sprinkler, drawn with its spray) wetter. `S.wet` is made again each time (cut the pipe and it dries). Bio Farms plant
     on wet ground (`cropSoil`, in `findCropSpot` and `fertileIn`), and crops there grow `IRR.crop` (1.2) as fast.
+    An Atmosphere Engine's rain counts as wet too (`rainWetAt`, in `wetAt`, `cropRate` and `t2Score`): the circle
+    (`atmosReach`) of a standing Engine at Rain or later with power (`b.working`), worked out once a tick from the
+    Engines (`rainHolds`), nothing stored or hashed.
   - **The Grader's jobs:** Spread soil (`tfJob` tool 'soil', job `k: 'soil'`; key O): `SOIL.spread` (2 Fiber, 1 Stone),
     `SOIL.spreadTime` (16) s, `SOIL.spreadGain` (64) soil; Reclaim (tool 'reclaim', `k: 'clear'`; key E): clears a crater,
     ash, scorched soil or a grove (`t2Scarred`), `SOIL.reclaimTime` (20) s, a mature grove's Fiber out as a crate
@@ -927,10 +936,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     `SHIFT.need` (2) or more its `S.tform` rises by the score, and at `SHIFT.full` (240) it takes a step along
     `SHIFT.chain` from its own biome (`t2BaseBiome`: the map's, or the second biome's where they blend): the Rust,
     Cinderlands, the Bloom and Steamwells to the Long Grass, then Greenreach; the Long Grass to Greenreach; the Polar Caps
-    to Greenreach. About 10 minutes a step with all four points, 20 with two. Drawn with the two-biome blend's look
+    to the Long Grass, then Greenreach (forests, Emberwood, swamps and the Shoals don't shift). About 10 minutes a step with all four points, 20 with two. Drawn with the two-biome blend's look
     (`t2PaintTile`: the next biome's ground texture blended in through noise, by `tform` and `shift`), its scenery taking
     root (a decor plant drawn with the new biome's art: `t2ArtBiome` in `drawPlant`); Long Grass ground counts as improving
-    soil (`soilLv`), Greenreach grows groves twice as fast.
+    soil (`soilLv`), ground shifted to Greenreach grows groves half as fast again (`t2TileBiome`, whatever step of its chain).
   - Drawn (looks only, `js/terraform2.js`): humus darkening the ground and wet ground greening (with a damp edge) baked
     with the map; the groves (`grove-<stage>-<variant>`, rendered 1-tile pieces) and sprinklers drawn with the ground and
     graded with it (`t2Ground`); the minimap's groves, irrigated and shifted land (`t2MiniColor`); the Nursery's loop at
