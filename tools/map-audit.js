@@ -8,15 +8,30 @@
 //   node tools/map-audit.js --ai 12            ...and a 12-minute computer-only game on each
 //   node tools/map-audit.js --only "The Ring"  one map type (a part of its name; "=Islands" for exactly that name)
 //   node tools/map-audit.js --json out.json    the full results as JSON too
+//   node tools/map-audit.js --strict           ...and count the thin starter fields of the maps in THIN as failures too
 // Exits non-zero when a check fails (an exception, a start off the ground, a colony that cannot reach another by the
-// map's crossing, no Ore or Crystal in reach where the map puts some at home, a stalled rival or a crash).
+// map's crossing, a home with too few Ore or Crystal tiles in walking reach (HOME_FLOOR), a stalled rival or a crash).
 'use strict';
 const { readFileSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const aiMin = +opt('--ai', 0), only = opt('--only', ''), jsonOut = opt('--json', ''), seeds = opt('--seeds', '11,21,37').split(',').map(Number);
-const sizes = opt('--sizes', '0,2').split(',').map(Number);
+const sizes = opt('--sizes', '0,2').split(',').map(Number), strict = args.includes('--strict');
+// The starter fields: every colony's home has at least this many Ore and Crystal tiles (deposit tiles, not their amounts) in
+// walking reach within HOME_R tiles of its Command Base: the starter field and the richer one just beyond the border (Standard's
+// lies 13.5 tiles out). A map can ask for more: Orbital platforms guarantees its fields' size (ORBITAL.field), so a wiped field
+// shows up there at once. Colonies whose map puts none at home are skipped (Half underground's surface colonies: their Ore and
+// Crystal come through the cave mouths).
+const HOME_R = 16, HOME_FLOOR = { ore: 3, crystal: 2 };
+const FLOOR_OF = { 'Orbital platforms': { ore: 8, crystal: 8 }, 'The Ring': { ore: 6, crystal: 6 } };
+// Maps whose starter fields are the generic small random stamps (generateMap's `field`), which a seed can leave at a tile or
+// two: the floor on them is the owner's open call (IDEAS.md, map audit follow-ups). Their thin homes are listed, not failed
+// (--strict fails them).
+// (Found by a sweep of seeds 1 to 8, 11, 21, 37, 99, 123 on Small to Immense, Nov 27 2026: on these a seed's two Ore or Crystal fields
+// come to 1 or 2 tiles within 16; every other map type held the floor on every case.)
+const THIN = new Set(['Ring valley', 'Oases', 'Crossroads', 'Lakes', 'Four Isles', 'Long Haul 2v2', 'Passenger Town', 'Fault line',
+  'Canyon maze', 'River delta', 'The Dam', 'The Walking Factory']);
 const modules = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders', 'landmarks', 'city', 'walker', 'dam'];
 const source = modules.map((name) => readFileSync(path.join(__dirname, '..', 'js', name + '.js'), 'utf8')).join('\n');
 
@@ -127,8 +142,8 @@ const api = new Function('sfx', 'PROGRESS', source + `
     }
     // Deposits in walking reach (the start's own area) within 12 and 24 tiles, and the nearest of each.
     out.reach = Ls.map((L) => {
-      const z = walk[tIdx(L.x, L.y)], r = { near: {}, r12: {}, r24: {}, all: {} };
-      for (const g in GOODS_OF) { r.near[g] = null; r.r12[g] = 0; r.r24[g] = 0; r.all[g] = 0; }
+      const z = walk[tIdx(L.x, L.y)], r = { near: {}, r12: {}, r24: {}, all: {}, home: {} };
+      for (const g in GOODS_OF) { r.near[g] = null; r.r12[g] = 0; r.r24[g] = 0; r.all[g] = 0; r.home[g] = 0; }
       for (let t = 0; t < W * H; t++) {
         if (!S.res[t]) continue;
         const g = Object.keys(GOODS_OF).find((k) => GOODS_OF[k].includes(S.res[t])); if (!g) continue;
@@ -139,9 +154,16 @@ const api = new Function('sfx', 'PROGRESS', source + `
         if (!inZ) continue;
         const d = dist(i, j, L.x, L.y), v = S.amt[t] || 1;
         r.all[g] += v; if (d <= 12) r.r12[g] += v; if (d <= 24) r.r24[g] += v;
+        if (d <= opts.homeR) r.home[g]++; // (tiles, for the starter-field floor)
         if (r.near[g] === null || d < r.near[g]) r.near[g] = +d.toFixed(1);
       }
       return r;
+    });
+    // The starter fields' floor (HOME_FLOOR): too few Ore or Crystal tiles at home.
+    out.thin = [];
+    out.reach.forEach((r, k) => {
+      if (out.starts[k].inside === false) return; // (Half underground's surface: no Ore or Crystal at home, by design)
+      for (const g in opts.floor) if (r.home[g] < opts.floor[g]) out.thin.push('colony ' + (k + 1) + ' has ' + r.home[g] + ' ' + g + ' tiles within ' + opts.homeR + ' (floor ' + opts.floor[g] + ')');
     });
     // Fairness: the smallest over the largest of each good within 24 tiles, among colonies of a kind (Half underground: inside and outside apart).
     out.fair = {};
@@ -214,7 +236,7 @@ const api = new Function('sfx', 'PROGRESS', source + `
 `)(() => {}, args.includes('--progress') ? (s, ms) => console.error('    ' + Math.round(s / 60) + ' min at ' + Math.round(ms / 1000) + ' s') : null);
 
 const results = [];
-let failures = 0;
+let failures = 0, thinCases = 0;
 const pick = api.SHAPE_PRESETS.map((p, k) => [p, k]).filter(([p]) => !only || (only[0] === '=' ? p.name === only.slice(1) : p.name.toLowerCase().includes(only.toLowerCase())));
 for (const [preset, shape] of pick) {
   const row = { map: preset.name, cases: [], ai: [] };
@@ -224,12 +246,13 @@ for (const [preset, shape] of pick) {
       if (api.mapSizeForPlayers(size, players) !== size) continue;
       for (const teams of players === 4 ? [false, true] : [false]) {
         for (const seed of seeds) {
-          const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks', murmur: 'active', biome: 'desert' };
+          const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks', murmur: 'active', biome: 'desert', homeR: HOME_R, floor: FLOOR_OF[preset.name] || HOME_FLOOR };
           const label = [preset.name, api.SIZE_PRESETS[size].name, players + 'p', teams ? 'teams' : 'ffa', 'seed ' + seed].join(' / ');
           let r;
           try { r = api.audit(opts); } catch (e) { r = { problems: ['exception: ' + e.stack.split('\n').slice(0, 3).join(' | ')] }; }
           r.label = label; r.size = size; r.seed = seed; r.teams = teams; r.np = players;
           row.cases.push(r);
+          if (r.thin && r.thin.length) { if (THIN.has(preset.name) && !strict) { console.log('THIN ' + label + ': ' + r.thin.join('; ')); thinCases++; } else r.problems.push(...r.thin); }
           if (r.problems.length) { failures++; console.log('PROBLEM ' + label + ': ' + r.problems.join('; ')); }
         }
       }
@@ -259,5 +282,6 @@ for (const [preset, shape] of pick) {
   results.push(row);
 }
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify(results, null, 1));
+if (thinCases) console.log(thinCases + ' thin starter-field cases on maps in THIN (the owner\'s open call; --strict fails them)');
 console.log(failures ? failures + ' problem cases' : 'no problems');
 process.exitCode = failures ? 1 : 0;

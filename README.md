@@ -509,7 +509,8 @@ the Observer's setup too). Planetary events run but **no dust storm** (`updateEv
 Ringfall, solar flares and the Wren come. **Economy**: Argos's, with **more oil** than any other map (`RING.oil`: three fields of four
 seeps on each home asteroid, two of three on the middle rock (and its twin) and one of three on every side and resource rock, at
 least ten times a standard map's) so Fuel (Oil Pump, Refinery) is never short; the starter fields are the standard colony's (the same
-offsets from the Command Base) and richer ones lie further out, each home asteroid is topped up to `RING.stone` Stone, and Ore, Crystal, Stalk and
+offsets from the Command Base) and richer ones lie further out, the Ore and Crystal ones each made up to `RING.field` (4) tiles where the asteroid's
+edge cut the stamp (`field` in `ringMap`, Nov 27 2026: a seed could leave one Crystal tile), each home asteroid is topped up to `RING.stone` Stone, and Ore, Crystal, Stalk and
 Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
 the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
 crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in Cargo Planes (`aiAir`, see *The rival's aircraft* under the AI); the map is laid out so every gap on the way is
@@ -571,8 +572,14 @@ cloud drifting under the decks and the decks' shadow on the air drawn in code; s
 pictures are in, `orbSkyCode`, the sky drawn in code), `orbDeckPaint` (plating,
 seams, rivets, kerb and railing, baked with the ground), `orbVoidPaint` (the hull under a deck's southern edge), `orbitalBridges` (the swinging
 leaves, corner lamps, the RAISING / LOWERING word) and `drawOrbBox`. **Economy**: as The Ring's: the standard colony's starter fields (Stalk, fertile
-soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`) with an
-oil seep or two each (`ORBITAL.oil`), Ore, Crystal, Stalk and Stone `ORBITAL.mul` (1.25) richer, each home deck topped up to `ORBITAL.stone` Stone. A
+soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`: Ore,
+Crystal and Stone in turn, the first Ore and Crystal always placed) with an oil seep or two each (`ORBITAL.oil`), Ore, Crystal, Stalk and Stone
+`ORBITAL.mul` (1.25) richer, each home deck topped up to `ORBITAL.stone` Stone. The home deck is short and its top edge carries the bridge heads, so
+its Ore and Crystal fields are laid first and each is made up to `ORBITAL.field.home` (5) tiles, its fertile soil to `soil` (8), and every field on
+the other decks to `deck` (4), from the free tiles nearest the field where the rim, a bridge head or a crag took part of it (`field` in
+`orbitalMap`; before Nov 27 2026 a Small home deck could have one Ore tile, or none). Crags keep 13 tiles from each Command Base, and a bridge head's
+clear ground is 3 tiles deep and 2 either side of the strip (the control boxes stand on it). On Small the side and middle decks are nearly all
+bridge heads and the post's middle, so their fields are few. A
 lowered bridge's road joins the two decks' road networks, so Haulers and trucks cross on it; raised, it is cut, and goods cross by Viaduct (which spans a raised bridge).
 **The rival** (`aiBridges`, `AI_BRIDGE`, js/ai.js): lowers a raised bridge of its own once 45 to 90 s have passed (by level) and the enemy
 warbots near it are fewer than 3, at once if its home deck is cut off from yours, and never shuts itself in; Medium and up raise a bridge
