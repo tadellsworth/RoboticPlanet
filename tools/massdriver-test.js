@@ -317,6 +317,29 @@ const full = JSON.parse(run(mk(), `
 `));
 check('a far end nothing collects from stops at ' + 64 + ' of a good, the Driver says "Far end full", and ships again once some is used', full.far === 1 && full.held <= full.max && full.held >= full.max - 16 && full.sent <= full.max + 16 && /Far end full/.test(full.status) && full.again, full);
 
+// ---- the cap is a good at a time (the owner's question, decided Nov 26 2026): 64 Cement nobody collects at the far
+// end doesn't stop the Fuel its Generator burns from coming; and every shot burns half a Fuel at its Generator
+const cap2 = JSON.parse(run(mk(), `
+  newGame({ seed: 5, mode: 'colony', size: 3, rough: 0 });
+  ${HELP}
+  const L = getE(S.players[0].lander), hz = S.zone[tIdx(L.x, L.y)];
+  for (const g of ['cement', 'alloy', 'chip', 'fuel']) bump(L.stock, g, 300);
+  const d = spot(L.x, L.y, 3, 6, (i, j) => S.zone[tIdx(i, j)] === hz && free(tIdx(i + 1, j)));
+  const D = driver(d[0], d[1]); const GD = gen(D.x, D.y);
+  const far = spot(D.x, D.y, 24, 26, (i, j) => dist(i, j, L.x, L.y) > dist(D.x, D.y, L.x, L.y) + 16);
+  const C = addBuilding(0, 'catcher', far[0], far[1], true); const GC = gen(C.x, C.y); GC.stock.fuel = 0;
+  computeTerritory(); computeZones();
+  applyOrder(0, 'mdAim', [D.id, C.id]);
+  applyOrder(0, 'mdSend', [D.id, 'cement', true]); applyOrder(0, 'mdSend', [D.id, 'fuel', true]);
+  bump(C.stock, 'cement', MASSDRIVER.full); // (full of Cement already, nothing there uses it)
+  const f0 = (GD.stock.fuel || 0) + (GD.energy || 0) / BDEFS.generator.burner.perFuel, s0 = D.mdSent || 0;
+  until(() => { if ((D.stock.fuel || 0) < 16) bump(D.stock, 'fuel', 16); if ((D.stock.cement || 0) < 16) bump(D.stock, 'cement', 16); return false; }, 120);
+  const shots = Math.round(((D.mdSent || 0) - s0) / MASSDRIVER.load), burned = f0 - ((GD.stock.fuel || 0) + (GD.energy || 0) / BDEFS.generator.burner.perFuel);
+  return JSON.stringify({ cement: C.stock.cement || 0, fuelThere: (C.stock.fuel || 0) + (GC.stock.fuel || 0), shots, burned: +burned.toFixed(2), perShot: MASSDRIVER.shot / BDEFS.generator.burner.perFuel });
+`));
+check('the far end\'s cap counts each good on its own: full of Cement, it still takes Fuel', cap2.cement <= 64 && cap2.fuelThere >= 16, cap2);
+check('each shot burns about half a Fuel at the Generator in reach', cap2.shots >= 3 && Math.abs(cap2.burned - cap2.shots * cap2.perShot) <= 1.2, cap2);
+
 // ---- the rival builds a pair: a Driver at home and a Catcher kit to an island it holds that no road reaches
 const ai = JSON.parse(run(mk(), `
   newGame({ seed: 11, mode: 'versus', size: 3, murmur: 'off', shape: SHAPE_PRESETS.findIndex((s) => s.name === 'Islands') });

@@ -1827,7 +1827,9 @@ function generateMap(seed, W, H, cfg) {
     for (const b of bases) d = Math.min(d, dist(i, j, b.x, b.y));
     const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
     const canyonRich = SH.grandCanyon && elev[t] === 0 && (res[t] === R_ORE || res[t] === R_CRYSTAL) ? 1.5 : 1;
-    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich * canyonRich), 1, 255);
+    // (Long haul's Ore and Crystal hold SH.haulRich times as much: the economy audit of Nov 26 2026)
+    const haulRich = SH.haulRich && (res[t] === R_ORE || res[t] === R_CRYSTAL) ? SH.haulRich : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich * canyonRich * haulRich), 1, 255);
   }
   const grow = new Float32Array(N).fill(1);
   // Sky islands: no water anywhere. The islands are towering mesas (the middle one and the islets a

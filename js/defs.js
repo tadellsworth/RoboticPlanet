@@ -381,8 +381,11 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * or `reloadLand` s when a robot could walk from one end to the other (mdOverland: then it is a shortcut over land, not
  * a crossing; the owner, Nov 26 2026). A Catcher takes `drivers` Drivers at most.
  * The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high at full range. Fuel
- * flies in sealed drums (no Crude). Power: no Fuel of its own, but an end fires only with a Generator (with Fuel) within
- * the Generator's radius (magPowered); without one it waits (it still catches). A canister has `hp`: an enemy Flak Gun
+ * flies in sealed drums (no Crude), shipped beyond a reserve of `fuelReserve` (the far end's Generator powers its shots
+ * home); a rival's automatic shipments keep `aiReserve` of a good, not `reserve` (its Alloy and Chips never sit in
+ * storage). Power: an end fires only with a Generator (with Fuel) within the Generator's radius (magPowered), and each
+ * shot takes `shot` seconds of that Generator's work, half a Fuel (mdShotPower; the economy audit of Nov 26 2026,
+ * owner-approved); without one it waits (it still catches). The far end's cap, `full`, counts each good on its own. A canister has `hp`: an enemy Flak Gun
  * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
  * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
  * the Hollow (nothing flies under the cavern roof).
@@ -393,7 +396,7 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * A far end nothing collects from fills up: past `full` of a good there (or what it keeps, if more), no more of it is
  * shipped there ("Far end full"). The rival builds a pair to an island or mesa it holds that no road reaches (aiMassDriver).
  */
-const MASSDRIVER = { min: 12, max: 50, kitClaim: 3, kitBuild: 20, full: 64, goods: 3, reserve: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
+const MASSDRIVER = { min: 12, max: 50, kitClaim: 3, kitBuild: 20, full: 64, goods: 3, reserve: 20, fuelReserve: 6, aiReserve: 6, shot: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
   flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
@@ -735,7 +738,7 @@ const MAP_GROUPS = [
 const SHAPE_PRESETS = [
   { name: 'Standard', group: 'open', blurb: 'Open ground with hills, cliffs and resource fields between the bases. Holds up to four: with four, a colony in each corner.', w: 1, h: 1, ffa: true, players: 4, std4: true,
     quadTip: 'Standard for four: a colony in each corner of open ground, hills, cliffs and resource fields between. Your neighbours are beside you to the north and east; the colony across the middle is the far one.' },
-  { name: 'Long haul', group: 'open', blurb: 'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).', w: 0.75, h: 1.7 },
+  { name: 'Long haul', group: 'open', blurb: 'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail). Its Ore and Crystal fields hold half as much again.', w: 0.75, h: 1.7, haulRich: 1.5 },
   { name: 'Chokepoint', group: 'divided', blurb: 'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
   { name: 'Islands', group: 'water', blurb: 'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
   { name: 'Crater', group: 'heights', blurb: 'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
@@ -764,7 +767,7 @@ const SHAPE_PRESETS = [
   // Long Haul 2v2: the Long haul planet (as long, and 1.6 times as wide), standing upright, with two colonies side by side
   // at each end, all four the same (mirrored left to right and end to end: see haul4Map). `teamDefault`: picking it turns
   // Teams: 2 vs 2 on.
-  { name: 'Long Haul 2v2', group: 'open', blurb: 'For four, made for 2 vs 2: the long, narrow planet of Long haul made wider, two colonies side by side at each end and the richest fields strung along the long middle: a war of supply lines.', w: 1.2, h: 1.7, haul4: true, players: 4, minPlayers: 4, teamDefault: true, tip: 'Long Haul 2v2: two colonies side by side at each end of a long planet (in 2 vs 2 your ally lands beside you, the other team at the far end). The richest fields lie along the long middle, richer the further out you go, with a neutral Trade Post at the very centre and more down the middle line. Push Depots, Freight Trucks, Road Trains and rail up the map, and guard the line.' },
+  { name: 'Long Haul 2v2', group: 'open', blurb: 'For four, made for 2 vs 2: the long, narrow planet of Long haul made wider, two colonies side by side at each end and the richest fields strung along the long middle: a war of supply lines.', w: 1.2, h: 1.7, haul4: true, haulRich: 1.5, players: 4, minPlayers: 4, teamDefault: true, tip: 'Long Haul 2v2: two colonies side by side at each end of a long planet (in 2 vs 2 your ally lands beside you, the other team at the far end). The richest fields lie along the long middle, richer the further out you go (every Ore and Crystal field holds half as much again as elsewhere), with a neutral Trade Post at the very centre and more down the middle line. Push Depots, Freight Trucks, Road Trains and rail up the map, and guard the line.' },
   // The Hollow (LORE.md): the Murmur's cavern lair under the Bloom, its own map with its own look (the biome 'hollow',
   // whatever the Biome setting) and always night. `murmur` and `alwaysNight` are read by the Murmur's night system.
   { name: 'The Hollow', group: 'heights', blurb: 'The Murmur\'s cavern lair, always night: caverns joined by passages and chasms, black lakes, the most Murmur nests of any planet, and daylight only down the breach shafts.', w: 1.15, h: 1.25, hollow: true, murmur: 'active', alwaysNight: true,
@@ -1707,7 +1710,7 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles, and each shot draws half a Fuel from it. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
     cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {

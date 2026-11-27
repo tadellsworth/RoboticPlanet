@@ -5670,8 +5670,8 @@ function renderMdSection(b) {
     const land = rates[k] === M.reloadLand, who = ps.length > 1 ? ` to the Driver ${dirText(b, o)}` : '';
     h += `<div class="kv"><span>Rate${who}</span><span>a shot every ${rates[k]} s each way: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
   });
-  h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach' : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
-  if (!pow) h += `<p class="hint">It burns no Fuel itself, but it fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles. Fuel can fly here by canister, in sealed drums.</p>`;
+  h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach: half a Fuel a shot' : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
+  if (!pow) h += `<p class="hint">It fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles, and each shot draws half a Fuel from it. Fuel can fly here by canister, in sealed drums.</p>`;
   if (fort) {
     h += `<p class="hint">One way: it keeps the ${BDEFS[live.type].name}'s Ammo${live.type === 'keep' ? ' and its cannon\'s Crystal' : ''} topped up for the warbots stationed there, out of what your colony holds beyond ${M.reserve} at home.${ships.length ? ` On its way: ${gl(Object.fromEntries(ships))}.` : ''}</p>`;
   } else if (ps.length) {
@@ -5679,7 +5679,7 @@ function renderMdSection(b) {
     if (far && b.auto) h += `<div class="kv"><span>Keeps here</span><span>${gl(b.auto)}</span></div>`;
     h += `<div class="section-label">Goods to send <span class="label-note">${manual ? `a goods list: up to ${M.goods}; the number is what stays home` : 'Auto: what the other end needs'}</span></div>`;
     h += `<div class="seg" id="sh-mdmode"><button data-v="auto" class="${manual ? '' : 'on'}">Auto</button><button data-v="list" class="${manual ? 'on' : ''}">Goods list</button></div>`;
-    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each.`}</p>`;
+    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each (Fuel beyond ${M.fuelReserve}, for the far end's Generator).`}</p>`;
     else {
       const gs = Object.keys(list || {});
       h += gs.length ? `<div class="keep-list" id="sh-mdlist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name} <small>(${Math.floor(b.stock[g] || 0)} loaded)</small></span><b class="n">${list[g]}</b>

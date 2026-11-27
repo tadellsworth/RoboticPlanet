@@ -9,8 +9,8 @@ and biomes started here and are now in the game.)
 2. **Opening fairness.** [Long Haul spot check](docs/economy-balance-audit.md#opening-fairness-spot-check). Compare time to reliable Fuel, Alloy and Chips across mirrored starts. Include route length and ramp cost on Islands, Long haul and team maps. The doctrine games showed colony 1 winning 25 of 39 on Standard 25 and Long haul 21. Checked on six seeds ([side lean](docs/economy-balance-audit.md#side-lean)): no consistent lean, colony 1 50 and colony 2 58 of 120; only Standard 25 favours colony 1 (16–4), the starts are exact mirrors. Left: a 1v1 game always updates colony 1's units first (Teams alternate).
 3. **Recovery after setbacks.** [First pass](docs/economy-balance-audit.md#recovery-after-losing-a-building); [road link cut](docs/economy-balance-audit.md#losing-a-key-road-link): the rival relays it in 20–45 s, output dips a minute at most. Still to run: a cut held under enemy guns or raiders.
 4. **Investment payback.** [Production buildings](docs/economy-balance-audit.md#investment-payback) repay their cost within two minutes of their own output (the Ammo Plant five); the [Mass Driver](docs/economy-balance-audit.md#mass-driver-against-maglev) was tuned against Maglev, then slowed to a shot every 10 s over walkable land with two Drivers a Catcher at most ([the owner's call](docs/economy-balance-audit.md#mass-driver-overland-lines-and-two-drivers-a-catcher)). Still to do: roads with Trucks, Express and rail, and trade, on routes suited to each.
-5. **Doctrines and snowballing.** [40 swapped games](docs/economy-balance-audit.md#doctrines-and-snowballing): Herald 11–4, Salvager 10–6, Architect 8–8, Warden 6–9, Steward 4–12; the leader in goods made at 10 minutes won 65%. The owner: the Herald stays; the Steward, the default rival, made stronger ([third pass](docs/economy-balance-audit.md#the-steward): bots 10% faster, army 15% faster from a minute sooner): 6–8 with 2 undecided on the same 40 games (from 4–12), and third of five on six seeds (20–22). Next: the Architect went 13–31 on six seeds (5–23 on the four new ones); look at what its Missile programme costs its army. Include human replays when available.
-6. **The late Chip and Crystal shortage on Long haul** (for a later audit): in undecided Long haul games both sides sit at 0 Chips from about minute 20 (seed 15 to 45 minutes: both Foundries "Waiting for Chip", colony 1 out of Ammo from minute 26; the before-merge stalls look the same). Where do the Chips and Crystal go, and why does neither side expand to new Crystal?
+5. **Doctrines and snowballing.** [40 swapped games](docs/economy-balance-audit.md#doctrines-and-snowballing): Herald 11–4, Salvager 10–6, Architect 8–8, Warden 6–9, Steward 4–12; the leader in goods made at 10 minutes won 65%. The owner: the Herald stays; the Steward, the default rival, made stronger ([third pass](docs/economy-balance-audit.md#the-steward): bots 10% faster, army 15% faster from a minute sooner): 6–8 with 2 undecided on the same 40 games (from 4–12), and third of five on six seeds (20–22). Next: the Architect went 13–31 on six seeds (5–23 on the four new ones); look at what its Missile programme costs its army. **Done ([economy audit, Nov 26 2026](docs/economy-audit-nov26.md#2-the-architect)):** the cause was its build order (its extra Smelter, Tap and Fab ahead of the Mine, Harvester and Grove Planter that feed them) and its Fuel, not the Missiles; its inputs now come first and its programme waits for a Mine and a Harvester at work: 10–22–4 → 16–15–5 in 36 games, about even with every doctrine but the Herald; on the two-seed tournament (Standard 25, Long haul 21) Steward 9–6, Salvager 9–6, Architect 8–7, Herald 7–8, Warden 4–10 (was 7–8). Open: is the Warden's drop these two seeds only, or does it need the push the Steward had? Include human replays when available.
+6. **The late Chip and Crystal shortage on Long haul** (for a later audit): in undecided Long haul games both sides sit at 0 Chips from about minute 20 (seed 15 to 45 minutes: both Foundries "Waiting for Chip", colony 1 out of Ammo from minute 26; the before-merge stalls look the same). Where do the Chips and Crystal go, and why does neither side expand to new Crystal? **Done ([economy audit, Nov 26 2026](docs/economy-audit-nov26.md#1-chips-and-crystal-late-on-long-haul)):** not the ground (hundreds of Ore and Crystal outlast every game) nor a demand spike (the Foundry takes nine Chips in ten): the rivals kept one Mine, one Smelter and one Fab at work as their fields worked out. A thin chain now gets its next Mine, Smelter, Fab, Tap or Harvester first (`AI_THIN`), and Long haul's Ore and Crystal hold half as much again (`haulRich`): Chips a colony-minute 2.29 → 3.03, Crystal 1.88 → 3.29. Open: two of four Long Haul 2v2 games now reach the hour.
 
 ## The Economy panel (built Nov 26 2026: calls made, open questions for the owner)
 
@@ -558,6 +558,14 @@ teaches it. The calls made in building it, open for the owner:
     rival owes its fee, its conveyors don't hand on what it owes, its Ammo Plant rests and, after 45 s, its Foundry:
     online 289 s (Lance, seed 8) and 430 s (Deep Core, seed 12) after it was seized. Watch: a long fee on a war footing
     rests the rival's Foundry for minutes; worth it for a Lance, maybe not for a Shield Dome.
+    **Decided (Nov 26 2026, economy audit; the owner gave the go-ahead to settle it):** the Foundry's rest scales with
+    the fee's Alloy and Chips: 45 s for 18 or more (a Lift's, an Uplink's), 45 × 18 ÷ the fee for less (a Dome's 9: 90 s;
+    a Lance's 12: 68 s), and no rest under 6 (`AI_SEIZE.restFee`, `restMin`); the Ammo Plant still rests at once.
+    Measured with `tools/mega-fee-audit.js` (a rival handed a seized megastructure at 16 minutes; scaled, a fixed 45 s,
+    never): a Dome came online in 111, 111, 111 s on Standard 25 and 118, 123, 331 s on Long haul 21, the Foundry
+    resting 6 and 18 s scaled against 52 and 66 fixed; a Lance in 135, 129, 150 s (Standard 25) and 143, 138, 270 s (Long
+    haul 21), resting 58 and 72 s against 78 and 88. So a small fee still comes in as fast with the Foundry mostly
+    running, and a big one keeps the full rest, which roughly halves the wait on Long haul.
 - **Megastructure design sheet: Seismic Lance, Deep Core, Atmosphere Engine, and Arrival City's new Soviet-bloc look
   (Nov 21 2026): APPROVED, the recommendations for all 31 questions except the Seismic Lance's look, which is
   **B Piston Battery**. Renamed (the owner, Nov 21 2026): the **Sundering Ray** (first Groundbreaker; not "Seismic Lance": the Lance of Corvane already has the name); short name and key to choose so they don't clash. Was recommended: Seismic A Hammer Pit, Deep Core A Headframe, City A Four Blocks round a Square (C Twin Towers runner-up),
@@ -1787,7 +1795,24 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     Viaduct), a kit where nothing of its can. Not done: a kit to a rich deposit nobody holds (no Worker can follow it
     there, so nothing could be built round it: a Ferry or a Drop Outpost first). (3) **Far end full**: a far end stops
     taking a good at 64 (or what it keeps, if more), the near end's status and panel say so, and it sends again once some
-    is used. Open: 64 a good, or a cap on the whole stock?
+    is used. ~~Open: 64 a good, or a cap on the whole stock?~~
+    **Decided (Nov 26 2026, economy audit; the owner: "do whatever you recommend to make the Mass Driver a competitive
+    option but also balanced so it isn't too good"; see [the audit](docs/economy-audit-nov26.md#the-mass-driver)):**
+    (a) **The cap stays 64 a good, each good counted on its own.** A cap on the whole stock would let a pile of one good
+    nothing collects (64 Cement on an island with no site left) stop the goods the far end does use, the Fuel its own
+    Generator burns first, and the line would go dark from the far end (`tools/massdriver-test.js` checks a far end full
+    of Cement still takes its Fuel). A far end holds 192 at most on a goods list of three. (b) **A shot costs Fuel:**
+    half a Fuel from the Generator in reach (`MASSDRIVER.shot`, 20 s of its work). Measured over 37 tiles of land
+    (`tools/freight-compare.js`), a line's Generators burned 0.2 Fuel a minute, next to nothing, against 2.2 for a 4-pod
+    Maglev line's and 1 to 1.2 for four Freight Trucks or Road Trains: now 3.2 a minute at an end firing flat out over
+    land, 4.1 across the sea. Its other numbers stay: it is still by far the cheapest long link to build (43 goods for the
+    pair against 133 to 135 for rail or a 4-pod Maglev line), up in 30 s of building against 169 s for a 37-tile Maglev
+    line, 88 goods a minute one way over land (112 across the sea) against 117 to 118 for rail and Maglev, nothing on the
+    ground between to defend, and the one way over a gap no line spans. What it gives up is running cost and a cap of
+    two Drivers a Catcher. (c) **Its Fuel is shipped beyond a reserve of 6, not 20** (`fuelReserve`), so the far end's
+    Generator keeps the line firing home; and **a rival's automatic shipments keep 6 of a good, not 20** (`aiReserve`):
+    a rival's Alloy and Chips never sit in storage, so its pairs had little to fire (the Architect's held Fuel past 20
+    only now and then).
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
@@ -2838,6 +2863,15 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
 - Rivals don't terraform yet (the owner's call). They cope with what a player does (their routes, sites and Ports follow
   the new ground), but they don't answer a moat or a land bridge on purpose. Teaching them is the next step once the
   numbers settle.
+  **The rule for when they do (the owner, Nov 26 2026; not built yet):** a rival terraforms only a little, and only
+  where stage 1 clearly pays in a long game, never as a habit or for show. The cases: *flattening* a little ground for
+  room when its land has no spot left for a building it wants (a Mine or Smelter on a field ringed by rises, a
+  megastructure's footprint); a *land bridge* of filled shallows to a near island it means to hold, when the fill is
+  cheaper than a Port and Ferry or a Viaduct; *filling a channel* that blocks its expansion toward Ore or Crystal it is
+  short of (P.short). Each is a one-off job with a clear payback, a Grader or two at most, from the middle game (not in
+  the opening, when Stone builds its colony), and never moats, raised banks or anything aimed at a rival's ground. The
+  economy audit of Nov 26 2026 found nothing that needed it yet: rivals ran short for want of Mines kept at work on the
+  Ore they already held, not for want of room.
 - Dug ground is plain water (robots can't wade it), so a moat stops walkers; a ford-like "wadeable" dig could be a
   later option.
 - Later stages stay as listed: blasting cliffs, landslides, flooding; then soil, resources, earthworks, big projects.

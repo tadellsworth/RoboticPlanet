@@ -1085,7 +1085,7 @@ const MISSIONS = [
     intro: [
       'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
       'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
-      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles. A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
+      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles, and every shot draws half a Fuel from it. A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
       'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
       'No foothold out there? A Driver throws a <b>Catcher kit</b> to open ground: it assembles itself into a Catcher.',
     ],
@@ -1125,7 +1125,7 @@ const MISSIONS = [
         ui: '#sh-mdaim' },
       { kind: 'mdPower', n: 1, text: 'Power both ends: a Generator by each', at: 'catcher',
         count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && magPowered(b) && mdCatcher(b) && magPowered(mdCatcher(b))) ? 1 : 0),
-        hint: 'A <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each end. The camp\'s comes by canister.',
+        hint: 'A <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each end: half a Fuel a shot.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
       { kind: 'mdFreight', n: [16, 24, 32], text: 'Catch {n} goods by canister', at: 'catcher',
         count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].catcher ? b.mdGot || 0 : 0), 0),

@@ -21397,7 +21397,13 @@ function mdHeld(p, g) {
 }
 
 /** The reserve end b keeps at home of good g it sends (its goods list's, else MASSDRIVER.reserve), or undefined if it doesn't send it. */
-function mdReserveOf(b, g) { return b.mdSend ? b.mdSend[g] : mdAutoN(b, g) > 0 ? MASSDRIVER.reserve : undefined; }
+function mdReserveOf(b, g) {
+  if (b.mdSend) return b.mdSend[g];
+  if (!(mdAutoN(b, g) > 0)) return undefined;
+  // (Fuel for the far end's own Generator, which powers its shots home, goes from a smaller reserve; and a rival's
+  // Alloy and Chips never sit in storage, so it ships from a smaller one: the economy audit of Nov 26 2026.)
+  return g === 'fuel' ? MASSDRIVER.fuelReserve : S.players[b.owner] && S.players[b.owner].ai ? MASSDRIVER.aiReserve : MASSDRIVER.reserve;
+}
 
 /** How much more of good g Haulers should bring end b (the near end only): up to its hopper (or what it ships), from what the colony holds beyond the reserve. */
 function mdWant(b, g) {
@@ -21585,11 +21591,38 @@ function mdLaunch(b) {
   S.cans.push({ id: S.nextId++, owner: b.owner, from: b.id, to: C.id, goods, t: 0, dur: M.flightMin + (M.flight - M.flightMin) * k,
     x0: o.x, y0: o.y, x1: C.x + 0.5, y1: C.y + 0.5, hp: M.hp });
   b.mdCd = mdReload(b, C) - M.charge; // (a shot every `reload` s, `reloadLand` s over land, its coils' charge included)
+  mdShotPower(b);
   b.mdLast = S.time;
   b.mdShot = S.time; // (the muzzle flash and the guidance beam: see drawMassDrivers)
   b.mdSent = (b.mdSent || 0) + n;
   b.working = true;
   sfx('mdlaunch', b.x + 0.5, b.y + 0.5);
+}
+
+/**
+ * A shot's power (MASSDRIVER.shot): `shot` seconds of a Generator's work taken from the one in reach with the most
+ * Fuel (its b.energy, a Fuel burned for more when it runs out): half a Fuel a shot at today's numbers. (The economy
+ * audit of Nov 26 2026: a line's Generators burned 0.2 Fuel a minute, next to nothing, against about 2 for a Maglev
+ * line's and 1 to 2 for four Freight Trucks: now about 3 a minute at each end at full rate.)
+ */
+function mdShotPower(b) {
+  const G = BDEFS.generator.burner, r2 = G.radius * G.radius;
+  let g = null;
+  for (const o of S.buildings) {
+    if (o.dead || o.owner !== b.owner || !o.built || o.type !== 'generator' || o.paused || murmurCutOn(o) || dist2(o.x, o.y, b.x, b.y) > r2) continue;
+    if (!g || (o.energy || 0) + (o.stock.fuel || 0) * G.perFuel > (g.energy || 0) + (g.stock.fuel || 0) * G.perFuel) g = o;
+  }
+  if (!g) return;
+  let need = MASSDRIVER.shot;
+  while (need > 0) {
+    if ((g.energy || 0) <= 0) {
+      if (!((g.stock.fuel || 0) >= 1)) break;
+      bump(g.stock, 'fuel', -1); usedGood(g.owner, 'fuel', 1);
+      g.energy = (g.energy || 0) + G.perFuel;
+    }
+    const k = Math.min(need, g.energy);
+    g.energy -= k; need -= k;
+  }
 }
 
 /** Canister m's height (tiles) at fraction k of its flight: an arc over everything, higher the further it flies. */
