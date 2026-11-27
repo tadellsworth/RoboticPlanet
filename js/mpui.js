@@ -194,16 +194,17 @@ function mpMenuSettings(final, people) {
   m.players = total;
   const pick = final ? resolveRandom() : { shape: m.shape || 0, biome: m.biome || 0 };
   m.players = keep;
-  const cols = !final && m.shapeRnd ? (colony ? 2 : total) : playerCount(mode, pick.shape, total);
+  const up = (people || 0) >= 3, tot = snapPlayers(pick.shape, total, up); // (Half underground: two or four; three people in the lobby make it four)
+  const cols = !final && m.shapeRnd ? (colony ? 2 : total) : playerCount(mode, pick.shape, tot);
   const size = mapSizeForPlayers(m.size[mode] ?? DEFAULT_SIZE[mode], cols);
   return {
     mode, coop: mpCoopSeats(), // (co-op: the seats sharing the host's colony; in Colony everyone does)
     seed: m.seed, diff: m.diff, size, rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(m, size), biomeRnd: !final && !!m.biomeRnd,
-    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, mega: m.mega !== 0 && m.mega !== false, upWin: !colony && menuUpWin(), events: !!m.events, victory: m.victory || 'capture',
+    players: snapPlayers(pick.shape, clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), up), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, mega: m.mega !== 0 && m.mega !== false, upWin: !colony && menuUpWin(), events: !!m.events, victory: m.victory || 'capture',
     murmur: murmurLevelOk(m.murmur) ? m.murmur : 'active', // (Off, Quiet or Active: every device makes the same Murmur)
     scars: scarsPref(), // (War scars: the host's, so every device scars the land alike)
-    teams: !colony && !!m.teams && total === 4, teamOf: !colony && m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
+    teams: !colony && !!m.teams && tot === 4, teamOf: !colony && m.teams && tot === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
     sum: mpSummary(size),
   };
 }
@@ -542,7 +543,7 @@ function mpLeaveLobby() {
  * doctrines the host picked are by place (player slot, `s.styles`); newGame takes them for its computer players in turn.
  */
 function mpGameOpts(s, humans) {
-  const total = Math.max(s.players, humans.length), cpus = Array.from({ length: total }, (_, p) => p).filter((p) => !humans.includes(p));
+  const total = snapPlayers(s.shape, Math.max(s.players, humans.length), true), cpus = Array.from({ length: total }, (_, p) => p).filter((p) => !humans.includes(p));
   return {
     seed: s.seed, difficulty: s.diff, mode: s.mode === 'colony' ? 'colony' : 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke, mega: !!s.mega, // (Megastructures: a host from before them sent none, and had none)
     upWin: !!s.upWin, // (the Great Uplink win: a host from before it sent none, and had it off)

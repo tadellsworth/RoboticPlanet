@@ -11,6 +11,7 @@ const check = new Function('assert', 'sfx', source + `
   const fields = ['terrain', 'elev', 'ramp', 'ford', 'tidal', 'fault', 'lava', 'res', 'amt', 'fert', 'cave'];
   const failures = [];
   let exact = 0, rounded = 0, shared = 0, drizzle = 0;
+  const nestCounts = [];
 
   function coordinates(tile, width) { return [tile % width, Math.floor(tile / width)]; }
 
@@ -103,6 +104,17 @@ const check = new Function('assert', 'sfx', source + `
       if (game.res[t] && calmAt(x + 0.5, y + 0.5)) throw new Error('deposit left on a Trade Post at (' + x + ',' + y + ')');
     }
     if (teams) assert.equal(game.uplinks, undefined, 'Teams use Capture');
+    // Half underground with the Murmur on: every nest has its twin west to east, and there are nests in the caves and on the surface alike.
+    if (shape.caves && game.wildlife) {
+      const nests = game.buildings.filter((b) => !b.dead && isNestB(b)), at = new Set(nests.map((b) => b.y * width + b.x));
+      let inside = 0, outside = 0;
+      for (const b of nests) {
+        assert.ok(at.has(b.y * width + (width - 1 - b.x)), 'nest (' + b.x + ',' + b.y + ') missing its twin');
+        if (game.cave[b.y * width + b.x] === 1) inside++; else outside++;
+      }
+      assert.ok(inside > 0 && outside > 0, 'nests inside and outside (' + inside + ', ' + outside + ')');
+      nestCounts.push(SIZE_PRESETS[game.settings.size].name + ' ' + game.players.filter((q) => !q.absent).length + 'p: ' + inside + ' in, ' + outside + ' out');
+    }
   }
 
   function snapshot(game) {
@@ -111,13 +123,14 @@ const check = new Function('assert', 'sfx', source + `
 
   for (const [shape, preset] of SHAPE_PRESETS.entries()) {
     for (let players = minPlayers(shape); players <= maxPlayers(shape); players++) {
+      if (!playersFit(shape, players)) continue; // (Half underground: two or four colonies, never three)
       for (let size = 0; size < SIZE_PRESETS.length; size++) {
         if (mapSizeForPlayers(size, players) !== size) continue;
         for (const teams of players === 4 ? [false, true] : [false]) {
           for (const seed of [11, 21, 37]) {
             const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids && !preset.caves; // (The Ring is always on Argos: no second biome; nor Half underground, whose caves are the second region)
             const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks',
-              murmur: preset.hollow || seed === 37 ? 'active' : 'off', biome: 'desert', biome2: mixed ? 'jungle' : undefined };
+              murmur: preset.hollow || preset.caves || seed === 37 ? 'active' : 'off', biome: 'desert', biome2: mixed ? 'jungle' : undefined };
             const label = [preset.name, SIZE_PRESETS[size].name, players, teams ? 'Teams' : 'Versus', 'seed ' + seed].join(' / ');
             try {
               const game = newGame(opts);

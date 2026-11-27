@@ -2841,7 +2841,8 @@ function ringMap(seed, W, H, cfg) {
  * caves to the north and then, on half the seeds, turned over end to end (so player 0 is inside on those). It is
  * mirror-symmetric (every tile made to its twin, west to east: the noise read at each tile's canonical place), so the two
  * colonies of a kind get the same to the bit; an inside colony and an outside one are alike in the totals (not tile for tile).
- *   - Colonies: two (one outside, one inside, on the middle line), three (an outside pair and one inside on the line), four
+ *   - Colonies: two (one outside, one inside, on the middle line), three (PARKED: an outside pair and one inside on the line; the map takes
+ *     two or four, SHAPE_PRESETS evenOnly, but older three-colony saves still load), four
  *     (an outside and an inside pair: west team, outside and inside, against east team in Teams). Half of them start inside.
  *   - The wall: a rock band across the middle (S.cave 2) that no road tunnels through; the entrances cut it. By seed: a
  *     narrow middle gate with wide mouths to each side, a wide middle mouth with narrow gates to each side, or two middle-sized
@@ -2849,7 +2850,7 @@ function ringMap(seed, W, H, cfg) {
  *   - Inside: the Hollow's look; winding passages and pillars, no stalks or fertile soil, plenty of Ore and Crystal, Stone and oil.
  *     Outside: flat ground with crags, the standard colony's stalk groves, fertile soil, Stone and oil, and little Ore or Crystal.
  *   - Returns what generateMap does, plus `cave` (the S.cave tile mask) and `caves`: { south, seats: [{x, y, inside}],
- *     entrances: [{x, y, hw}], nests: [{x, y}] (twin pairs, inside), wall: [y of the wall's middle at each column] }.
+ *     entrances: [{x, y, hw}], nests: [{x, y}] (twin pairs, inside), nestsOut: the same on the surface, wall: [y of the wall's middle at each column] }.
  */
 function cavesMap(seed, W, H, cfg) {
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
@@ -3044,17 +3045,50 @@ function cavesMap(seed, W, H, cfg) {
   }
   // The Murmur's nest sites (used only with the Murmur on): open inside floor away from the colonies and the entrances, in twin pairs.
   const nests = [], want = C.nests[sz] || 2;
-  {
-    const cands = [];
+  // (Crowded out, a little closer to the colonies and the mouths and to each other, only to have as many as the Size's: the small maps.)
+  for (let pass = 0; pass < 4 && nests.length < want * 2; pass++) {
+    const fromSeat = [15, 12, 10, 8][pass], fromMouth = [11, 9, 7, 5][pass], apart = [9, 8, 7, 6][pass], cands = [];
     for (let j = 3; j < H - 3; j++) for (let i = 3; i <= Math.floor(ccx); i++) {
       const t = id(i, j);
       if (cave[t] !== 1 || terrain[t] !== T_GROUND || res[t] || mir(t) === t) continue;
       let o = 0; orth(t, (u) => { if (terrain[u] === T_GROUND) o++; });
-      if (o < 3 || seats.some((s) => dist(i, j, s.x, s.y) < 15 || dist(i, j, W - 1 - s.x, s.y) < 15) || entrances.some((e) => dist(i, j, e.x, e.y) < e.hw + 11) || !reach[t]) continue;
+      if (o < 3 || seats.some((s) => dist(i, j, s.x, s.y) < fromSeat || dist(i, j, W - 1 - s.x, s.y) < fromSeat) || entrances.some((e) => dist(i, j, e.x, e.y) < e.hw + fromMouth) || !reach[t]) continue;
       cands.push({ x: i, y: j, h: hash2(i, j, sE ^ 0x1234) });
     }
     cands.sort((a, b) => a.h - b.h || a.x - b.x || a.y - b.y);
-    for (const c of cands) { if (nests.length >= want * 2) break; if (nests.every((n) => dist(n.x, n.y, c.x, c.y) >= 9)) nests.push({ x: c.x, y: c.y }, { x: W - 1 - c.x, y: c.y }); }
+    for (const c of cands) { if (nests.length >= want * 2) break; if (nests.every((n) => dist(n.x, n.y, c.x, c.y) >= apart && dist(n.x, n.y, W - 1 - c.x, c.y) >= apart)) nests.push({ x: c.x, y: c.y }, { x: W - 1 - c.x, y: c.y }); }
+  }
+  // ...and the same on the surface, where the Murmur live as on any map: the ordinary rule (placeNestsVersus: MURMUR.active's `orbits` at most, one orbit
+  // of nests a colony, `perTiles` of ground for each, and the Murmur Quiet's one orbit; here a pair is an orbit's two nests: the map is mirrored west to east, not turned).
+  // Open ground off the colonies' ground (MURMUR.minBase), the mouths and the ways between them (MURMUR.offRoute), twin pairs as the cave ones. They are fair
+  // between the two kinds of start: each colony faces the nests of its own half (an outside one these, an inside one the cave ones), the same number a colony.
+  const nestsOut = [];
+  {
+    let ground = 0; for (let t = 0; t < N; t++) if (cave[t] === 0 && terrain[t] === T_GROUND) ground++;
+    const A = MURMUR.active, orbits = clamp(Math.round(ground / (A.perTiles * Math.max(1, np / 2))), 1, A.orbits), pairs = Math.round(orbits * np / 2);
+    // The ways: from each colony to each mouth (its own half; the east ones mirrored in the same loop) and between the outside colonies.
+    const ways = [];
+    for (const s of seats) for (const e of entrances) { const ey = wc[clamp(e.x, 0, W - 1)] + (s.inside ? -th - 3 : th + 3); for (const sx of [s.x, W - 1 - s.x]) ways.push([sx, s.y, e.x, ey]); }
+    const outs = seats.filter((s) => !s.inside); if (np === 4) ways.push([outs[0].x, outs[0].y, W - 1 - outs[0].x, outs[0].y]);
+    const toWay = (i, j) => { let d = Infinity; for (const [ax, ay, bx, by] of ways) { const dx = bx - ax, dy = by - ay, f = clamp(((i - ax) * dx + (j - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1); d = Math.min(d, dist(i, j, ax + dx * f, ay + dy * f)); } return d; };
+    const span = Math.hypot(W, H);
+    for (let pass = 0; pass < 5 && nestsOut.length < pairs * 2; pass++) { // (crowded out: a little closer in, closer together, nearer the ways, as placeNestsVersus does)
+      const minBase = Math.max(MURMUR.minBase, span * 0.2) * [1, 0.85, 0.7, 0.55, 0.45][pass], apart = [12, 10, 8, 7, 6][pass], offRoute = [MURMUR.offRoute, 3, 0, 0, 0][pass];
+      const cands = [];
+      for (let j = 3; j < H - 3; j++) for (let i = 3; i <= Math.floor(ccx); i++) {
+        const t = id(i, j);
+        if (cave[t] !== 0 || terrain[t] !== T_GROUND || res[t] || fert[t] || mir(t) === t || !reach[t]) continue;
+        let o = 0; orth(t, (u) => { if (terrain[u] === T_GROUND) o++; });
+        if (o < 3 || seats.some((s) => dist(i, j, s.x, s.y) < minBase || dist(i, j, W - 1 - s.x, s.y) < minBase) || entrances.some((e) => dist(i, j, e.x, e.y) < e.hw + 11) || toWay(i, j) < offRoute) continue;
+        cands.push({ x: i, y: j, h: hash2(i, j, sE ^ 0x5eed) });
+      }
+      cands.sort((a, b) => a.h - b.h || a.x - b.x || a.y - b.y);
+      for (const c of cands) {
+        if (nestsOut.length >= pairs * 2) break;
+        const tw = { x: W - 1 - c.x, y: c.y };
+        if (dist(c.x, c.y, tw.x, tw.y) >= apart && nestsOut.every((n) => dist(n.x, n.y, c.x, c.y) >= apart && dist(n.x, n.y, tw.x, tw.y) >= apart)) nestsOut.push({ x: c.x, y: c.y }, tw);
+      }
+    }
   }
   // Turn it over end to end for half the seeds (the caves south: player 0 inside), and put the colonies in order: south first, the west team first.
   const south = hash2(9, 9, sE) < 0.5;
@@ -3065,13 +3099,14 @@ function cavesMap(seed, W, H, cfg) {
     for (const s of seats) s.y = H - 1 - s.y;
     for (const e of entrances) e.y = H - 1 - e.y;
     for (const n of nests) n.y = H - 1 - n.y;
+    for (const n of nestsOut) n.y = H - 1 - n.y;
     order = np === 2 ? [1, 0] : np === 3 ? [1, 0, 2] : [1, 0, 3, 2];
   }
   const ordered = order.map((k) => seats[k]);
   return {
     ...out, bases: ordered.map((s) => ({ x: s.x, y: s.y })),
     spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
-    caves: { south, seats: ordered.map((s) => ({ x: s.x, y: s.y, inside: s.inside })), entrances, nests, variant },
+    caves: { south, seats: ordered.map((s) => ({ x: s.x, y: s.y, inside: s.inside })), entrances, nests, nestsOut, variant },
   };
 }
 
@@ -3082,8 +3117,17 @@ function maxPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return 
 /** The fewest players map type `shape` is made for: 2, or 3 on the maps built round three or four colonies. */
 function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.minPlayers || 2; }
 
+/**
+ * Map types with `evenOnly` (Half underground) take two or four colonies, never three (the owner's call, Nov 2026; its three-colony layout
+ * is parked in cavesMap). A three that arrives (a saved setting, a lobby, a link) becomes two, or four with `up` (a lobby of three people:
+ * all of them need a place).
+ */
+function snapPlayers(shape, n, up) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.evenOnly && n === 3 ? (up ? 4 : 2) : n; }
+/** Can map type `shape` (a number, or Random: -1) hold exactly `n` colonies? */
+function playersFit(shape, n) { return shape < 0 || (n >= minPlayers(shape) && n <= maxPlayers(shape) && snapPlayers(shape, n) === n); }
+
 /** How many players a game asking for `want` gets: as many as the map type has room for (Versus only). */
-function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape)) : minPlayers(shape); }
+function playerCount(mode, shape, want) { return mode === 'versus' ? snapPlayers(shape, clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape))) : minPlayers(shape); }
 
 /** Planetary is sized for a solo colony or a two-colony match. */
 function mapSizeForPlayers(size, players) {
@@ -3325,7 +3369,7 @@ function newGame(opts) {
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
   // Half underground: the cave mask (S.cave) and where its seats, entrances and the Murmur's nest sites are (see cavesMap).
-  if (m.caves) { S.cave = m.cave; S.caves = { south: m.caves.south, seats: m.caves.seats, entrances: m.caves.entrances, nests: m.caves.nests, variant: m.caves.variant }; }
+  if (m.caves) { S.cave = m.cave; S.caves = { south: m.caves.south, seats: m.caves.seats, entrances: m.caves.entrances, nests: m.caves.nests, nestsOut: m.caves.nestsOut, variant: m.caves.variant }; }
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
@@ -6256,6 +6300,7 @@ function checkSave(o) {
     if (!obj(C) || !Array.isArray(C.seats) || C.seats.length > 4 || !C.seats.every((q) => pt(q, ['x', 'y']) && typeof q.inside === 'boolean')) bad();
     if (!Array.isArray(C.entrances) || C.entrances.length > 6 || !C.entrances.every((q) => pt(q, ['x', 'y', 'hw']))) bad();
     if (!Array.isArray(C.nests) || C.nests.length > 64 || !C.nests.every((q) => pt(q, ['x', 'y']))) bad();
+    if (C.nestsOut != null && (!Array.isArray(C.nestsOut) || C.nestsOut.length > 64 || !C.nestsOut.every((q) => pt(q, ['x', 'y'])))) bad(); // (the surface's: a save from before them has none)
     if (o.cave == null) bad();
   }
   // A Contingency battle's landmark (js/landmarks.js): its tiles and its state.

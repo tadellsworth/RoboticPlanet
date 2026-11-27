@@ -634,7 +634,7 @@ function setMenuMode(v) {
 function menuPlayers() {
   const m = UI.menu, want = clamp(Math.round(m.players) || 2, 2, 4);
   if (m.mode !== 'versus') return 2;
-  return m.shapeRnd ? want : clamp(want, minPlayers(m.shape || 0), maxPlayers(m.shape || 0));
+  return m.shapeRnd ? want : snapPlayers(m.shape || 0, clamp(want, minPlayers(m.shape || 0), maxPlayers(m.shape || 0)));
 }
 /** A team game: four colonies, two against two (the Teams choice, with four players)? */
 function menuTeams() { return UI.menu.mode === 'versus' && !!UI.menu.teams && menuPlayers() === 4; }
@@ -1127,8 +1127,9 @@ function syncMenu() {
     mark(btn, v === menuPlayers());
     if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
     btn.textContent = mps ? String(v) : btn.dataset.lbl; // (multiplayer: how many colonies, people and computers together)
-    btn.disabled = v > room || (!m.shapeRnd && v < minPlayers(shape));
+    btn.disabled = v > room || (!m.shapeRnd && (v < minPlayers(shape) || !playersFit(shape, v)));
     btn.dataset.info = v === 2 ? '2 players: you and one rival colony, landing at the far end of the planet.'
+      : !m.shapeRnd && v === 3 && !playersFit(shape, 3) ? `${SH.name} takes two or four colonies, not three (for now).`
       : modeInfo('versus', v) + (v <= room ? (m.shapeRnd || v >= minPlayers(shape) ? '' : ` (Not on ${SH.name}: it is for ${minPlayers(shape)} or more.)`)
         : v === 4 ? ` (Not on ${SH.name}: it has room for ${room === 3 ? 'three' : 'two'}. Pick a map type marked “3–4 players”.)` : ` (Not on ${SH.name}: pick a map type marked “3 players” or “3–4 players”.)`);
     if (mps) btn.dataset.info = `${v} colonies: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
@@ -1497,7 +1498,7 @@ function openPicker(kind, ctx = menuPickCtx()) {
     for (const g of groups.concat(other)) {
       if (!g.list.length) continue;
       h += `<section class="pgroup" aria-label="${g.name}"><h3>${g.name}</h3><div class="pgrid">` + g.list.map((i) => {
-        const P = SHAPE_PRESETS[i], badges = (maxPlayers(i) > 2 ? `<span class="badge ffa">${minPlayers(i) === maxPlayers(i) ? maxPlayers(i) : `${Math.max(3, minPlayers(i))}–${maxPlayers(i)}`.replace('3–3', '3')} players${minPlayers(i) > 2 ? ' only' : ''}</span>` : '') + (P.naval && !P.river ? '<span class="badge naval">Naval</span>' : '');
+        const P = SHAPE_PRESETS[i], badges = (P.evenOnly ? '<span class="badge ffa">2 or 4 players</span>' : maxPlayers(i) > 2 ? `<span class="badge ffa">${minPlayers(i) === maxPlayers(i) ? maxPlayers(i) : `${Math.max(3, minPlayers(i))}–${maxPlayers(i)}`.replace('3–3', '3')} players${minPlayers(i) > 2 ? ' only' : ''}</span>` : '') + (P.naval && !P.river ? '<span class="badge naval">Naval</span>' : '');
         return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''), '', P.blurb);
       }).join('') + '</div></section>';
     }
@@ -1586,7 +1587,7 @@ function pickerKey(e) {
 
 /** A map type at random with room for `want` players (Random, in Custom Game and Observer mode). */
 function randomShape(want) {
-  const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
+  const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => playersFit(i, want));
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
 }
 function randomBiomeFor(shape, needsMurmur = false) {
