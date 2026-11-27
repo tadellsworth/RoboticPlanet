@@ -140,7 +140,7 @@ function watchPickCtx() {
       const SH = SHAPE_PRESETS[w.shape];
       if (SH.teamDefault) { w.teams = 1; w.n = 4; } // (a map made for 2 vs 2: four colonies, Teams on, as in Custom Game)
       if (murmurLevelOk(SH.murmur)) w.murmur = SH.murmur; // (a map type with its own Murmur: the Hollow)
-      w.n = clamp(w.n, minPlayers(w.shape), maxPlayers(w.shape));
+      w.n = snapPlayers(w.shape, clamp(w.n, minPlayers(w.shape), maxPlayers(w.shape)));
     }
     if (!biomeAllowed(BIOME_ORDER[w.biome], w.shapeRnd ? -1 : w.shape)) w.biome = 0;
     watchMapChanged(w); watchKeepSetup(); syncWatch();
@@ -209,8 +209,8 @@ function syncWatch() {
   // Match: colonies (as many as the map type has room for), Teams with four, Victory (Capture with teams), the computer's level.
   for (const b of $('w-n').children) {
     const v = +b.dataset.v;
-    b.disabled = !w.shapeRnd && (v < minPlayers(w.shape) || v > maxPlayers(w.shape));
-    b.dataset.info = b.disabled ? `${SHAPE_PRESETS[w.shape].name} has room for ${minPlayers(w.shape) === maxPlayers(w.shape) ? maxPlayers(w.shape) : `${minPlayers(w.shape)} to ${maxPlayers(w.shape)}`} colonies.`
+    b.disabled = !w.shapeRnd && !playersFit(w.shape, v);
+    b.dataset.info = b.disabled ? SHAPE_PRESETS[w.shape].evenOnly && v === 3 ? `${SHAPE_PRESETS[w.shape].name} takes two or four colonies, not three (for now).` : `${SHAPE_PRESETS[w.shape].name} has room for ${minPlayers(w.shape) === maxPlayers(w.shape) ? maxPlayers(w.shape) : `${minPlayers(w.shape)} to ${maxPlayers(w.shape)}`} colonies.`
       : v === 2 ? 'Two colonies, landing at either end of the planet.' : `${v} colonies${w.shapeRnd ? ' (Random picks a map type with room for them)' : ''}, a free-for-all unless Teams says otherwise.`;
     mark(b, v === n);
   }
