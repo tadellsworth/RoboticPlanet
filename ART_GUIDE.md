@@ -2080,6 +2080,50 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 39: Orbital platforms' backdrop, Ithaca I from the decks (installed; stars, near cloud and deck shadows drawn in code)
+
+The owner asked for "a nice background" on Orbital platforms (Nov 27 2026). It went through Claude Design: the canvas
+https://claude.ai/artifact/TtwzU6nmnCU3uTq9GH32ZQ showed three concepts, each in the game over the decks, bridges and
+bases at three zooms, by day, morning, dusk and night, on a desktop and a phone, beside the old sky. The owner asked for the
+recommended one to go in: **A, the Limb**. The old sky was a generic blue ocean world, the same by day and night; Ithaca I is the
+coral world of the atlas, and the decks hang over it.
+
+- **A · Limb** (installed): looking out over the planet toward its curved limb from about a third of its radius up: the
+  Rust's southern coast below, the sea beyond, the thin blue air along the limb (the menu planet's and the Contingency
+  globe's halo colour), the Ring rising out of the sky at the right. Lit from the upper left, the game's key light.
+- **B · Nadir**: straight down through the haze onto the Rust's east coast, the Ring's shadow bands across it. Reads most
+  like the game's own top-down camera, but flat: no horizon, no sky, nothing to say "high above".
+- **C · Terminator**: facing Corvane low behind the limb over the ash lands, the dusk line across the view and colony
+  lights below. The most dramatic, but dark by day too, and it fights the decks' top-left light.
+
+The pick keeps C's best part: at dusk A's terminator crosses the planet with Corvane on the limb, and at night the
+colonies' lights come out (the atlas's lights, `art/lore/ithaca-map.webp`'s alpha, for where the towns are).
+
+**How it's made.** `renderer/post/orbital_sky.py` ray-traces a sphere in numpy over the Contingency globe's own surface,
+`art/globe/ithaca-4096.webp`, with detail made up where the map runs out of pixels (relief lit from the sun, crinkled
+coasts, grain), two decks of cloud from `art/globe/ithaca-clouds.webp` and noise with their shadows, the sea's glint, an
+atmosphere shell (haze thickening toward the limb, warm along the terminator), the Ring as a ray-plane hit with
+`rspRing`'s five bands (lit unless in the planet's shadow; its shadow on the ground the same way), Corvane's disc and glare,
+and the night lights as streets in a town's glow. Fixed seeds: the same command makes the same pictures.
+`python3 renderer/post/orbital_sky.py art/orbital A 2560` writes them; `B` and `C` make the other concepts.
+
+| File | What | How it's drawn |
+|---|---|---|
+| `art/orbital/orb-day.webp` (2560 × 1600) | The whole view by day, opaque: space, the limb, the planet | Behind the decks, drawn to cover the screen 1.24 × over (`ORB_SKY.cover`), slid by where the view is on the map, at most a tenth of the screen's longer side (`ORB_SKY.slide`): toward the north end of the map the sky opens, toward the south the planet fills the view |
+| `orb-dusk.webp` | Dusk: the terminator across the planet, Corvane on the limb | Evening; mirrored for morning (the sun rises on the other side) |
+| `orb-night.webp` | Night: the colonies' lights, the Ring still sunlit overhead | Night; the game's time of day crossfades between them (`todNow`) |
+| `orb-cloud.webp` (1024², tileable, RGBA) | The near deck of cloud | Drifting under the decks over the planet (not above the limb), ramped in below the limb in five bands, its shadow multiplied down and right; tinted for dusk and night once (`orbCloudTint`); faster parallax than the picture (`ORB_SKY.cloud`) |
+| `orbital-art.js` | `window.ORBITAL_ART`: the size, the limb circle (as fractions of the width) and the names | The stars are clipped above the limb with it |
+
+Drawn in code (`js/orbital.js`): **the stars** above the limb (`rspStarTile`, sharp at any size, brighter as the light
+goes), and **the decks' shadow** on the air below them: the decks as a soft mask (two pixels a tile, drawn up smoothly,
+made again when a bridge moves), offset 0.35 tile right and 0.7 down, as every shadow falls. **Graphics Saver** draws the
+picture and the stars only (no near cloud, no drift); **reduced motion** holds everything still. The pictures load only for
+an Orbital platforms map (`ensureOrbArt`: `art/orbital/orbital-art.js`; in the one-file build a bundle beside the page,
+`dist/orbital-art.js`, `window.ORBITAL_BUNDLE`); till they're in, the old sky is drawn in code (`orbSkyCode`).
+The Ring map's space (js/ring.js) is a different place in the same sky: out among the asteroids with Ithaca I small and
+whole; here the planet is close below and fills half the view.
+
 ### Batch 38: Terraforming stage 4, the earthworks, the Sluice and the Sap Head (installed; floods, grooves and saps drawn in code)
 
 Stage 4 of terraforming (Nov 2026; README, "Terraforming, stage 4") went through Claude Design: the concept canvas
