@@ -4,7 +4,7 @@ Five partial audits (docs consistency, missions, keyboard shortcuts, lore, phone
 `origin/codex/working-branch`. Each finding was checked against the code on `main` (by symbol; the audits' line
 numbers are stale), then fixed if real. Only text, mission hints and selectors, panel key bindings and phone CSS
 changed: no game rule or number. `hashState` after two AI-vs-AI games (seed 777, 2 colonies; seed 31, 4 colonies;
-hard, 25 minutes, sampled every 5) is identical before and after.
+hard, to 25 minutes or the win, sampled every 5 minutes) is identical before and after.
 
 Verdicts: **Confirmed** (true as stated, fixed), **Partly right** (what is actually true is said), **Wrong**.
 
