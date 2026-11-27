@@ -4,7 +4,8 @@ Status: In progress. This inventory covers static map and selected-panel tables.
 
 | Severity | Finding | Location |
 | --- | --- | --- |
-| Unverified | Same-letter selected-panel buttons require contextual review for overlap. | `js/ui.js:2623` |
+| Medium | L can select “Add a line” when the same Maglev Terminal panel also offers “Rebuild the missing Terminal.” | `js/ui.js:2694`, `js/ui.js:2721`, `js/ui.js:5271`, `js/ui.js:5284` |
+| Unverified | Other same-letter selected-panel buttons require contextual review for overlap. | `js/ui.js:2623` |
 
 | Key | Context | Action | Source |
 | --- | --- | --- | --- |
@@ -205,3 +206,14 @@ Status: In progress. This inventory covers static map and selected-panel tables.
 | Arrow keys, Escape | Contingency globe | Rotate globe; step back or close | js/contingency-ui.js:446 |
 
 Panel button shortcuts take precedence over map bindings (`js/ui.js:3047`); for example, D can trigger Demolish on the relevant visible panel and otherwise pans. This is contextual priority, not by itself proof of a clash. The inventory still requires a complete tooltip and help comparison and a review of dynamic controls.
+
+**Medium — Maglev Terminal L collision.** A Terminal with a missing far Terminal can show its rebuild button (`js/ui.js:5271`–`5276`) and, while it has fewer than three occupied slots and no active site, “Add a line from here” (`js/ui.js:5284`). Both first rebuild and add-line buttons are bound to L (`js/ui.js:2694`–`2695`). `sheetKeyButton` searches bindings in order (`js/ui.js:2721`), so the add-line button wins and L does not rebuild. Give the actions distinct keys or make the advertised key apply unambiguously to the intended button; also account for more than one missing Terminal, whose dynamically suffixed rebuild IDs are not in the binding table. The circumstances and handler order are confirmed from source; actual visual key labels during a live example remain unverified.
+
+| Key | Context | Action | Source |
+| --- | --- | --- | --- |
+| X | Selected defence panel | Clear a manually aimed target | js/ui.js:2710 |
+| Arrow keys | Main menu | Move focus among buttons | js/ui.js:790 |
+| Arrow keys, Enter, Escape, Tab | Settings picker | Change choice, choose, close, or cycle focus | js/ui.js:1425 |
+| Arrow keys, Home, End, Escape, Tab | Map and biome picker | Navigate cards, close, or cycle focus | js/ui.js:1553 |
+| Left/Right, Escape | Lore guide | Turn pages; close enlarged atlas first | js/ui.js:4243 |
+| Escape | Save and cloud dialogs | Close the active dialog | js/qol.js:381, js/cloud.js:111 |
