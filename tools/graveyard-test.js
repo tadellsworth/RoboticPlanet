@@ -3,7 +3,8 @@
 // turned half round and fair to both colonies (starter fields, oil, the salvage and debris lanes, the hulks); the hulks landed
 // on and built on (a Shuttle lands a Drop Outpost; then a Depot goes up beside it), the Arbiter's relay kept clear; salvage
 // towed in and broken down for Alloy and Chips; the Arbiter taken, held, jammed, its salvage sent home, and Hold the Arbiter
-// won; a craft clipped flying through a debris lane; a save made mid-tow; and two runs of the same game alike.
+// won; a craft clipped flying through a debris lane; a save made mid-tow; two runs of the same game alike; a rival's
+// Dropship jamming the Arbiter; and on The Ring a rival's Shuttle landing a Drop Outpost by a derelict.
 // Run: node tools/graveyard-test.js
 const fs = require('node:fs');
 const path = require('node:path');
@@ -117,7 +118,7 @@ const HELP = `
   `);
   check('A debris shard is not towed', /Loose debris/.test(r.jw), r);
   check('A Shuttle hooks a salvage wreck and tows it home', r.why === '' && r.hooked && r.done, r);
-  check(`At the pad it is broken down: ${JSON.stringify([10, 6])} Alloy and Chips into the pad's store, counted`, r.got[0] === 10 && r.got[1] === 6 && r.towed === 1, r);
+  check(`At the pad it is broken down: ${JSON.stringify([8, 5])} Alloy and Chips into the pad's store, counted`, r.got[0] === 8 && r.got[1] === 5 && r.towed === 1, r);
   check('Another wreck drifts in on its lane DRIFT.salvageBack s later', r.back && Math.abs(r.after - 150) < 1.5, r);
 }
 
@@ -149,7 +150,7 @@ const HELP = `
   `);
   check('Hold the Arbiter: the one Uplink is the Arbiter', r.up.length === 1 && r.up[0][0] === 1, r.up);
   check('A Drop Outpost landed by its relay takes the Arbiter (most land on the relay)', r.why === '' && r.taken, r);
-  check(`Held, it sends ${JSON.stringify([4, 3])} Alloy and Chips into the Command Base every ${30} s`, r.got[0] === 4 && r.got[1] === 3, r.got);
+  check(`Held, it sends ${JSON.stringify([3, 2])} Alloy and Chips into the Command Base every ${30} s`, r.got[0] === 3 && r.got[1] === 2, r.got);
   check('A rival\'s armed robot by the relay jams it: no one holds it; gone, it is held again', r.jammed && r.again === 0, r);
   check('Held 5 minutes in all once online: Hold the Arbiter is won', r.won && r.winner === 0 && r.how === 'uplinks', r);
 }
@@ -205,6 +206,39 @@ const HELP = `
     return { grave: !!S.grave, pad: !!P, space: !!S.space, why, towed: S.players[0].stats.towed || 0, st: missionStates(S.mission).map((g) => g.n + ':' + g.have) };
   `);
   check('The Graveyard mission: a Launch Pad ready, salvage drifting, a tow counted for its first goal', r.grave && r.pad && r.space && r.why === '' && r.towed >= 1, r);
+}
+
+// ---- 8. Rivals: a Dropship lands warbots to jam a rival's hold of the Arbiter; on The Ring a Shuttle lands a Drop Outpost by a derelict
+{
+  const c = mk();
+  const r = run(c, `
+    newGame({ seed: 21, mode: 'versus', shape: SH_GRAVE, size: 1 }); quiet();
+    const L0 = getE(S.players[0].lander), L1 = getE(S.players[1].lander), P0 = pad(0, L0.x, L0.y), sh = craft(0, 'shuttle', P0);
+    bump(L0.stock, 'cement', 20); bump(L0.stock, 'alloy', 20);
+    const m = graveMid(); orderShuttleOutpost(0, sh, Math.floor(m.x) - 3, Math.floor(m.y));
+    until(() => arbHolder() === 0, 150);
+    const P1 = pad(1, L1.x, L1.y), ds = craft(1, 'dropship', P1);
+    for (let k = 0; k < 6; k++) enterBuilding(addBot(1, 'warbot', L1.x, L1.y), L1);
+    S.time = Math.max(S.time, 900);
+    aiGraveJam(1, aiLevel(1));
+    const ordered = !!ds.mission;
+    const jammed = until(() => S.grave.jam === 2, 180);
+    return { ordered, jammed, holder: arbHolder() };
+  `);
+  check('A rival lands warbots by Dropship beside the relay and jams the Arbiter', r.ordered && r.jammed && r.holder === -1, r);
+  const c2 = mk();
+  const r2 = run(c2, `
+    newGame({ seed: 11, mode: 'versus', shape: SHAPE_PRESETS.findIndex((s) => s.asteroids), size: 1 }); quiet();
+    const L = getE(S.players[1].lander), P = pad(1, L.x, L.y), sh = craft(1, 'shuttle', P);
+    bump(L.stock, 'cement', 20); bump(L.stock, 'alloy', 20);
+    S.time = 700;
+    const me = S.buildings.filter((b) => !b.dead && b.owner === 1);
+    aiSpacePost(1, me, L);
+    const ordered = !!(sh.mission && sh.mission.kind === 'outpost');
+    const down = until(() => S.buildings.some((b) => !b.dead && b.owner === 1 && b.type === 'dropost'), 180);
+    return { ordered, down };
+  `);
+  check('The Ring: a rival\'s Shuttle lands a Drop Outpost beside a derelict it can\'t walk to', r2.ordered && r2.down, r2);
 }
 
 if (fails) { console.log(`${fails} failed`); process.exit(1); }

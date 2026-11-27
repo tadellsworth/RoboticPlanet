@@ -2384,6 +2384,8 @@ function aiBridge(p, maxSites) {
   const via = aiViaductSpot(p, home, T);
   if (via) {
     const cost = viaductCost(via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
+    // (The Graveyard: its dearer spans wait for a Smelter and a Launch Pad (salvage first), and its Cement Works make room for the span's Cement, past their usual limit.)
+    if (S.grave) { if (!['smelter', 'launchpad'].every((k) => S.buildings.some((b) => !b.dead && b.owner === p && b.type === k && b.built))) return; for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'kiln' && stockLimit(b) < (cost.cement || 0) + 15) b.limit = (cost.cement || 0) + 15; }
     if (!canPay(p, cost)) { P.bridgeWant = S.time; P.bridgeNeed = cost; return; }
     P.bridgeWant = 0; P.bridgeNeed = null;
     placeViaduct(p, via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
@@ -2659,7 +2661,7 @@ function aiMdFarSpots(p, T, x, y) {
 /** Uplinks: the nearest free Uplink player p can't walk to (across water or a canyon), to cross toward; or null. */
 function aiCrossTarget(p, home) {
   const L = getE(S.players[p].lander);
-  if (S.grave && L && arbHolder() !== p) { const m = graveMid(), x = Math.floor(m.x), y = Math.floor(m.y), z = S.zone[tIdx(x, y)]; if (z >= 0 && z !== home) return { x, y }; } // (The Graveyard: span the gaps to the Arbiter first)
+  if (S.grave && L && arbHolder() !== p) { const C = S.grave.core, x = L.x <= C.x0 ? C.x0 : L.x >= C.x1 ? C.x1 : L.x, y = L.y <= C.y0 ? C.y0 : L.y >= C.y1 ? C.y1 : L.y, z = S.zone[tIdx(x, y)]; if (z >= 0 && z !== home) return { x, y }; } // (The Graveyard: span the gaps to the Arbiter first: the relay tile nearest our base, so both colonies aim alike)
   if (S.victory !== 'uplinks' || !S.uplinks || !L) return null;
   let best = null, bd = Infinity;
   for (const u of S.uplinks) {
@@ -5947,7 +5949,7 @@ const AI_GUN_VALUE = { launchpad: 9, foundry: 8, smelter: 7, fab: 7, refinery: 6
 
 /** How many Launch Pads rival p wants now. */
 function aiPads(p, me, kinds) {
-  if (S.grave && S.space && !worldBan('launchpad')) return S.time < AI_GRAVE.pad ? 0 : S.time >= AI_SPACE.pad2 || aiArmyOf(p) >= AI_AIR.second ? 2 : 1; // (The Graveyard: salvage is the economy)
+  if (S.grave && S.space && !worldBan('launchpad')) return S.time < AI_GRAVE.pad || !me.some((b) => b.type === 'smelter' && b.built) ? 0 : S.time >= AI_SPACE.pad2 || aiArmyOf(p) >= AI_AIR.second ? 2 : 1; // (The Graveyard: salvage is the economy)
   if (!S.space || worldBan('launchpad') || !me.some((b) => b.type === 'foundry' && b.built)) return 0;
   if (S.time < AI_SPACE.pad) return 0;
   return S.time >= AI_SPACE.pad2 || aiArmyOf(p) >= AI_AIR.second ? 2 : 1;
@@ -6003,7 +6005,8 @@ function aiSpace(p, me, kinds, lvl) {
   // The craft: a Dropship for a gap (aiAir flies it), a Shuttle, Gunships.
   if (aiAirFoes(p).length && aiCraftCount(p, me, 'dropship') < 1) aiOrderCraft(p, me, 'dropship');
   if (S.time >= AI_SPACE.shuttle && aiCraftCount(p, me, 'shuttle') < 1) aiOrderCraft(p, me, 'shuttle');
-  if (S.grave) aiGrave(p, me, L); // (The Graveyard: salvage, Drop Outposts onto the hulks, the Arbiter)
+  if (S.grave) { aiGrave(p, me, L); aiGraveJam(p, lvl); } // (The Graveyard: salvage, Drop Outposts onto the hulks, the Arbiter, and a rival's hold of it jammed)
+  else aiSpacePost(p, me, L); // (The Ring, Orbital platforms: a Drop Outpost by Shuttle beside a derelict no walk reaches)
   const gunWant = warOn() && S.time >= AI_SPACE.gun ? AI_SPACE.guns[S.difficulty] ?? 1 : 0;
   if (aiCraftCount(p, me, 'gunship') < gunWant) aiOrderCraft(p, me, 'gunship');
   // Logistics: its places no road from home reaches are supplied by Shuttle.
@@ -6041,14 +6044,78 @@ function aiSpace(p, me, kinds, lvl) {
 
 /*
  * The Graveyard (S.grave): how a rival lives off salvage and fights for the Arbiter (from aiSpace, every think).
- *   - Its first Launch Pad from AI_GRAVE.pad s (no Bot Foundry needed), Shuttles at once (`shuttles`, by the clock), and every
+ *   - Its first Launch Pad from AI_GRAVE.pad s once a Smelter stands (no Bot Foundry needed: it would save for the pad's
+ *     Alloy and Chips with no way to make them), Shuttles at once (`shuttles`, by the clock), and every
  *     idle Shuttle on its pad tows the nearest salvage wreck no one else is after home (Alloy and Chips: the economy).
  *   - While the Arbiter is not its own and it can't walk there, a Shuttle lands a Drop Outpost beside the relay, as near the
  *     middle as it may (its land takes the relay), once every AI_GRAVE.postGap s; then one on the nearest wreck nobody holds.
  *   - Its Viaducts reach for the Arbiter first (aiCrossTarget), its Outposts lean toward the relay (aiSearchSpot), and its
  *     Dropship bands and Gunships go first for the forts that hold it for a rival (aiAir, aiGunTarget: aiArbFort).
  */
-const AI_GRAVE = { pad: 150, shuttles: [[150, 1], [540, 2]], towEvery: 6, postGap: 75, postMost: 4, wreckAt: 900 };
+const AI_GRAVE = { pad: 150, shuttles: [[150, 1], [540, 2]], towEvery: 6, postGap: 75, postMost: 4, wreckAt: 900, jamGap: 90, jamMin: 3 };
+/** The Ring and Orbital platforms: a rival's Shuttle lands a Drop Outpost beside a derelict module no walk reaches, once every `gap` s from `at` s, at most `most` Drop Outposts. */
+const AI_SPACE_POST = { at: 600, gap: 120, most: 2 };
+
+/** A tile within R of (cx, cy), on area `zone`, where Shuttle sh of rival p may land a Drop Outpost (nearest first), or null. */
+function aiPostNear(p, sh, cx, cy, zone, R) {
+  const c = [];
+  for (let j = Math.floor(cy - R); j <= Math.ceil(cy + R); j++) for (let i = Math.floor(cx - R); i <= Math.ceil(cx + R); i++) {
+    if (!inMap(i, j) || S.zone[tIdx(i, j)] !== zone) continue;
+    c.push([dist2(i + 0.5, j + 0.5, cx, cy), i, j]);
+  }
+  const L = getE(S.players[p].lander), near = (q) => (L ? dist2(q[1], q[2], L.x, L.y) : 0); // (a tie: the tile nearer our own base, so both colonies land alike)
+  c.sort((a, b) => a[0] - b[0] || near(a) - near(b) || a[1] - b[1] || a[2] - b[2]);
+  for (const [, i, j] of c.slice(0, 40)) if (!shuttleOutpostBlocked(p, sh, i, j)) return { i, j };
+  return null;
+}
+
+/**
+ * The Graveyard: a rival holds the Arbiter, so rival p lands warbots by Dropship beside its relay to jam it (within
+ * GRAVE.arb.jam of its middle), once every AI_GRAVE.jamGap s, when it has a Dropship parked, no band of its own in the air
+ * (aiAir) and at least AI_GRAVE.jamMin warbots to spare, and none of its own already there.
+ */
+function aiGraveJam(p, lvl) {
+  const P = S.players[p], h = arbHolder();
+  if (h < 0 || !foes(h, p) || !warOn() || S.difficulty === 'easy' || S.time < lvl.grace || P.air || S.time - (P.grJamT ?? -999) < AI_GRAVE.jamGap) return;
+  const m = graveMid(), J = GRAVE.arb.jam;
+  if (S.bots.some((v) => !v.dead && v.owner === p && isArmy(v) && !v.inside && dist2(v.x, v.y, m.x, m.y) <= J * J)) return;
+  const ds = S.bots.find((u) => !u.dead && u.owner === p && u.type === 'dropship' && !u.mission && !u.sf && craftPad(u) && u.inside === craftPad(u).id && u.bat > 60);
+  if (!ds) return;
+  const pad = craftPad(ds), avail = rallyAvailable(p, pad.x, pad.y, true);
+  if (avail < AI_GRAVE.jamMin) return;
+  P.grJamT = S.time;
+  let best = null, bd = Infinity;
+  for (let j = Math.floor(m.y - J); j <= Math.ceil(m.y + J); j++) for (let i = Math.floor(m.x - J); i <= Math.ceil(m.x + J); i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d0 = dist2(i + 0.5, j + 0.5, m.x, m.y), d = d0 + dist2(i, j, pad.x, pad.y) * 1e-4; // (a tie: the side nearer its own pad, so both colonies land alike)
+    if (d0 > (J - 1) * (J - 1) || d >= bd || !craftLandable(t, ds) || rampTile(t) < 0) continue;
+    bd = d; best = { i, j };
+  }
+  if (best) orderSquad(p, ds, best.i, best.j, null, 'warbot', Math.min(BOTS.dropship.seats, avail));
+}
+
+/** The Ring and Orbital platforms: rival p's Shuttle lands a Drop Outpost beside a derelict module it doesn't hold, on ground it can't walk to and no one holds. */
+function aiSpacePost(p, me, L) {
+  const P = S.players[p];
+  if (!S.space || S.time < AI_SPACE_POST.at || S.time - (P.spPostT ?? -999) < AI_SPACE_POST.gap || !warOn()) return;
+  if (me.filter((b) => b.type === 'dropost').length >= AI_SPACE_POST.most || !aiAffordable(p, 'dropost')) return;
+  if (S.bots.some((u) => !u.dead && u.owner === p && u.mission && u.mission.kind === 'outpost')) return;
+  const sh = S.bots.find((u) => !u.dead && u.owner === p && u.type === 'shuttle' && !u.mission && !u.sf && craftPad(u) && u.inside === craftPad(u).id && u.bat > 55);
+  if (!sh) return;
+  P.spPostT = S.time;
+  const home = S.zone[tIdx(L.x, L.y)];
+  let best = null, bd = Infinity;
+  for (const m of S.space.mods) {
+    if (modHolder(m) === p || (m.k === 'hulk' && m.done)) continue;
+    const z = S.zone[m.st], si = m.st % S.W, sj = (m.st / S.W) | 0;
+    if (z < 0 || z === home || S.owner[m.st] >= 0) continue;
+    const d = dist2(si, sj, L.x, L.y);
+    if (d < bd) { bd = d; best = { si, sj, z }; }
+  }
+  if (!best) return;
+  const spot = aiPostNear(p, sh, best.si + 0.5, best.sj + 0.5, best.z, 3);
+  if (spot) orderShuttleOutpost(p, sh, spot.i, spot.j);
+}
 
 /** Does building b hold the Arbiter's relay in its land (a fort within its ring of the relay's middle)? */
 function aiArbFort(b) {
@@ -6088,16 +6155,7 @@ function aiGravePostSpot(p, L) {
   const W = S.W, home = S.zone[tIdx(L.x, L.y)], m = graveMid(), mz = S.zone[tIdx(Math.floor(m.x), Math.floor(m.y))];
   const sh = S.bots.find((u) => !u.dead && u.owner === p && u.type === 'shuttle' && !u.mission && !u.sf && craftPad(u) && u.inside === craftPad(u).id);
   if (!sh) return null;
-  const tryNear = (cx, cy, zone, R) => {
-    const c = [];
-    for (let j = Math.floor(cy - R); j <= Math.ceil(cy + R); j++) for (let i = Math.floor(cx - R); i <= Math.ceil(cx + R); i++) {
-      if (!inMap(i, j) || S.zone[tIdx(i, j)] !== zone) continue;
-      c.push([dist2(i + 0.5, j + 0.5, cx, cy), i, j]);
-    }
-    c.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
-    for (const [, i, j] of c.slice(0, 40)) if (!shuttleOutpostBlocked(p, sh, i, j)) return { i, j };
-    return null;
-  };
+  const tryNear = (cx, cy, zone, R) => aiPostNear(p, sh, cx, cy, zone, R);
   // The Arbiter: ours by land unless walking there (our Viaducts) already does it.
   if (S.grave.owner !== p && mz >= 0 && mz !== home) { const s = tryNear(m.x, m.y, mz, BDEFS.dropost.terr); if (s) return s; }
   if (S.time < AI_GRAVE.wreckAt) return null;

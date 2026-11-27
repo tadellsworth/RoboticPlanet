@@ -14,7 +14,7 @@ for tod in day morning evening night; do
   O=out/grave/$tod; mkdir -p $O; X=""; [ $tod != day ] && X="&tod=$tod"
   J=()
   if [ $tod = day ]; then for v in 0 1 2; do J+=("grave::${TC[0]}:plate-$v:c=plate&v=$v"); done; fi
-  for v in 0 1; do J+=("grave::${TC[0]}:salvage-$v:c=salvage&v=$v$X"); done
+  for v in 0 1; do J+=("grave::${TC[0]}:salvage-$v:c=salvage&v=$v$X" "grave::${TC[0]}:salvage-$v-tow:c=salvage&v=$v&tow=1&W=14$X"); done
   J+=("grave::${TC[0]}:junk:c=junk$X" "grave::${TC[0]}:arb:c=arb&cap=0$X")
   for t in 0 1; do J+=("grave::${TC[$t]}:arb@$t:c=arb&cap=1$X"); done
   for k in $(seq 0 $((N - 1))); do A=(); i=0; for j in "${J[@]}"; do [ $((i % N)) = $k ] && A+=("$j"); i=$((i + 1)); done; [ ${#A[@]} -gt 0 ] && node run.js $O "${A[@]}" > $O/log-$k.txt 2>&1 & done; wait

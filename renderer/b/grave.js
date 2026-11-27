@@ -5,7 +5,8 @@
 //             torn up (plates missing, ribs showing through, burns), v=2 the Arbiter's Accord white (pale plates, seams,
 //             relay conduits). Panel seams fall on the tile grid and the image's edges, so it tiles without a seam.
 //   c=salvage towable debris, the wreckage a Shuttle tows in: v=0 a torn-off engine bell on a hull plate, v=1 a cluster of
-//             hull plates round a cargo pod, ribs sticking out (12 units: the game draws it 1.8 tiles across)
+//             hull plates round a cargo pod, ribs sticking out (12 units: the game draws it 1.8 tiles across); tow=1 in its tow
+//             harness (a clamp band, three claws, the cable led off west)
 //   c=junk    a debris lane's shard cloud: twisted plates and beams loose in space (24 units)
 //   c=arb     the Arbiter's relay, the old Accord arbitration ship's superstructure that stands on the core tiles: a great
 //             shallow relay dish on its yoke, a mast array with lamps, the beacon housing. cap=0 derelict (dark, a dim amber
@@ -47,8 +48,10 @@ export default function (L) {
         } else if (roll < 0.36) { // a vent grille
           for (let s = 0; s < 6; s++) B(3.2, 0.06, 0.18, mat.black, a + 4.9, 0.32, b + 3.4 + s * 0.6, { cast: false });
         } else if (roll < 0.5) { // scorch and pitting from the old fight
-          for (let s = 0; s < 9; s++) C(0.2 + r() * 0.7, 0.03, s % 3 ? M.plain('#26221e', 0.95, 0.1) : mat.burnt, a + 1.2 + r() * 7.4, 0.31 + s * 0.002, b + 1.2 + r() * 7.4, { seg: 7, cast: false });
-          B(2 + r() * 3, 0.03, 0.3, mat.burnt, a + 5, 0.33, b + 3 + r() * 4, { ry: r() * 3, cast: false }); // (a gouge)
+          // (faint: a few small marks a shade darker than the plate, not black holes)
+          const sc = M.plain(pale ? '#8f8b82' : '#34373b', 0.95, 0.1);
+          for (let s = 0; s < 4; s++) C(0.15 + r() * 0.4, 0.03, sc, a + 1.5 + r() * 7, 0.31 + s * 0.002, b + 1.5 + r() * 7, { seg: 7, cast: false });
+          B(1.5 + r() * 2, 0.03, 0.2, sc, a + 5, 0.33, b + 3 + r() * 4, { ry: r() * 3, cast: false }); // (a gouge)
         } else if (roll < 0.58 && !pale) { // a hazard stripe across the plate
           B(9.6, 0.04, 0.8, M.hazard, a + 4.88, 0.31, b + 2.0, { cast: false });
         } else if (roll < 0.66) { // a conduit run (Accord white on the Arbiter: the relay's)
@@ -81,6 +84,13 @@ export default function (L) {
       S(0.24, mat.amber, -3.8, Y + 1.0, -2.4); S(0.2, dead, 3.8, Y + 0.8, 2.8);
     }
   }
+  if (c === 'salvage' && num('tow', 0)) { // the tow harness: a clamp band round the wreck, three claws, the cable led off west to the Shuttle
+    const g = new THREE.TorusGeometry(4.2, 0.18, 6, 32); g.rotateX(Math.PI / 2); L.mesh(g, mat.steel, 0, Y + 1.1, 0, { parent: G, dirt: 0 });
+    for (const a of [Math.PI * 0.75, Math.PI, Math.PI * 1.25]) { const x = Math.cos(a) * 4.2, z = Math.sin(a) * 4.2;
+      beam([x, Y + 1.1, z], [x * 1.2 - 0.5, Y + 1.1, z * 1.08], 0.22, 0.22, mat.armor); S(0.14, mat.amber, x, Y + 1.3, z); }
+    beam([-4.9, Y + 1.1, 0], [-6.2, Y + 1.1, 0], 0.08, 0.08, mat.black);
+    for (const z of [-1, 0, 1]) beam([-4.6, Y + 1.1, z * 1.5], [-5.4, Y + 1.1, 0], 0.06, 0.06, mat.black);
+  }
   if (c === 'junk') {
     // twisted plates and beams, loose, spread over the frame (the game spins the whole cloud slowly)
     for (let k = 0; k < 9; k++) {
@@ -100,11 +110,16 @@ export default function (L) {
       const rim = new THREE.TorusGeometry(7.7, 0.35, 6, 48); rim.rotateX(Math.PI / 2); L.mesh(rim, cap ? mat.team : whiteD, 14, Y + 5.95, 0, { parent: G, dirt: 0, cast: false });
       for (let k = 0; k < 3; k++) { const a = k * Math.PI * 2 / 3; beam([14 + Math.cos(a) * 7.2, Y + 6.0, Math.sin(a) * 7.2], [14, Y + 11.0, 0], 0.3, 0.3, mat.steel); }
       S(0.9, NEU, 14, Y + 11.2, 0); beam([9, Y + 3.5, 0], [14, Y + 4.5, 0], 1.2, 1.2, mat.steel); }
-    // the mast array aft (west): tall thin masts with crossbars and lamps (lit in the holder's colour once held)
-    for (const [x, z, h] of [[-12, -5, 12], [-12, 5, 10], [-17, 0, 16], [-21, -4, 9], [-21, 4, 11]]) {
-      C(0.25, h, mat.steel, x, Y + 2.0, z, { seg: 6 });
-      for (let y = 3; y < h; y += 3) B(2.8, 0.1, 0.1, mat.steel, x, Y + 2.0 + y, z);
-      S(0.4, cap ? mat.team : NEU, x, Y + 2.0 + h, z);
+    // the mast array aft (west): tall masts with wide crossbars (yards) and lamps, stood on a lattice frame that ties their
+    // feet together, so from straight above it reads as an array (a cross of yards at each mast, the frame between)
+    const masts = [[-12, -5, 12], [-12, 5, 10], [-17, 0, 16], [-21, -4, 9], [-21, 4, 11]];
+    for (let k = 0; k < masts.length; k++) for (let q = k + 1; q < masts.length; q++) { const [x1, z1] = masts[k], [x2, z2] = masts[q]; if (Math.hypot(x2 - x1, z2 - z1) < 11) beam([x1, Y + 2.3, z1], [x2, Y + 2.3, z2], 0.5, 0.35, mat.rail); }
+    for (const [x, z, h] of masts) {
+      C(1.1, 0.6, mat.armor, x, Y + 2.0, z, { seg: 8 });
+      C(0.3, h, mat.steel, x, Y + 2.0, z, { seg: 6 });
+      for (let y = 3; y < h; y += 3) { const w = 4.2 - y * 0.12; B(w, 0.18, 0.18, mat.steel, x, Y + 2.0 + y, z); B(0.18, 0.18, w * 0.7, mat.steel, x, Y + 2.0 + y, z); }
+      C(0.9, 0.12, cap ? mat.team : whiteD, x, Y + 2.0 + h - 0.4, z, { seg: 10, cast: false }); // (a lamp ring at the top: lit once held)
+      S(0.55, cap ? mat.team : NEU, x, Y + 2.0 + h, z);
     }
     // conduits from the drum down onto the deck, and the deck clamps that hold it
     for (const s of [-1, 1]) { beam([0, Y + 1.0, s * 4.5], [0, Y + 0.2, s * 10], 0.8, 0.5, mat.rail); B(3, 0.6, 2, mat.armor, 0, Y + 0.3, s * 10.5); lights([[0, Y + 0.8, s * 11.6, cap ? mat.team : dead, 0.3]]); }
