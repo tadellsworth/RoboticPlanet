@@ -27,6 +27,7 @@ function generateMap(seed, W, H, cfg) {
   cfg = cfg || {};
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).hollow) return hollowMap(seed, W, H, cfg); // (its own layout: see hollowMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).orbital) return orbitalMap(seed, W, H, cfg); // (Orbital platforms: station decks and drawbridges, see orbitalMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
@@ -3110,6 +3111,227 @@ function cavesMap(seed, W, H, cfg) {
   };
 }
 
+/* ------------------------------------------------------------------ Orbital platforms */
+
+/**
+ * Orbital platforms (SHAPE_PRESETS orbital, ORBITAL in defs.js): two colonies on station decks high over the planet. Its own
+ * generator (called by generateMap first thing, as ringMap is), point-symmetric to the tile (every tile has its twin, the same
+ * spot turned half round), so both colonies get exactly the same. The decks are rectangles with their corners cut, level
+ * ground (elevation 0), the space between them `T_CHASM` (voidTile: nothing is built on it or crosses it); the decks are
+ * joined by bridges, strips of BW tiles across a gap of `g` tiles.
+ *   Small and Medium, five decks: a home deck at each end (player 0's at the bottom), a big middle deck (its own twin), and a
+ *     side deck to each side (twins), each beside the middle deck and under (or over) a home deck. Six bridges: each home deck to
+ *     the middle deck and to its side deck, and the side decks to the middle one.
+ *   Large and up, seven decks: the same homes and middle deck (now a tall spine), and two side decks on each side, one beside
+ *     each home deck's end. Eight bridges: each home deck to a side deck on each side, and the four side decks to the middle one.
+ * Every bridge starts down (a strip of ground), and has a control box on each deck at its two ends (S.orb.bx), standing
+ * on the rim's clear ground beside the bridge head. The rim (any ground beside space) and the heads stay clear of deposits and
+ * crags; the middle of the middle deck and of each side deck stays bare (a Trade Post or an Uplink can stand there).
+ * Resources: the standard colony's starter fields on each home deck (the same offsets from the Command Base as every map, and
+ * the Ring's: Stalk, Stone, Ore, Crystal, fertile soil and three oil fields), the other decks get fields scattered over them (more
+ * the bigger the deck) and an oil seep or two, so Fuel is never short.
+ * Returns what generateMap does, with `orbital`: { plats: [{ id, x0, y0, x1, y1, kind, tw }], br: [{ id, ax, x0, y0, x1, y1, a, b }] }
+ * (the decks and the bridges, boxes are made by newGame).
+ */
+function orbitalMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
+  const N = W * H, half = Math.floor(H / 2);
+  const terrain = new Uint8Array(N).fill(T_CHASM), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1);
+  const id = (i, j) => j * W + i, mir = (t) => N - 1 - t;
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const rng = makeRng((seed ^ 0x6f1d3b) >>> 0), sH = seed * 7 + 11;
+  const dens = RPR.density, stampDens = clamp(dens, 0.7, 1.15);
+  const seven = (cfg.size ?? 1) >= 2, BW = ORBITAL.width, CH = 2, M = 2;
+  const g = clamp(Math.round(H * 0.075), 4, 7);
+  const twinR = (r) => ({ x0: W - 1 - r.x1, x1: W - 1 - r.x0, y0: H - 1 - r.y1, y1: H - 1 - r.y0 });
+  // 1) The decks (as rectangles). Index 0 is player 0's home deck, 1 its twin, 2 the middle deck; then side decks, each followed by its twin.
+  const plats = [];
+  const add = (r, kind, tw) => { plats.push({ id: plats.length, ...r, kind, tw }); return plats.length - 1; };
+  const hh = clamp(Math.round(H * (seven ? 0.2 : 0.23)), 12, 28);
+  const yA0 = H - M - hh, lw = clamp(Math.round(W * 0.2), 7, 40), lx0 = M, lx1 = M + lw - 1;
+  const aX = clamp(Math.round(W * 0.14), 3, lx1 - 2 * CH - BW + 1);
+  add({ x0: aX, x1: W - 1 - aX, y0: yA0, y1: H - 1 - M }, 'home', 1);
+  add(twinR(plats[0]), 'home', 0);
+  const mx0 = lx1 + 1 + g;
+  const link = []; // [deck, deck] of the bridges (canonical ones; their twins are made below)
+  if (!seven) {
+    const yM1 = yA0 - 1 - g, hL = clamp(Math.round(H * 0.2), 9, 40);
+    add({ x0: mx0, x1: W - 1 - mx0, y0: H - 1 - yM1, y1: yM1 }, 'mid', 2);
+    const L = add({ x0: lx0, x1: lx1, y0: yM1 - hL + 1, y1: yM1 }, 'deck', 4), R = add(twinR(plats[L]), 'deck', L);
+    plats[L].tw = R;
+    link.push([0, 2], [0, L], [L, 2]);
+  } else {
+    const yL1 = yA0 - 1 - g, yL2 = M + hh + g, hL = Math.floor((yL1 - yL2 + 1 - g) / 2);
+    add({ x0: mx0, x1: W - 1 - mx0, y0: H - 1 - yL1, y1: yL1 }, 'mid', 2);
+    const L1 = add({ x0: lx0, x1: lx1, y0: yL1 - hL + 1, y1: yL1 }, 'deck', 0), R1 = add(twinR(plats[L1]), 'deck', L1);
+    const L2 = add({ x0: lx0, x1: lx1, y0: yL2, y1: yL2 + hL - 1 }, 'deck', 0), R2 = add(twinR(plats[L2]), 'deck', L2);
+    plats[L1].tw = R1; plats[L2].tw = R2;
+    link.push([0, L1], [0, R2], [L1, 2], [L2, 2]);
+  }
+  const inDeck = (r, i, j) => { if (i < r.x0 || i > r.x1 || j < r.y0 || j > r.y1) return false; return Math.min(i - r.x0, r.x1 - i) + Math.min(j - r.y0, r.y1 - j) >= CH; };
+  for (const r of plats) for (let j = r.y0; j <= r.y1; j++) for (let i = r.x0; i <= r.x1; i++) if (inDeck(r, i, j)) terrain[id(i, j)] = T_GROUND;
+  // 2) The bridges: a strip of BW tiles across the gap between two decks, in the middle of the stretch both can reach (their corners are cut).
+  const br = [];
+  const strip = (a, b) => {
+    const p = plats[a], q = plats[b];
+    const ox0 = Math.max(p.x0, q.x0) + CH, ox1 = Math.min(p.x1, q.x1) - CH, oy0 = Math.max(p.y0, q.y0) + CH, oy1 = Math.min(p.y1, q.y1) - CH;
+    if (ox1 - ox0 + 1 >= BW && (p.y1 < q.y0 || q.y1 < p.y0)) { // one over the other
+      const c = Math.floor((ox0 + ox1) / 2), top = p.y1 < q.y0 ? p : q, bot = top === p ? q : p;
+      return { ax: 'v', x0: c - 1, x1: c + 1, y0: top.y1 + 1, y1: bot.y0 - 1, a: top.id, b: bot.id };
+    }
+    if (oy1 - oy0 + 1 >= BW && (p.x1 < q.x0 || q.x1 < p.x0)) { // side by side
+      const c = Math.floor((oy0 + oy1) / 2), lf = p.x1 < q.x0 ? p : q, rt = lf === p ? q : p;
+      return { ax: 'h', x0: lf.x1 + 1, x1: rt.x0 - 1, y0: c - 1, y1: c + 1, a: lf.id, b: rt.id };
+    }
+    return null;
+  };
+  for (const [a, b] of link) {
+    const s = strip(a, b);
+    if (!s) continue;
+    br.push(s);
+    // its twin: the same strip turned half round (the deck at its low end is now the twin of the other end's)
+    br.push({ ax: s.ax, x0: W - 1 - s.x1, x1: W - 1 - s.x0, y0: H - 1 - s.y1, y1: H - 1 - s.y0, a: plats[s.b].tw, b: plats[s.a].tw });
+  }
+  br.forEach((s, k) => { s.id = k; });
+  // 3) The rim (kept clear), the heads of the bridges and the bare middles.
+  const rim = new Uint8Array(N), bare = new Uint8Array(N), near = new Uint8Array(N);
+  for (let t = 0; t < N; t++) if (terrain[t] !== T_CHASM) { const i = t % W, j = (t / W) | 0; if (i === 0 || j === 0 || i === W - 1 || j === H - 1) { rim[t] = 1; continue; } orth(t, (u) => { if (terrain[u] === T_CHASM) rim[t] = 1; }); }
+  for (let t = 0; t < N; t++) if (rim[t]) { near[t] = 1; orth(t, (u) => { near[u] = 1; }); }
+  const mark = (arr, x0, y0, x1, y1) => { for (let j = Math.max(0, y0); j <= Math.min(H - 1, y1); j++) for (let i = Math.max(0, x0); i <= Math.min(W - 1, x1); i++) arr[id(i, j)] = 1; };
+  for (const s of br) {
+    // a head's ground: 4 tiles into each deck, 3 tiles either side of the strip
+    if (s.ax === 'v') { mark(bare, s.x0 - 3, s.y0 - 4, s.x1 + 3, s.y0 - 1); mark(bare, s.x0 - 3, s.y1 + 1, s.x1 + 3, s.y1 + 4); }
+    else { mark(bare, s.x0 - 4, s.y0 - 3, s.x0 - 1, s.y1 + 3); mark(bare, s.x1 + 1, s.y0 - 3, s.x1 + 4, s.y1 + 3); }
+  }
+  for (const r of plats) if (r.kind !== 'home') { const cx = Math.round((r.x0 + r.x1) / 2), cy = Math.round((r.y0 + r.y1) / 2); mark(bare, cx - 2, cy - 2, cx + 2, cy + 2); }
+  // The control boxes: one on each deck at each end of a bridge, on clear ground just beside the head.
+  const bx = [];
+  for (const s of br) for (const end of [0, 1]) {
+    const cand = [];
+    for (const d of [2, 3]) for (const side of [-1, 1]) {
+      const along = side < 0 ? (s.ax === 'v' ? s.x0 - 2 : s.y0 - 2) : (s.ax === 'v' ? s.x1 + 2 : s.y1 + 2);
+      const ins = end === 0 ? (s.ax === 'v' ? s.y0 - d : s.x0 - d) : (s.ax === 'v' ? s.y1 + d : s.x1 + d);
+      cand.push(s.ax === 'v' ? [along, ins] : [ins, along]);
+    }
+    const pick = cand.find(([i, j]) => i > 0 && j > 0 && i < W - 1 && j < H - 1 && terrain[id(i, j)] === T_GROUND && !rim[id(i, j)] && !near[id(i, j)]) || cand.find(([i, j]) => terrain[id(i, j)] === T_GROUND);
+    if (pick) bx.push({ id: bx.length, br: s.id, end, x: pick[0], y: pick[1], owner: -1 });
+  }
+  // A few crags, away from the rim, the heads, the middles and the bases.
+  const base = { x: Math.floor(W / 2), y: yA0 + Math.round(hh * 0.56) };
+  base.y = Math.min(base.y, H - M - 6);
+  const bxx = base.x, byy = base.y;
+  for (let t = 0; t < N; t++) {
+    if (terrain[t] !== T_GROUND || near[t] || bare[t] || rim[t]) continue;
+    const i = t % W, j = (t / W) | 0, m = Math.min(t, mir(t)), mi = m % W, mj = (m / W) | 0;
+    if (dist2(i, j, bxx, byy) < 100 || dist2(i, j, W - 1 - bxx, H - 1 - byy) < 100) continue;
+    if (fbm(mi / 6.5, mj / 6.5, sH, 3) > TPR.rock + 0.05) terrain[t] = T_ROCK;
+  }
+  for (let t = 0; t < N; t++) if (bx.some((b) => id(b.x, b.y) === t) && terrain[t] === T_ROCK) terrain[t] = T_GROUND;
+  // 4) Resources, every tile made to its twin as well. `jmin`: the middle deck is its own twin, so it is laid out in its lower half.
+  const free = (t) => terrain[t] === T_GROUND && !rim[t] && !res[t] && !fert[t] && !bare[t];
+  const stamp = (x, y, rad, type, fill, jmin) => {
+    for (let j = Math.max(jmin || 0, Math.floor(y - rad)); j <= Math.min(H - 2, Math.ceil(y + rad)); j++) {
+      for (let i = Math.max(1, Math.floor(x - rad)); i <= Math.min(W - 2, Math.ceil(x + rad)); i++) {
+        const d2 = dist2(i, j, x, y), t = id(i, j);
+        if (d2 > rad * rad || !free(t) || !free(mir(t))) continue;
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        for (const u of [t, mir(t)]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+      }
+    }
+  };
+  const oil = (x, y, k, jmin) => {
+    const c = [];
+    for (let j = Math.max(jmin || 0, Math.floor(y - 3)); j <= Math.min(H - 2, Math.ceil(y + 3)); j++) for (let i = Math.max(1, Math.floor(x - 3)); i <= Math.min(W - 2, Math.ceil(x + 3)); i++) { const t = id(i, j); if (free(t) && free(mir(t))) c.push([dist2(i, j, x, y), t]); }
+    c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
+  };
+  // The landing zone: open ground round each Command Base.
+  for (let j = byy - 4; j <= byy + 4; j++) for (let i = bxx - 4; i <= bxx + 4; i++) { const t = id(i, j); if (terrain[t] === T_ROCK) for (const u of [t, mir(t)]) terrain[u] = T_GROUND; }
+  // The home decks: the standard colony's starter fields, then the richer ones out beyond, and oil.
+  stamp(bxx - 6, byy - 2, 2.5, R_STALK, 0.85 * stampDens);
+  stamp(bxx - 4, byy + 4, 1.4, R_STALK, 0.8 * stampDens);
+  stamp(bxx + 6, byy, 1.8, R_BOULDER, 0.8 * stampDens);
+  stamp(bxx - 4, byy - 5, 1.3, R_ORE, 0.9 * stampDens);
+  stamp(bxx + 4, byy - 5, 1.3, R_CRYSTAL, 0.9 * stampDens);
+  stamp(bxx + 2, byy + 4, 1.2, R_BOULDER, 0.7 * stampDens);
+  stamp(bxx - 1, byy - 6.5, 2.0, 'fert', 0.85);
+  stamp(bxx + 9, byy - 3.5, 1.6, R_ORE, 0.8 * stampDens);
+  stamp(bxx - 10, byy + 2.5, 1.5, R_CRYSTAL, 0.8 * stampDens);
+  for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, ORBITAL.oil.home)) oil(bxx + dx, byy + dy, 4);
+  stamp(bxx - 8, byy + 6, 1.4, R_BOULDER, 0.75 * stampDens);
+  // The other decks: fields scattered over them (the more the bigger), best-candidate spaced, Ore, Crystal and Stone in turn, and oil.
+  const scatter = (r, jmin) => {
+    const x0 = r.x0 + 2, x1 = r.x1 - 2, y0 = Math.max(r.y0 + 2, jmin || 0), y1 = r.y1 - 2;
+    if (x1 < x0 || y1 < y0) return;
+    const area = (x1 - x0 + 1) * (y1 - y0 + 1), n = clamp(Math.round(area / 34), 3, 36), sites = [], types = [R_ORE, R_CRYSTAL, R_BOULDER, R_ORE, R_CRYSTAL, R_BOULDER, R_ORE, R_CRYSTAL];
+    const pickSite = (minD) => {
+      let best = null, bs = -1;
+      for (let k = 0; k < 14; k++) {
+        const x = x0 + rng() * (x1 - x0), y = y0 + rng() * (y1 - y0), t = id(Math.round(x), Math.round(y));
+        if (!free(t) || !free(mir(t))) continue;
+        let d = Infinity; for (const s of sites) d = Math.min(d, dist(x, y, s[0], s[1]));
+        if (d >= minD && d > bs) { bs = d; best = [x, y]; }
+      }
+      return best;
+    };
+    const oils = r.kind === 'mid' ? ORBITAL.oil.mid : ORBITAL.oil.deck + Math.floor(area / 420);
+    for (let k = 0; k < oils; k++) { const s = pickSite(4); if (s) { sites.push(s); oil(s[0], s[1], 3, jmin); } }
+    for (let k = 0; k < n; k++) {
+      const s = pickSite(4.2);
+      if (!s) continue;
+      sites.push(s);
+      const type = types[k % types.length];
+      stamp(s[0], s[1], type === R_BOULDER ? 1.5 : 1.7, type, 0.85, jmin);
+    }
+  };
+  for (const r of plats) {
+    if (r.kind === 'mid') scatter(r, half);
+    else if (r.kind === 'deck' && r.id < r.tw) scatter(r);
+  }
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 600 && placed < Math.ceil(URANIUM_DEPOSITS / 2); tries++) {
+      const i = 2 + Math.floor(rng() * (W - 4)), j = half + 1 + Math.floor(rng() * (H - half - 3)), t = id(i, j);
+      if (!free(t) || !free(mir(t)) || dist(i, j, bxx, byy) < 12) continue;
+      for (const u of [t, mir(t)]) res[u] = R_URANIUM;
+      placed++;
+    }
+  }
+  // Stone: each home deck is topped up to ORBITAL.stone (Cement comes from Stone alone, and every Viaduct costs Cement).
+  {
+    const per = clamp(Math.round(RES[R_BOULDER].amount * RPR.amount * ORBITAL.mul), 1, 255), target = Math.round(ORBITAL.stone * RPR.amount);
+    const b0 = id(bxx, byy), land = new Uint8Array(N), q = [b0];
+    land[b0] = 1;
+    for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!land[u] && terrain[u] !== T_CHASM) { land[u] = 1; q.push(u); } });
+    let have = 0;
+    for (const t of q) if (res[t] === R_BOULDER) have += per;
+    const spots = q.filter((t) => free(t) && free(mir(t)) && dist((t % W), (t / W) | 0, bxx, byy) >= 4.5)
+      .sort((a, c) => (dist2(a % W, (a / W) | 0, bxx + 3, byy + 7) - dist2(c % W, (c / W) | 0, bxx + 3, byy + 7)) || a - c);
+    for (let k = 0; k < spots.length && have < target; k++) { for (const u of [spots[k], mir(spots[k])]) res[u] = R_BOULDER; have += per; }
+  }
+  // The rim and the heads stay clear; nothing lies off the ground.
+  for (let t = 0; t < N; t++) {
+    if (rim[t]) { if (terrain[t] === T_ROCK) terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+    if (terrain[t] !== T_GROUND) { res[t] = R_NONE; fert[t] = 0; }
+  }
+  // How much each holds (as on every map: richer out toward the middle).
+  const reach = Math.max(1, dist(bxx, byy, W - 1 - bxx, H - 1 - byy) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bxx, byy), dist(i, j, W - 1 - bxx, H - 1 - byy));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (SKY_RICH.includes(res[t]) ? ORBITAL.mul : 1)), 1, 255);
+  }
+  // The bridges start down: the strips are ground (flat, bare: nothing is ever built or grown on them).
+  for (const s of br) for (let j = s.y0; j <= s.y1; j++) for (let i = s.x0; i <= s.x1; i++) { const t = id(i, j); terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bxx, y: byy }, { x: W - 1 - bxx, y: H - 1 - byy }],
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    orbital: { plats: plats.map((r) => ({ id: r.id, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, kind: r.kind, tw: r.tw })), br, bx },
+  };
+}
+
 /* ------------------------------------------------------------------ new game */
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
@@ -3312,7 +3534,7 @@ function newGame(opts) {
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
-  if (SHAPE_PRESETS[settings.shape].asteroids) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring has Argos's look and rules, whatever the Biome setting)
+  if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring and Orbital platforms have Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
   const { W, H } = mapDims(settings);
@@ -3373,6 +3595,7 @@ function newGame(opts) {
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
+  if (m.orbital) S.orb = orbInit(m.orbital, m.bases); // (Orbital platforms: its decks, drawbridges and control boxes: orbitalMap)
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   if (SHAPE_PRESETS[settings.shape].walker) walkerSetup(m.bases); // (the Walking Factory: its yard and loop round the middle)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
@@ -4424,6 +4647,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   // (Nothing can be attacked on a Trade Post's ground, so only the Terminal that docks there may stand on it: an Outpost
   // or Wall there would be a door no enemy could ever break.)
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
+  if (orbTile(t)) return { ok: false, reason: 'A drawbridge: nothing is built on it.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
@@ -4759,6 +4983,7 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
+  if (orbTile(t)) return false; // (a drawbridge's strip: no road on it, or it would stay walkable when raised)
   if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)

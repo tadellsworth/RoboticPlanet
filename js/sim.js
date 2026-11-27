@@ -102,6 +102,7 @@ function simStep(dt) {
   if (S.town && S.tick % 3 === 1) townTick(3 * dt); // (Passenger Town's sentries)
   if (S.walker) walkerTick(dt); // (the Walking Factory: it walks, its claim, its line)
   if (S.dam && S.tick % 3 === 2) damTick(3 * dt); // (The Dam: robots at the dams, Workers mending, the floods)
+  if (S.orb) orbTick(); // (Orbital platforms: the bridges' warnings and leaves, the control boxes)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -4173,6 +4174,7 @@ function tfWhere(owner, t, plan) {
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds this ground: terraform your own land or no-one\'s.';
   if (postAt(t) || calmAt(i + 0.5, j + 0.5)) return 'A Trade Post\'s ground: it stays as it is.';
   if (uplinkAt(t)) return 'A neutral Uplink stands here.';
+  if (orbTile(t)) return 'A drawbridge: it stays as it is.';
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return lw; }
   if (S.dam && damAt(t)) return 'The dam stands here.';
   if (S.town && townRuinAt(t)) return 'A building of Passenger Town stands here.';
@@ -14025,6 +14027,145 @@ function updateUplinks() {
   }
 }
 
+/* ------------------------------------------------------------------ Orbital platforms: the drawbridges and their control boxes */
+
+/*
+ * Orbital platforms (SHAPE_PRESETS orbital; orbitalMap in world.js, ORBITAL in defs.js, the look in js/orbital.js).
+ * S.orb = { plats, br, bx, ver }:
+ *   br[k]  a bridge: its strip (x0..x1, y0..y1: tiles; ax 'v' runs north-south, 'h' east-west) between decks `a` (the one
+ *          at its low end) and `b`; up (1: the strip is void, T_CHASM; 0: ground that can be walked), mv (0 at rest, 1 a Raise
+ *          ordered and the warning running, 2 the leaf swinging up, 3 a Lower ordered and the leaf coming down), t0 (when
+ *          mv began), cd (no new order until S.time reaches it), by (who ordered it).
+ *   bx[n]  a control box: bridge br, which end (0 at the low end, 1 at the high), its tile, owner (-1 no one).
+ * A raised bridge is void from the moment the leaf lifts (up = 1) until a Lower finishes (up = 0). A Raise is called off if a
+ * robot (any colony's, on foot) is on the strip when the warning ends, so no robot is ever lost to a raise. Nothing is built on
+ * a strip (orbTile). The tiles' terrain is the truth for walking (T_GROUND or T_CHASM), so paths, zones and territory need
+ * nothing special; orbFlip changes it and tells them (terrainChanged).
+ */
+let _orbIdx = { of: null, idx: null };
+/** The bridge (index) whose strip tile t is, or -1. */
+function orbBridgeAt(t) {
+  const O = S && S.orb;
+  if (!O) return -1;
+  if (_orbIdx.of !== O) {
+    const idx = new Int16Array(S.W * S.H).fill(-1);
+    O.br.forEach((B, k) => { for (let j = B.y0; j <= B.y1; j++) for (let i = B.x0; i <= B.x1; i++) idx[j * S.W + i] = k; });
+    _orbIdx = { of: O, idx };
+  }
+  return _orbIdx.idx[t];
+}
+/** Is tile t on a drawbridge's strip, up or down (nothing is built, laid or dropped on it)? */
+function orbTile(t) { return !!(S && S.orb) && orbBridgeAt(t) >= 0; }
+/** The deck's name for messages: South, North, West, East, South-west..., Middle. */
+function orbDeckName(i) {
+  const P = S.orb.plats[i], cx = (P.x0 + P.x1 + 1) / 2 / S.W, cy = (P.y0 + P.y1 + 1) / 2 / S.H;
+  if (P.kind === 'mid') return 'Middle';
+  const ns = cy < 0.4 ? 'North' : cy > 0.6 ? 'South' : '', ew = cx < 0.4 ? 'west' : cx > 0.6 ? 'east' : '';
+  return ns && ew ? `${ns}-${ew}` : ns || ew.charAt(0).toUpperCase() + ew.slice(1);
+}
+/** Bridge k's name: "South to Middle". */
+function orbName(k) { const B = S.orb.br[k]; return `${orbDeckName(B.a)} to ${orbDeckName(B.b)}`; }
+/** Is any robot on foot on bridge k's strip (or at its edge)? */
+function orbOccupied(k) {
+  const B = S.orb.br[k], pad = ORBITAL.pad;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air) continue;
+    if (u.x >= B.x0 - pad && u.x <= B.x1 + 1 + pad && u.y >= B.y0 - pad && u.y <= B.y1 + 1 + pad) return true;
+  }
+  return false;
+}
+/** Does player p hold a control box at either end of bridge k? */
+function orbHolds(p, k) { return S.orb.bx.some((b) => b.br === k && b.owner === p); }
+/** Why p can't order bridge k up (up 1) or down (0) now ('' if it can). */
+function orbWhy(p, k, up) {
+  const O = S.orb;
+  if (!O) return 'There are no bridges on this map.';
+  const B = O.br[k];
+  if (!B) return 'That bridge is gone.';
+  if (!orbHolds(p, k)) return 'Hold one of its control boxes first: armed robots beside it, or your land round it.';
+  if (B.mv) return 'The bridge is moving.';
+  if (up ? B.up : !B.up) return up ? 'It is already up.' : 'It is already down.';
+  if (S.time < B.cd) return `The bridge is resting: ${Math.ceil(B.cd - S.time)} s.`;
+  if (up && orbOccupied(k)) return 'Robots are on the bridge: it can\'t be raised.';
+  return '';
+}
+/** Order bridge k raised (up 1) or lowered (0) for player p: '' or why not. */
+function orbSet(p, k, up) {
+  k = k | 0;
+  const why = orbWhy(p, k, up);
+  if (why) return why;
+  const B = S.orb.br[k];
+  B.mv = up ? 1 : 3; B.t0 = S.time; B.by = p;
+  S.orb.ver++;
+  const cx = (B.x0 + B.x1 + 1) / 2, cy = (B.y0 + B.y1 + 1) / 2;
+  postMsg(ME, up ? `The ${orbName(k)} bridge is being raised${p === ME ? '' : ' by ' + playerName(p, true)}: get off it (${ORBITAL.warn} s).` : `The ${orbName(k)} bridge is being lowered${p === ME ? '' : ' by ' + playerName(p, true)}.`, cx, cy, up && p !== ME ? 'warn' : 'info');
+  sfx('bridge', cx, cy, up ? 1 : 0);
+  return '';
+}
+/** Raise or lower bridge k's tiles now, and tell the paths, zones and land. */
+function orbFlip(k, up) {
+  const B = S.orb.br[k], W = S.W;
+  B.up = up ? 1 : 0;
+  for (let j = B.y0; j <= B.y1; j++) for (let i = B.x0; i <= B.x1; i++) {
+    const t = j * W + i;
+    S.terrain[t] = up ? T_CHASM : T_GROUND;
+    S.dirtyTiles.push(t);
+  }
+  S.orb.ver++;
+  terrainChanged();
+  for (const u of S.bots) if (!u.dead && u.path && u.path.slice(u.pi).some((v) => orbBridgeAt(v) === k)) dropPath(u); // (a route over it is a route no more)
+}
+/** A step: the warnings run out and the leaves swing. */
+function orbTick() {
+  const O = S.orb;
+  for (let k = 0; k < O.br.length; k++) {
+    const B = O.br[k];
+    if (!B.mv) continue;
+    const cx = (B.x0 + B.x1 + 1) / 2, cy = (B.y0 + B.y1 + 1) / 2;
+    if (B.mv === 1 && S.time >= B.t0 + ORBITAL.warn) {
+      if (orbOccupied(k)) {
+        B.mv = 0; B.cd = S.time + ORBITAL.fail; O.ver++;
+        postMsg(ME, `The ${orbName(k)} bridge stays down: a robot is on it.`, cx, cy, 'info');
+      } else { orbFlip(k, true); B.mv = 2; B.t0 = S.time; }
+    } else if (B.mv === 2 && S.time >= B.t0 + ORBITAL.lift) { B.mv = 0; B.cd = S.time + ORBITAL.cool; O.ver++; }
+    else if (B.mv === 3 && S.time >= B.t0 + ORBITAL.lift) {
+      orbFlip(k, false); B.mv = 0; B.cd = S.time + ORBITAL.cool;
+      postMsg(ME, `The ${orbName(k)} bridge is down.`, cx, cy, 'info');
+    }
+  }
+  if (S.tick % 30 === 12) orbBoxes();
+}
+/**
+ * Who holds each control box (once a second): the colony with more armed robots within ORBITAL.reach of it than any other
+ * (a tie leaves it as it was); with none near, the colony whose land it stands in; a box on no one's land keeps its holder.
+ */
+function orbBoxes() {
+  const O = S.orb, r2 = ORBITAL.reach * ORBITAL.reach;
+  for (const b of O.bx) {
+    let best = -1, bn = 0, tie = false;
+    const near = new Map();
+    for (const u of S.bots) {
+      if (u.dead || u.inside || u.dropping || u.owner < 0 || BOTS[u.type].air || !isArmy(u) || S.players[u.owner].out) continue;
+      if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= r2) near.set(u.owner, (near.get(u.owner) || 0) + 1);
+    }
+    for (const [o, n] of near) { if (n > bn) { bn = n; best = o; tie = false; } else if (n === bn) tie = true; }
+    let own = b.owner;
+    if (best >= 0 && !tie) own = best;
+    else if (!near.size) { const lo = S.owner[b.y * S.W + b.x]; if (lo >= 0 && S.players[lo] && !S.players[lo].out && !S.players[lo].absent) own = lo; }
+    if (own === b.owner) continue;
+    const was = b.owner;
+    b.owner = own; O.ver++;
+    if (own === ME) postMsg(ME, `You hold the control box of the ${orbName(b.br)} bridge (its ${orbDeckName(b.end ? O.br[b.br].b : O.br[b.br].a)} end).`, b.x + 0.5, b.y + 0.5, 'good');
+    else if (was === ME) postMsg(ME, `${own >= 0 ? playerName(own) + ' took' : 'You lost'} the control box of the ${orbName(b.br)} bridge (its ${orbDeckName(b.end ? O.br[b.br].b : O.br[b.br].a)} end).`, b.x + 0.5, b.y + 0.5, 'bad');
+  }
+}
+/** The orbital state a new game starts with, from the generator's decks, bridges and boxes: every bridge down, a colony's own home-deck boxes its own, the rest no one's. */
+function orbInit(o, bases) {
+  // (a box on a colony's home deck, the one its Command Base stands on, starts as its own; the others are no one's)
+  const homeOf = (x, y) => { const k = bases.findIndex((c) => c && o.plats.some((P) => P.kind === 'home' && c.x >= P.x0 && c.x <= P.x1 && c.y >= P.y0 && c.y <= P.y1 && x >= P.x0 && x <= P.x1 && y >= P.y0 && y <= P.y1)); return k; };
+  return { plats: o.plats, br: o.br.map((s) => ({ id: s.id, ax: s.ax, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, a: s.a, b: s.b, up: 0, mv: 0, t0: 0, cd: 0 })), bx: o.bx.map((b) => ({ id: b.id, br: b.br, end: b.end, x: b.x, y: b.y, owner: homeOf(b.x, b.y) })), ver: 1 };
+}
+
 /** m:ss */
 function fmtClock(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
@@ -18887,7 +19028,7 @@ function airdropBlocked(owner, u, kind, i, j) {
   const t = tIdx(i, j);
   if (caveTile(t)) return 'The roof is in the way: nothing is dropped into the caves. Drop it out on the surface, by an entrance.';
   if (kind === 'outpost') {
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
+    if (S.terrain[t] !== T_GROUND || orbTile(t) || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
     if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
     if (S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
@@ -21371,6 +21512,7 @@ function hashState() {
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
   if (S.walker) { const w = S.walker; num(w.x); num(w.y); num(w.a); num(w.od); num(w.prog); num(w.t); int(w.ph); int(w.dir); int(w.owner); int(w.cap); int(w.hot); for (const id of w.kids) int(id); for (const r of S.rallies) if (r.walker) { int(r.id); num(r.x); num(r.y); } } // (the Walking Factory)
   if (S.town) for (const r of S.town.r) { int(r.id); int(r.gone); int(r.by); int(r.cache); num(r.sen); num(r.scd || 0); int(r.g.cement || 0); int(r.g.alloy || 0); int(r.g.chip || 0); } // (Passenger Town's buildings)
+  if (S.orb) { for (const B of S.orb.br) { int(B.up); int(B.mv); num(B.t0); num(B.cd); int(B.by ?? -1); } for (const b of S.orb.bx) int(b.owner); } // (Orbital platforms: the bridges and who holds the control boxes)
   if (S.dam) for (const d of S.dam.d) { num(d.hp); int(d.by); int(d.mend); num(d.hitT); int(d.hitBy); num(d.broke); int(d.fi); int(d.ri); int(d.li); int(d.wet.length); } // (The Dam: its dams and floods)
   for (const L of S.landmarks || []) { str(L.id); int(L.x); int(L.y); int(L.v); int(L.solid.length); int(L.on || 0); num(L.hold || 0); int(L.got || 0); } // (a Contingency battle's landmark: js/landmarks.js)
   // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
