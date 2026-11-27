@@ -287,6 +287,10 @@ const ART_MANIFEST = {
   // every team, drawn over it by t5DrawBuilding), and its two build stages (<k>-site1@T, <k>-site2@T).
   ...Object.fromEntries(['reservoir', 'leveller'].flatMap((k) => [0, 1].flatMap((t) => [k, `${k}-site1`, `${k}-site2`].map((n) => [`${n}@${t}`, { src: `buildings/${n}@${t}.webp`, ...T5_FRAME }])))),
   ...Object.fromEntries(['reservoir', 'leveller'].flatMap((k) => [0, 1, 2, 3].map((f) => [`${k}-work-${f}`, { src: `buildings/${k}-work-${f}.webp`, ...T5_FRAME }]))),
+  // The Leveller with its boom slewed to the other three quarters (leveller-hH@T, H 1..3, every time of day, and its moving
+  // parts leveller-hH-work-F; renderer/tools/render_t5_slew.sh, install_t5_slew.py): t5Heading turns it toward its work.
+  ...Object.fromEntries([1, 2, 3].flatMap((h) => [...[0, 1].map((t) => [`leveller-h${h}@${t}`, { src: `buildings/leveller-h${h}@${t}.webp`, ...T5_FRAME }]),
+    ...[0, 1, 2, 3].map((f) => [`leveller-h${h}-work-${f}`, { src: `buildings/leveller-h${h}-work-${f}.webp`, ...T5_FRAME }])])),
   // The Atmosphere Engine (renderer/b/atmos.js, the owner's look A, the Rain Tower, installed by tools/install_atmos.py): the
   // cooling-tower shell, its fans and control house (atmos@T, every time of day); the plume, its night light and the rain in code.
   ...Object.fromEntries([0, 1].map((t) => [`atmos@${t}`, { src: `buildings/atmos@${t}.webp`, ...ATMOS_FRAME }])),

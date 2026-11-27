@@ -24,7 +24,11 @@ mission Made Ready.
 - **Made ready is the default Colony goal** (the setup's new Goal row: Made ready or Free play). Reaching it wins, and
   Keep playing goes on as Colony did, so nothing is lost for a player who only wanted to build; one who wants no end at
   all picks Free play (remembered). `newGame` only sets it when asked, so missions, the tests and older saves are as
-  before. Not in co-op Colony yet (the lobby's settings don't carry it).
+  before. **Co-op Colony: DONE (Nov 27 2026).** The lobby's settings carry the Goal (`greenWin`: the host picks Made
+  ready or Free play in the multiplayer settings; the lobby's line says which) and every device makes the same game
+  from them. Call made: the shared colony's land counts the same way as alone (it is one colony, colony 0, whoever
+  greened a tile), not each person's land added up, since in shared co-op nobody has land of their own. The win is
+  everyone's (they all run colony 0). `tools/coop-green-test.js`.
 - **What counts as green:** improving or rich soil, any grove, wet ground (pumps, the Engine's rain, the Reservoir's
   banks), shifted ground and an Engine's Green, and **graded ground** (anything the Graders or the Leveller changed, the
   "reclaimed ground" of the brief: the narrator's "prepared to Accord standard"). Scorched ground never counts. In
@@ -42,22 +46,40 @@ mission Made Ready.
   the highest first and the nearest of those, never a step steeper than stage 1 allows.
 - **Ports on a made lake on any map** (`navalOk`), so ships use the lake as the brief asked; the Foundry and the build
   menu then offer ships and the Port. Rivals keep to `navalMap` and never build for a lake.
+- **Done (Nov 2026): the Leveller's ridge mode, Raise a ridge** (`H` on its panel; `ORDERS.levelRidge`, `ridgePlan`,
+  `updateRidge`, `ridgeCommit`; `LVL.ridge*`). A line dragged in the Terraform mode (tool `ridge`), 2 to 12 tiles in its
+  reach, previewed tile by tile with each tile's new level and what it leaves out crossed in red. 2 levels up in the
+  middle, 1 at the ends, the ground beside the crest raised a level as shoulders (stage 1's rule run the other way: the
+  crest is capped by the ground it can't raise, then the shoulders take the least earth that works). The earth is Stone
+  taken from storage as it piles (2 a level, a Wall's way, not a Hauler's: the Leveller's own hopper is a source like any
+  store, so what it cut goes back into a ridge), a level every 4 s, in batches of four (one `terrainChanged` a batch,
+  about 15 ms). Robots on a rising tile step aside; routes go round. Rivals don't use it.
+- **Done (Nov 2026): the boom slews toward its work**, both modes: three more renders of the whole Leveller with the
+  upper works turned a quarter at a time (`hd=1..3` in renderer/b/leveller.js: north-north-east, south-east, south-south-
+  west; the plain art is west-north-west), every time of day and their work frames, and `t5Heading` picks the one
+  nearest the tile it works (it stays put when it stops). It snaps from one to the next; south-east is a little short of
+  a quarter so the wheel stays in the frame.
 - **The lore line:** "Reservoir, settlement plan phase 3. Capacity: a town of forty thousand. Condensing. Filling." The
   Leveller: "Grade the site to standard. Standard: level." The win: "Region prepared to Accord standard. Settlement
   priority: ours. Arrival clock: T+31 years. Ready." Nothing says who it is ready for.
 
 **Not built (for later):**
-- **A ridge mode for the Leveller** (bank the earth it cuts into a line, a level at a time: "Embankment, to standard.
-  The standard did not say against whom."). Cutting came first; a ridge needs its own planner (a line like Walls), an
-  earth stock and the cliff rule run the other way. Cheap enough next.
-- **The boom slewing toward the cut** (a few turned frames, as the Lance's head): the boom points north-west whatever
-  it cuts; the dust and a pulsing tan square mark the tile it bites.
+- The ridge's open questions: a **ridge that curves** (a line a tile at a time, like a sap, rather than straight); a
+  **ramp left at an end** on its own (now the player builds one); whether the rival AI should ever **raise one across a
+  choke**; the lore line "Embankment, to standard. The standard did not say against whom." (for the owner); the boom
+  **turning smoothly** between its four headings (more renders) instead of snapping.
 - **Contingency: greened territories carry over to the globe** (the canvas's World view: the globe painted green where
   a won campaign battle greened its territory, a GREENED row on the territory card, the planet's share in the top bar,
   a campaign goal such as "green a quarter of Ithaca I"). Not now.
 - Versus greening (the canvas's optional "Also win by" chip, held 5 minutes): the owner said Versus doesn't need it.
 - The Greening panel's History series beside the Statistics graphs (it keeps its own last hour for now).
 - Should the banks reach further, or the lake raise the water table round it? (2 tiles deep now.)
+
+## The Build menu's tabs on a phone (fixed Nov 27 2026)
+
+At 390 px the tab bar cut off "Terraform" (six tabs since Mega). DONE: on screens up to 480 px wide the tabs tighten
+their letters and padding (and shrink a little more under 360 px) so all six fit across at 390 and 430 px without
+scrolling sideways, full names kept; the desktop look is unchanged.
 
 ## A lighter dusk on slow devices (built Nov 27 2026, Auto only: open questions)
 
@@ -3088,8 +3110,9 @@ Calls made, for the owner to confirm or change:
   or an ally's) sends them to shoot that tile till it breaches (`orderEwShoot`, task `ewshoot`): a heavy robot at the
   full 2 a shot, a light warbot at `EW.light` (25%) of it, so heavy robots and blasts stay the real way to breach. A
   coral reticle marks the tile; breached, the order ends and a group's units go back to their flag. Rivals don't use it.
-  Open: on a touch screen there's no way yet to order it on your own earthworks (no Ctrl); a "Force attack" toggle on
-  the selection bar would do it, if play shows it's needed. `EW.light` to tune in play-testing.
+  **Touch: DONE (Nov 27 2026)**: under a finger the selection bar has **Breach** while you or an ally have an earthwork
+  standing; it arms the next tap as the order on an earthwork, your own or an ally's too (your and your allies' in view
+  outlined in coral), then it's off. `tools/breach-touch-test.js`. `EW.light` to tune in play-testing.
 - **The Sluice floods by its own rules, not the Dam map's:** the Dam turns the flood plain into fords and back
   (`terrainChanged` each time, about 15 ms a tile batch), which costs too much for a building a player can open again
   and again. The Sluice's flood is a layer (`S.fld`) drawn over the ground, closing routes while under water and

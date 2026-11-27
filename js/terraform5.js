@@ -7,10 +7,13 @@
  *  - Build → Mega (key 5): the Reservoir (V) and the Leveller (G). Placing a Reservoir outlines the basin it would fill
  *    (teal) or what stands in its way (red), and the Generators' reach (t5Ranges, t5PlaceText). A Leveller shows its reach.
  *  - Their panels (t5Panel, t5Buttons): the Reservoir's stage lamps (dry, puddling, half, full) and power; the Leveller's
- *    Level a hill (F: the aim mode, ORDERS.levelAim; tap a hill in reach) and Stop (C), its hopper and what's left.
- *  - On the map (t5Marks): a filling basin's outline, the hill a Leveller is cutting and the dust at its cut.
+ *    Level a hill (F: the aim mode, ORDERS.levelAim; tap a hill in reach), Raise a ridge (H: the Terraform mode with the
+ *    tool 'ridge', ridgeStart; drag a line, ORDERS.levelRidge) and Stop (C), its hopper and what's left.
+ *  - On the map (t5Marks): a filling basin's outline, the hill a Leveller is cutting and the dust at its cut, the ridge it
+ *    raises (outlined, each tile's level when selected) and the dust and spoil where it piles; the ridge being planned.
  *  - The buildings (t5DrawBuilding, t5DrawSite): renderer/b/reservoir.js and leveller.js (ART_GUIDE Batch 42), the base
- *    art at every time of day, the moving parts over it in 4 frames (still when it stops), the two build stages.
+ *    art at every time of day, the moving parts over it in 4 frames (still when it stops), the two build stages. The
+ *    Leveller's boom slews to the quarter its work tile lies in (t5Heading: four renders, leveller and leveller-h1..3).
  *  - The greening meter, "Land made ready": a ring in the top bar's land chip (t5Chip; tap it), the Greening panel
  *    (Shift+G: openGreening), the minimap's Green layer (its GREEN tag at the minimap's foot: t5MiniGreen), and in a
  *    Colony game with the Made ready goal its progress card (t5WinCard) and the green VICTORY.
@@ -30,7 +33,7 @@ function t5PlaceText(type, i, j) {
     if (B.why) return '';
     return `Fills a basin of <b>${B.ts.length}</b> tiles (outlined) over ${Math.round(RSV.fill[2] / 60)} minutes of power: ${RSV.gens} Generators with Fuel within ${RSV.reach} tiles.`;
   }
-  if (BDEFS[type].lvl) return `Cuts a hill or mesa within <b>${LVL.reach}</b> tiles of it (aim it from its panel). Power: a Generator with Fuel within ${LVL.powReach} tiles.`;
+  if (BDEFS[type].lvl) return `Cuts a hill or mesa within <b>${LVL.reach}</b> tiles of it, or raises a ridge there (from its panel). Power: a Generator with Fuel within ${LVL.powReach} tiles.`;
   return '';
 }
 
@@ -52,23 +55,94 @@ function t5Panel(b, mine) {
   } else if (BDEFS[b.type].lvl) {
     if (!b.built) return out;
     const base = S.elev[tIdx(b.x, b.y)], left = (b.lvTs || []).reduce((n, t) => n + Math.max(0, S.elev[t] - base), 0);
-    out.push(`<div class="kv"><span>Hill</span><span>${b.lvAim !== undefined ? `${left} level${left === 1 ? '' : 's'} to cut, about ${fmtClock(left * LVL.every)} of power` : b.lvDone ? 'Levelled. Aim it at another' : 'None: aim it at a hill or mesa within reach'}</span></div>`);
-    if (mine) out.push(`<div class="kv"><span>STONE hopper</span><span>${goodTag('stone', `${b.stock.stone || 0}/${LVL.cap}`, (b.stock.stone || 0) >= LVL.cap)} (${LVL.stone} a level; Haulers carry it off)</span></div>`);
-    if (mine) out.push(`<div class="kv"><span>Power</span><span>${b.working ? 'A Generator in reach: a Fuel a minute' : `${b.lvAim !== undefined ? '<b>None</b>: a' : 'A'} Generator with Fuel within ${LVL.powReach} tiles`}</span></div>`);
-    out.push(`<p class="hint">It cuts the highest ground first, a level off a tile every ${LVL.every} s, down to its own level, and never leaves a step a Ramp couldn't climb. Buildings, roads, track, resources and earthworks are left standing. The cut ground counts as land made ready.</p>`);
+    if (b.rgTs) {
+      const up = Math.max(0, ridgeLeft(b) - (b.lvN || 0)); // (less what is piled and not yet on the ground, as its status says)
+      out.push(`<div class="kv"><span>Ridge</span><span>${up} level${up === 1 ? '' : 's'} of earth to pile on ${b.rgTs.length} tiles, about ${fmtClock(up * LVL.ridgeEvery)} of power and ${up * LVL.ridgeStone} Stone from storage</span></div>`);
+      if (mine) { const have = spendable(ME).stone || 0; out.push(`<div class="kv"><span>Stone</span><span>${goodTag('stone', String(have), have < LVL.ridgeStone)} in storage (${LVL.ridgeStone} a level, taken as it piles)</span></div>`); }
+    } else out.push(`<div class="kv"><span>Hill</span><span>${b.lvAim !== undefined ? `${left} level${left === 1 ? '' : 's'} to cut, about ${fmtClock(left * LVL.every)} of power` : b.lvDone ? 'Levelled. Aim it at another' : b.rgDone ? 'None: the ridge is raised. Level a hill or raise another' : 'None: aim it at a hill or mesa within reach, or raise a ridge'}</span></div>`);
+    if (mine) out.push(`<div class="kv"><span>STONE hopper</span><span>${goodTag('stone', `${b.stock.stone || 0}/${LVL.cap}`, (b.stock.stone || 0) >= LVL.cap)} (${LVL.stone} a level cut; Haulers carry it off)</span></div>`);
+    if (mine) out.push(`<div class="kv"><span>Power</span><span>${b.working ? 'A Generator in reach: a Fuel a minute' : `${b.lvAim !== undefined || b.rgTs ? '<b>None</b>: a' : 'A'} Generator with Fuel within ${LVL.powReach} tiles`}</span></div>`);
+    out.push(`<p class="hint">It cuts the highest ground first, a level off a tile every ${LVL.every} s, down to its own level, and never leaves a step a Ramp couldn't climb. Buildings, roads, track, resources and earthworks are left standing. Or it piles a ridge along a line you drag (up to ${LVL.ridgeMost} tiles): ${LVL.ridgeH} levels up in the middle, sloping down to its ends and sides a level a step, a level every ${LVL.ridgeEvery} s for ${LVL.ridgeStone} Stone from storage. Routes go round it. The ground it works counts as land made ready.</p>`);
   }
   return out;
 }
 
-/** The Leveller's buttons (yours, built): Level a hill and Stop. */
+/** The Leveller's buttons (yours, built): Level a hill, Raise a ridge and Stop. */
 function t5Buttons(b) {
   if (!BDEFS[b.type].lvl) return '';
-  return `<button class="btn primary big" id="sh-level">Level a hill</button><p class="hint">Then tap a hill or mesa within ${LVL.reach} tiles of it: it cuts it down to its own level.</p>` +
-    `<button class="btn" id="sh-lvstop"${b.lvAim === undefined ? ' hidden' : ''}>Stop cutting</button>`;
+  return `<div class="actions"><button class="btn primary big" id="sh-level">Level a hill</button><button class="btn primary big" id="sh-ridge">Raise a ridge</button></div>` +
+    `<p class="hint">Level a hill: tap a hill or mesa within ${LVL.reach} tiles of it, and it cuts it down to its own level. Raise a ridge: drag a line within ${LVL.reach} tiles of it (up to ${LVL.ridgeMost}), and it piles the earth there ${LVL.ridgeH} levels high, for Stone from storage.</p>` +
+    `<button class="btn" id="sh-lvstop"${b.lvAim === undefined && !b.rgTs ? ' hidden' : ''}>${b.rgTs ? 'Stop raising' : 'Stop cutting'}</button>`;
 }
 function t5Bind(b) {
   if ($('sh-level')) $('sh-level').onclick = () => { sfx('click'); startAim(b); };
-  if ($('sh-lvstop')) $('sh-lvstop').onclick = () => { sfx('click'); act('levelStop', [b.id], () => { toast('The Leveller stops: what it has cut stays cut.', 'info'); refreshSheet(); }); };
+  if ($('sh-ridge')) $('sh-ridge').onclick = () => ridgeStart(b);
+  if ($('sh-lvstop')) $('sh-lvstop').onclick = () => { sfx('click'); const rg = !!b.rgTs; act('levelStop', [b.id], () => { toast(rg ? 'The Leveller stops: what it has piled stays.' : 'The Leveller stops: what it has cut stays cut.', 'info'); refreshSheet(); }); };
+}
+
+/* ------------------------------------------------------------------ planning a ridge (the Terraform mode, tool 'ridge') */
+
+/** Start planning Leveller b's ridge: the Terraform mode with the tool 'ridge' (drag a line within its reach). */
+function ridgeStart(b) {
+  if (!b || b.dead || !b.built) return;
+  sfx('click');
+  closeSheet();
+  setMode('terra');
+  UI.tf = { tool: 'ridge', head: b.id, list: [], start: -1, end: -1, prev: { rows: [], plan: new Map(), why: '' }, rg: null };
+  ridgeBanner();
+}
+/** The line from the start tile to (i, j), four-way, LVL.ridgeMost tiles at most. */
+function ridgeLine(F, i, j) {
+  const si = F.start % S.W, sj = (F.start / S.W) | 0;
+  return tileLine(si, sj, i, j).map(([x, y]) => tIdx(x, y)).slice(0, LVL.ridgeMost);
+}
+/** A drag on the map while planning a ridge: from where it starts to where it is now, a straight line. */
+function ridgePaint(i, j, first) {
+  const F = UI.tf;
+  if (!inMap(i, j)) return;
+  if (first || F.start < 0) F.start = tIdx(i, j);
+  F.end = tIdx(i, j);
+  F.list = ridgeLine(F, i, j);
+  ridgeBanner();
+}
+/** A tap while planning a ridge: its start, then its far end. */
+function ridgeTap(i, j) {
+  const F = UI.tf;
+  if (!inMap(i, j)) return;
+  if (F.start < 0 || F.list.length > 1 || F.start === tIdx(i, j)) { F.start = tIdx(i, j); F.list = [F.start]; } else F.list = ridgeLine(F, i, j);
+  sfx('click');
+  ridgeBanner();
+}
+/** The banner while planning a ridge: how long, how high, the earth, the Stone and the time; why tiles are left out. */
+function ridgeBanner() {
+  const F = UI.tf, h = getE(F.head);
+  if (!h || h.dead) { setMode('normal'); return; }
+  const n = F.list.length, P = n >= 2 ? ridgePlan(h, F.list) : null;
+  F.rg = P && !P.why ? P : null;
+  F.prev = { rows: [], plan: new Map(), why: P ? P.why || '' : '' };
+  let sum = 'Drag a line within the Leveller\'s reach (the tan ring), or tap its two ends.', why = '';
+  if (P && P.why) why = P.why;
+  else if (P) {
+    const out = [...new Set(P.rows.filter((r) => r))], have = spendable(ME).stone || 0;
+    sum = P.ts.length ? `<b>${n}</b> tiles long · <b>${P.levels}</b> levels of earth on ${P.ts.length} tiles · <b>${P.stone}</b> Stone from storage (you have ${have}) · about <b>${fmtClock(P.levels * LVL.ridgeEvery)}</b> of power.` : 'Nothing along this line it can raise.';
+    if (out.length) why = `Left out (crossed): ${out.join(', ')}.`;
+    if (P.ts.length && have < LVL.ridgeStone) why += `${why ? ' ' : ''}No Stone to spare: it waits for some.`;
+  }
+  showBanner(`<div class="tf-how"><b>Raise a ridge</b>: up to ${LVL.ridgeMost} tiles, ${LVL.ridgeH} levels up in the middle and a level less at each end, shoulders beside it, no step steeper than a Ramp could climb. Not on buildings, roads, track, pipes, resources, water, a rival's land or neutral ground.</div><div class="tf-sum">${sum}${why ? ` <span class="err">${why}</span>` : ''}</div>`, 'Raise it', 'Done');
+  $('banner-ok').disabled = !F.rg || !F.rg.ts.length;
+  if (typeof bannerMissionHint === 'function') bannerMissionHint();
+}
+/** The banner's Raise it: the line goes to the Leveller. */
+function ridgeConfirm() {
+  const F = UI.tf;
+  if (!F || !F.rg || !F.rg.ts.length) return;
+  const P = F.rg;
+  act('levelRidge', [F.head, F.list.slice()], (why) => {
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('order'); haptic('order');
+    toast(`The Leveller swings round to raise the ridge: ${P.levels} levels of earth, ${P.stone} Stone from storage, about ${fmtClock(P.levels * LVL.ridgeEvery)}.`, 'info');
+    setMode('normal');
+  });
 }
 
 /** The aim banner for a Leveller (showAimBanner). */
@@ -136,41 +210,135 @@ function t5Ranges(ctx, type, x, y, ox, oy, z, owner) {
   }
 }
 
-/** Over the ground: each Leveller's hill being cut (selected: outlined) and the dust at its cut; a Reservoir's basin while it fills. */
+/** The tile Leveller b works now (its cut's or its ridge's; -1: none), looked up every 1.5 s. Looks only. */
 const _t5Cut = new Map();
+function t5Work(b) {
+  const mode = b.rgTs ? 2 : b.lvTs ? 1 : 0;
+  let c = _t5Cut.get(b.id);
+  if (!c || c.mode !== mode || R.time - c.at > 1.5 || R.time < c.at) { c = { at: R.time, mode, t: mode === 2 ? ridgePick(b) : mode === 1 ? lvlPick(b) : -1 }; _t5Cut.set(b.id, c); }
+  return c.t;
+}
+/** Write `txt` small at (x, y), white on a dark shadow. */
+function t5Label(ctx, txt, x, y, z) {
+  ctx.font = `700 ${Math.max(9, z * 0.3)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(10,12,16,0.8)'; ctx.fillText(txt, x + 1, y + 1);
+  ctx.fillStyle = '#fff'; ctx.fillText(txt, x, y);
+}
+/** A ridge's tiles `ts` going to levels `to`: tinted by how high they go, each one's level (at a readable zoom). */
+function t5RidgeTiles(ctx, ts, to, ox, oy, z, a, nums) {
+  ctx.save();
+  for (let k = 0; k < ts.length; k++) {
+    const t = ts[k], up = to[k] - S.elev[t];
+    if (up <= 0) continue;
+    const x = ox + (t % S.W) * z, y = oy + ((t / S.W) | 0) * z;
+    ctx.globalAlpha = a * Math.min(1, 0.45 + 0.3 * up); ctx.fillStyle = T5_COL.lvl; ctx.fillRect(x, y, z + 0.5, z + 0.5);
+    if (nums && z >= 16) { ctx.globalAlpha = 1; t5Label(ctx, String(to[k]), x + z / 2, y + z / 2, z); }
+  }
+  ctx.restore();
+}
+/** The dust at Leveller b's work tile t, and (raising) the spoil falling onto it and the heap growing there. */
+function t5Dust(ctx, b, t, ox, oy, z) {
+  const x = ox + ((t % S.W) + 0.5) * z, y = oy + (((t / S.W) | 0) + 0.5) * z;
+  ctx.save();
+  if (b.rgTs) {
+    const k = Math.max(0, Math.min(1, ((b.lvAcc || 0) / LVL.ridgeEvery + (b.lvN || 0)) / LVL.batch));
+    ctx.fillStyle = 'rgba(122,92,64,0.75)'; // (the heap of spoil, growing toward the batch that lands)
+    ctx.beginPath(); ctx.ellipse(x, y + z * 0.12, z * (0.2 + 0.22 * k), z * (0.1 + 0.12 * k), 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(168,132,96,0.8)';
+    ctx.beginPath(); ctx.ellipse(x - z * 0.04, y + z * 0.06, z * (0.12 + 0.14 * k), z * (0.06 + 0.07 * k), 0, 0, Math.PI * 2); ctx.fill();
+    for (let n = 0; n < 5; n++) { // (clods falling off the wheel onto it)
+      const ph = (R.time * 1.4 + n / 5) % 1, cx = x + Math.sin(n * 2.7 + b.id) * z * 0.22, cy = y - z * 1.1 * (1 - ph * ph);
+      ctx.globalAlpha = 0.9 * (1 - ph * 0.4); ctx.fillStyle = n % 2 ? '#6e5236' : '#9a7a58';
+      ctx.fillRect(cx - z * 0.04, cy - z * 0.04, z * 0.08, z * 0.08);
+    }
+    ctx.globalAlpha = 1;
+  }
+  for (let k = 0; k < 4; k++) {
+    const ph = (R.time * 0.7 + k / 4) % 1, a = 0.38 * (1 - ph);
+    ctx.fillStyle = `rgba(206,184,152,${a})`;
+    ctx.beginPath(); ctx.arc(x + Math.sin(k * 2.1 + b.id) * z * 0.3, y - ph * z * 0.9, z * (0.2 + ph * 0.45), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.strokeStyle = T5_COL.lvl; ctx.globalAlpha = 0.5 + 0.3 * Math.sin(R.time * 4); ctx.lineWidth = Math.max(1, z * 0.05);
+  ctx.strokeRect(x - z * 0.5, y - z * 0.5, z, z);
+  ctx.restore();
+}
+/** Over the ground: each Leveller's hill being cut (selected: outlined), its ridge (yours: outlined; selected: each tile's level), the dust at its work; the ridge being planned. */
 function t5Marks(ctx, ox, oy, z, v0, v1) {
   for (const b of S.buildings) {
-    if (b.dead || !b.built) continue;
-    if (BDEFS[b.type].lvl && b.lvTs) {
+    if (b.dead || !b.built || !BDEFS[b.type].lvl) continue;
+    const sel = R.selected === b.id || (R.mode === 'aim' && UI.aimSilo === b.id);
+    if (b.lvTs) {
       const base = S.elev[tIdx(b.x, b.y)];
-      if (R.selected === b.id || (R.mode === 'aim' && UI.aimSilo === b.id)) t5Outline(ctx, new Set(b.lvTs.filter((t) => S.elev[t] > base)), ox, oy, z, T5_COL.lvl, 0.12, true);
-      if (!b.working || R.inMap) continue;
-      let c = _t5Cut.get(b.id);
-      if (!c || R.time - c.at > 1.5) { c = { at: R.time, t: lvlPick(b) }; _t5Cut.set(b.id, c); }
-      if (c.t < 0) continue;
-      const x = ox + ((c.t % S.W) + 0.5) * z, y = oy + (((c.t / S.W) | 0) + 0.5) * z;
-      ctx.save();
-      for (let k = 0; k < 4; k++) {
-        const ph = (R.time * 0.7 + k / 4) % 1, a = 0.38 * (1 - ph);
-        ctx.fillStyle = `rgba(206,184,152,${a})`;
-        ctx.beginPath(); ctx.arc(x + Math.sin(k * 2.1 + b.id) * z * 0.3, y - ph * z * 0.9, z * (0.2 + ph * 0.45), 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.strokeStyle = T5_COL.lvl; ctx.globalAlpha = 0.5 + 0.3 * Math.sin(R.time * 4); ctx.lineWidth = Math.max(1, z * 0.05);
-      ctx.strokeRect(x - z * 0.5, y - z * 0.5, z, z);
-      ctx.restore();
-    }
+      if (sel) t5Outline(ctx, new Set(b.lvTs.filter((t) => S.elev[t] > base)), ox, oy, z, T5_COL.lvl, 0.12, true);
+    } else if (b.rgTs && b.owner === ME) {
+      const left = new Set(b.rgTs.filter((t, k) => S.elev[t] < b.rgTo[k]));
+      if (left.size) t5Outline(ctx, left, ox, oy, z, T5_COL.lvl, sel ? 0.1 : 0.06, true);
+      if (sel) t5RidgeTiles(ctx, b.rgTs, b.rgTo, ox, oy, z, 0.18, true);
+    } else continue;
+    if (!b.working || R.inMap) continue;
+    const t = t5Work(b);
+    if (t >= 0) t5Dust(ctx, b, t, ox, oy, z);
   }
+  // The ridge being planned (the Terraform mode, tool 'ridge'): the Leveller's reach, each tile's level, the line, what's left out.
+  const F = typeof UI !== 'undefined' && UI.tf;
+  if (R.mode !== 'terra' || !F || F.tool !== 'ridge') return;
+  const h = getE(F.head);
+  if (!h) return;
+  const c = bCentre(h);
+  ctx.save();
+  ctx.strokeStyle = T5_COL.lvl; ctx.lineWidth = Math.max(1.5, z * 0.06); ctx.setLineDash([z * 0.3, z * 0.18]);
+  ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, (LVL.reach + 1.5) * z, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.12, z * 0.08]);
+  ctx.strokeRect(ox + h.x * z + z * 0.04, oy + h.y * z + z * 0.04, z * 2.92, z * 2.92); ctx.setLineDash([]);
+  if (F.rg && F.rg.ts.length) { t5RidgeTiles(ctx, F.rg.ts, F.rg.to, ox, oy, z, 0.42, true); t5Outline(ctx, new Set(F.rg.ts), ox, oy, z, T5_COL.lvl, 0, false); }
+  if (F.list.length) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.setLineDash([z * 0.16, z * 0.12]); ctx.lineCap = 'round';
+    ctx.beginPath();
+    F.list.forEach((t, k) => { const x = ox + ((t % S.W) + 0.5) * z, y = oy + (((t / S.W) | 0) + 0.5) * z; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    ctx.stroke(); ctx.setLineDash([]);
+    const s0 = F.list[0];
+    ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ox + ((s0 % S.W) + 0.5) * z, oy + (((s0 / S.W) | 0) + 0.5) * z, z * 0.3, 0, Math.PI * 2); ctx.stroke();
+  }
+  const rows = F.rg ? F.rg.rows : [];
+  F.list.forEach((t, k) => { // (a tile left out: crossed in red)
+    if (!rows[k]) return;
+    const x = ox + (t % S.W) * z, y = oy + ((t / S.W) | 0) * z;
+    ctx.strokeStyle = 'rgba(255,90,90,0.9)'; ctx.lineWidth = Math.max(1.2, z * 0.05);
+    ctx.strokeRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+    ctx.beginPath(); ctx.moveTo(x + z * 0.25, y + z * 0.25); ctx.lineTo(x + z * 0.75, y + z * 0.75); ctx.moveTo(x + z * 0.75, y + z * 0.25); ctx.lineTo(x + z * 0.25, y + z * 0.75); ctx.stroke();
+  });
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ drawing: the buildings */
 
 const T5_WORK = new Map(); // (each one's work frame where it stopped: looks only)
+/*
+ * The Leveller's boom slews round to its work: four renders (renderer/tools/render_t5_slew.sh), the boom out to the
+ * west-north-west (heading 0, the plain leveller art), north-north-east (1), south-east (2) and south-south-west
+ * (3), about a quarter turn apart round the turntable (T5_PIVOT, in tiles from the square's middle). It turns to the one
+ * nearest the tile it works, and stays there when it stops. Looks only.
+ */
+const T5_HD = new Map(), T5_PIVOT = [0.45, -0.1], T5_SLEW = [1.3, 1.3 - Math.PI / 2, -2.2, 1.3 + Math.PI / 2]; // (each heading's turn of the turntable, as in leveller.js)
+function t5Heading(b) {
+  if (!b || !b.id || !b.built) return 0;
+  if (T5_HD.size > 64) T5_HD.clear();
+  const t = b.lvTs || b.rgTs ? t5Work(b) : -1;
+  if (t >= 0) {
+    const c = bCentre(b), dx = (t % S.W) + 0.5 - (c.x + T5_PIVOT[0]), dy = ((t / S.W) | 0) + 0.5 - (c.y + T5_PIVOT[1]);
+    let best = 0, bd = -Infinity;
+    for (let k = 0; k < 4; k++) { const a = T5_SLEW[k], d = -Math.sin(a) * dx - Math.cos(a) * dy; if (d > bd) { bd = d; best = k; } }
+    T5_HD.set(b.id, best);
+  }
+  return T5_HD.get(b.id) || 0;
+}
 /** The Reservoir or the Leveller, built: its art at the time of day, its lamps, its moving parts over it. True if drawn. */
 function t5DrawBuilding(ctx, type, cx, cy, s, owner, b) {
-  const art = artFor(type, owner);
+  const hd = type === 'leveller' ? t5Heading(b) : 0, key = hd && ART[`leveller-h${hd}-work-0`] ? `leveller-h${hd}` : type;
+  const art = artFor(key, owner);
   if (!art) { t5Plain(ctx, type, cx, cy, s, owner); return true; }
   drawMegaArt(ctx, art, cx, cy, s, b);
-  megaNight(ctx, art, cx, cy, s, owner, b);
+  megaNight(ctx, art, cx, cy, s, owner, b, key);
   const live = !!(b && b.id && b.built);
   let f = 0;
   if (live) {
@@ -178,7 +346,7 @@ function t5DrawBuilding(ctx, type, cx, cy, s, owner, b) {
     f = b.working && !megaDark(b) ? Math.floor(R.time * 6) % 4 : T5_WORK.get(b.id) || 0;
     T5_WORK.set(b.id, f);
   }
-  const w = ART[`${type}-work-${f}`];
+  const w = ART[`${key}-work-${f}`];
   if (w) drawMegaArt(ctx, w, cx, cy, s, b);
   return true;
 }

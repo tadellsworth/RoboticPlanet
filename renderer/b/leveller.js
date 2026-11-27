@@ -12,7 +12,7 @@
 import { setup, gameTextures, puffs, site, rock, spin, rot } from './t5kit.js';
 import { workLayer, hideParts } from './worklib.js';
 const Q = new URLSearchParams(location.search);
-const F = +(Q.get('f') || 0), SITE = +(Q.get('site') || 0), FACE = Q.get('face') === '1', WORK = Q.get('part') === 'work';
+const F = +(Q.get('f') || 0), SITE = +(Q.get('site') || 0), FACE = Q.get('face') === '1', WORK = Q.get('part') === 'work', HD = +(Q.get('hd') || 0);
 const PI = Math.PI;
 export const config = { pad: false };
 
@@ -23,7 +23,8 @@ export default async function (L) {
   ao(0, 0, 28, 28, 0.3);
   const ore = M.rough('#9a8d80'), oreD = M.rough('#7b6f64');
   // the crawler: four track units under a frame
-  const MX = 4.5, MZ = -1, ANG = 1.3, from = L.getRoot().children.length, mov = [];
+  const MX = 4.5, MZ = -1, ANG = [1.3, 1.3 - PI / 2, -2.2, 1.3 + PI / 2][HD], // (hd: the boom slewed a quarter turn round, 0 west-north-west, 1 north-north-east, 2 south-east (short of east-south-east: the wheel stays in the frame), 3 south-south-west)
+    from = L.getRoot().children.length, mov = [];
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const x = MX + sx * 5.2, z = MZ + sz * 4.4;
     box(3.2, 1.8, 6.2, T.dark, x, 0, z, { dirt: 0.6 });
@@ -82,7 +83,9 @@ export default async function (L) {
   spin(L, from, MX, MZ, ANG);
   // the discharge boom east, a stacker over the Stone yard, the STONE hopper
   {
-    const dr = rot(MX + 5.6, MZ + 1.2, MX, MZ, ANG), D0 = [dr[0], HY + 3.0, dr[1]], D1 = [10.5, 9.2, 8.5];
+    // (from the side of the house nearer the stacker: with the boom slewed round, hd=1..3, it may be the other side)
+    const D1 = [10.5, 9.2, 8.5], sides = [rot(MX + 5.6, MZ + 1.2, MX, MZ, ANG), rot(MX - 3.6, MZ + 1.2, MX, MZ, ANG)];
+    const dr = HD === 0 ? sides[0] : sides.sort((a, b) => Math.hypot(a[0] - D1[0], a[1] - D1[2]) - Math.hypot(b[0] - D1[0], b[1] - D1[2]))[0], D0 = [dr[0], HY + 3.0, dr[1]];
     beam(D0, D1, 1.0, 0.8, T.yellowD, { dirt: 0 });
     beam([D0[0], D0[1] + 0.5, D0[2]], [D1[0], D1[1] + 0.5, D1[2]], 1.1, 0.12, T.belt, { dirt: 0 });
     for (let k = 0; k < 6; k++) { const t = (k + F / 4) / 6; mov[mov.length] = box(0.5, 0.3, 0.5, ore, D0[0] + (D1[0] - D0[0]) * t, D0[1] + 0.7 + (D1[1] - D0[1]) * t, D0[2] + (D1[2] - D0[2]) * t, { dirt: 0.2, ry: k }); }
