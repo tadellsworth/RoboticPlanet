@@ -2807,7 +2807,8 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    Atmosphere Engine taken further): weather stations calming sandstorms or bringing rain; cooling lava ground into rich
    volcanic soil; greening pushing back the Murmur's blight. Biome shift: enough terraforming turns a region desert →
    savanna → forest, with its look, animals and resource bonuses.
-3. **Resources from the ground:** deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
+3. **Resources from the ground** (stage 3 BUILT Nov 27 2026: the Seam Drill, Seed Mast and Thermal Plant; see below; reclaiming was built with stage 2):
+   deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
    "seed" fields that slowly grow new Crystal on prepared ground (renewable, with upkeep); geothermal power from lava or
    hot springs (a Fuel-free Generator on volcanic maps); reclaiming wasteland (craters, scorched ground, fallen Lift
    cable) back into usable land (pairs with "total war scars the land").
@@ -2893,6 +2894,44 @@ owner:
   is Fiber + Stone only.
 - Rain wetness is the whole circle day and night (the rain falls at night; the ground stays damp). Only if it reads
   oddly: wet only at night, or a drying lag.
+
+**Stage 3, resources from the ground: BUILT (Nov 27 2026; README "Terraforming, stage 3", ART_GUIDE Batch 37,
+`tools/terraform3-test.js`, the mission Deep Ground).** The owner said "your picks for all" on the canvas
+(https://claude.ai/artifact/Hcjo7wWok4Xri35aFSt5kJ): the Seam Drill (concept A "Derrick"), the Seed Mast (concept B
+"Charge Mast") growing a Crystal Seedbed, the Thermal Plant (concept A "Cooling Tower"). Reclaim was already built. Calls
+made, for the owner:
+- **Seams are made lazily from the map's seed** the first time any Seam Drill surveys (`t3SeamsMake`), so map
+  generation, saves and hashes are untouched in every game without a drill (seeded AI-vs-AI games hash as before). They
+  are drawn only for the colony that found them; a rival's drill finds its own.
+- **A drill surveys when it is finished**, not when its site is placed (placing and cancelling would be a free survey).
+  Its survey then grows a tile every 30 s it has power, 4 to 8 tiles: the "periodic" survey has something to find.
+- **Power is the Generator's boost role**: a drill or Mast asks for power and a Generator in reach burns its Fuel for it
+  as for a factory (1.5 Fuel a minute if it powers nothing else), or a Thermal Plant does it free. No separate fuel
+  hopper on the drill. The Thermal Plant powers factories, drills and Masts, **not** the megastructures, Maglev or the
+  Mass Driver (they still read a Generator's Fuel); say if it should.
+- **Rates, against the economy audit's measures** (an Ore Mine 3.7 Ore a minute, a Crystal Tap 2.2 Crystal): a drill 2
+  Ore or 1 Crystal a minute, a seam 60 Ore or 30 Crystal; six beds net about 1.6 Crystal a minute after their seed
+  Crystal. Neither beats a deposit, so the late Chip and Crystal balance stays the deposits'
+  (IDEAS "Economy balance audit to-do" 6). Rivals never build them, so the audit's AI numbers are unchanged.
+- **Grown Crystal is gathered by a Crystal Tap**, not Workers or a crew of the Mast's own: a ripe bed holds 3 Crystal as
+  an ordinary Crystal cluster, so a Tap beside the Mast gathers it like any Crystal (and a rival's Tap could take it on
+  no-one's land, as any deposit). The bed is drawn in place of the cluster's sprite. After a harvest the bed is seeded
+  again with a new Crystal (the "small input" of upkeep); power is the upkeep whose lapse starves it.
+- **Seed Masts keep 5 tiles apart**, so every bed has one Mast. None on Argos (the Seam Drill works there, Ore only).
+- **The Murmur**: a growing field counts as a Refinery's charge in `murmurPower` and a power plant's in `chargeWorth`;
+  the Thermal Plant as a Generator (and they can cut it, as a Generator).
+- **Accents**: the canvas's indigo (Seed Mast) and sulfur (Thermal Plant) were too near the Refinery, the Generator and
+  the Chip Fab; now rose `#f78fc0` and pale sulfur `#c9ef8f` (ART_GUIDE Batch 37 has the check).
+
+**Stage 3, open questions for the owner:**
+- **Ringfall refilling seams.** The canvas suggested seams refill with ringfall like deposits; built as one-off (a
+  worked-out seam is spent for good, as asked). A slow refill would make the drill a permanent fixture.
+- **Should the Thermal Plant power the megastructures and the Maglev** (a Fuel-free Deep Core on volcanic maps would be
+  strong), and should rivals use it on volcanic maps (the canvas suggested it; built player-only as asked)?
+- **Seedbeds and rival Taps**: a rival's Crystal Tap can gather a ripe bed on no-one's land. Keep (it's Crystal on the
+  ground), or make grown Crystal its grower's only?
+- **The Thermal Plant's reach (3) and cost** (6 Cement, 3 Alloy, 1 Chip) are first guesses for "nice, not a must"; worth
+  a look after play.
 
 ## Done: Argos on the main menu (owner, Nov 26)
 

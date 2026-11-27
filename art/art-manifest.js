@@ -306,6 +306,16 @@ const ART_MANIFEST = {
   // ground and graded with it (js/terraform2.js).
   ...Object.fromEntries([1, 2, 3].flatMap((g) => [1, 2, 3, 4].map((v) => [`grove-${g}-${v}`, `resources/grove-${g}-${v}.webp`]))),
   sprinkler: 'resources/sprinkler.webp',
+  // Terraforming, stage 3 (ART_GUIDE Batch 37: renderer/b/seamdrill.js, seedmast.js, thermal.js, seedbed.js, installed by
+  // tools/install_t3.py): the Seam Drill (concept A "Derrick"), the Seed Mast (concept B "Charge Mast") and the Thermal
+  // Plant (concept A "Cooling Tower"), each with its working loop (the top drive over the drill without it,
+  // 'seamdrill-base'; the mast's rings; the turbine hall's windows), at every time of day; the Crystal Seedbed's tile for
+  // its five looks in three variants (drawn with the ground, js/terraform3.js) and its night glow.
+  ...Object.fromEntries(['seamdrill', 'seedmast', 'thermal'].flatMap((b) => [0, 1].map((t) => [`${b}@${t}`, B3D(`buildings/${b}@${t}.webp`)]))),
+  'seamdrill-base@0': B3D('buildings/seamdrill-base@0.webp'), 'seamdrill-base@1': B3D('buildings/seamdrill-base@1.webp'),
+  ...Object.fromEntries(['seamdrill', 'seedmast', 'thermal'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
+  ...Object.fromEntries([0, 1, 2, 3, 4].flatMap((g) => [1, 2, 3].map((v) => [`seedbed-${g}-${v}`, `resources/seedbed-${g}-${v}.webp`]))),
+  ...Object.fromEntries([0, 1, 2, 3].map((g) => [`seedbed-${g}-glow`, `resources/seedbed-${g}-glow.webp`])),
   // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
   // graded with the light at dusk and night like other smoke.
   'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },

@@ -1497,6 +1497,43 @@ const MISSIONS = [
     ],
   },
 
+  // Terraforming, stage 3: resources from the ground (SEAM, SEED, THERMAL), on the Cinderlands, where the lakes are lava.
+  {
+    id: 'deepground', name: 'Deep Ground', chapter: 'Sea and Sky',
+    brief: 'The survey filed the readings under these lava lakes as instrument error. Drill for the seams below, grow Crystal of your own, and run a turbine on the heat.',
+    intro: [
+      'The last three buildings on <b>Build → Terraform</b> (<kbd>7</kbd>) take resources from the ground itself. All three are slow: they add to your Mines and Taps, never replace them.',
+      'A <b>Seam Drill</b> (<kbd>I</kbd>) surveys for hidden Ore and Crystal seams the moment it stands, further while it has power, and drills the nearest one: glowing cracks inside a dashed outline, its marker\'s pips counting down.',
+      'A <b>Seed Mast</b> (<kbd>G</kbd>) prepares a ring of beds, seeds each with a Crystal, and charges them to grow. Ripe Crystal is gathered by a <b>Crystal Tap</b>: build one beside the Mast. Without power the beds starve.',
+      'Both need power: a <b>Generator</b> with Fuel within 4 tiles, or a <b>Thermal Plant</b> (<kbd>T</kbd>), which burns no Fuel but only stands right beside lava or hot water.',
+    ],
+    mode: 'colony', seed: 71, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 11, limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT7, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 40; L.stock.alloy += 20; L.stock.chip += 8; L.stock.crystal += 16; L.stock.fuel += 16; L.stock.fiber += 20;
+      preBuild(0, 'generator', L.x + 4, L.y + 2, { road: true, stock: { fuel: BDEFS.generator.fuelCap } });
+      computeTerritory();
+    },
+    goals: [
+      { kind: 'built', type: 'seamdrill', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Terraform</b> (<kbd>7</kbd>) → <b>Seam Drill</b> (<kbd>I</kbd>), near the Generator.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='seamdrill']" },
+      { kind: 'seams', n: [1, 1, 2], text: 'Find a hidden seam and drill {n} from it', at: 'seamdrill',
+        count: (P) => ((P.stats.seams || 0) ? (P.stats.seamOre || 0) + (P.stats.seamCrystal || 0) : 0),
+        hint: 'Keep the Generator fuelled: with power the Seam Drill surveys further and drills the seam it finds.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='seamdrill']" },
+      { kind: 'bedRipe', n: [2, 3, 4], text: 'Grow {n} beds of Crystal', at: 'seedmast',
+        count: (P) => P.stats.bedRipe || 0,
+        hint: '<b>Terraform</b> → <b>Seed Mast</b> (<kbd>G</kbd>) by the Generator, a <b>Crystal Tap</b> beside it.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='seedmast'], #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
+      { kind: 'thermal', n: 1, text: 'Power a building with a Thermal Plant', at: 'thermal',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'thermal' && b.working).length,
+        hint: '<b>Terraform</b> → <b>Thermal Plant</b> (<kbd>T</kbd>) beside a lava lake, a factory within 3 tiles.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='thermal']" },
+    ],
+  },
+
   // Chapter 6, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)

@@ -945,6 +945,56 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     graded with it (`t2Ground`); the minimap's groves, irrigated and shifted land (`t2MiniColor`); the Nursery's loop at
     4 frames a second (`WORK_FPS`). Missions: **Topsoil** (Sea and Sky, after Cut and Fill). Tests:
     `node tools/terraform2-test.js`.
+- **Terraforming, stage 3: resources from the ground** (Nov 2026; `SEAM`, `SEED`, `THERMAL` in `js/defs.js`; the rules in
+  the stage 3 block of `js/sim.js`: `t3SeamsMake`, `seamSurvey`, `seamOf`, `updateSeamDrill`, `updateSeedMast`,
+  `bedsOf`, `bedSpotOk`, `thermalHotTile`, `thermalHeat`; the cards, panels, rings and drawing in `js/terraform3.js`).
+  The player's alone, like stage 2: no rival builds these (rivals only cope with them existing), and a game without any
+  has no seams, no bed layers and nothing new hashed (seeded AI-vs-AI games keep their hashes). On the Terraform tab
+  after stage 2's (`BDEFS[].t3`, `t3Cards`, `BUILD_KEYS.terra` I, G, T). Power (`BDEFS[].t3pow`): the Seam Drill and the
+  Seed Mast ask for it (`b.t3want`), a Generator (burning its Fuel) or a Thermal Plant in its reach counts them as busy
+  (`updateGenerator`) and boosts them, and they work while boosted (`t3Powered`: `b.boostUntil`, not cut by the Murmur).
+  - **Seam Drill** (`BDEFS.seamdrill`, concept A "Derrick", accent orchid `#d94dff`; 6 Cement, 4 Alloy, 2 Chips; key I).
+    Hidden seams (`S.seams`) don't exist until a drill first surveys: then `t3SeamsMake` makes them once from the map's
+    seed (`hash2`, no use of the game's random numbers): in each `SEAM.cell` (12) square, with chance `SEAM.chance`
+    (0.6), a seam of `SEAM.size` (3 to 6) ground tiles round a point, Crystal `SEAM.crystalShare` (0.4) of them (never
+    on Argos), holding `SEAM.ore` (60) or `SEAM.crystal` (30), up to a fifth more. Each is `{ id, x, y, g, t, n, m, f }`
+    (`f`: a bit per colony that found it), saved as is, checked by `checkSave` (ids in order, on the map, Ore or Crystal,
+    tiles, amounts, bits) and hashed (`id`, `n`, `f`). A drill surveys `SEAM.survey[0]` (4) tiles the moment it stands
+    (`b.svR`), a tile further every `SEAM.surveyEvery` (30) s of power out to `SEAM.survey[1]` (8) (`seamSurvey`: a ring
+    effect, the seams in reach found for its colony, a message), and works the nearest found unspent seam in its survey
+    (`seamOf`, `b.seam`) at `SEAM.rate` (2 Ore or 1 Crystal a minute), into its stock (`SEAM.cap` 12 of each) for
+    Haulers. A seam at 0 is worked out: grey, its mark crossed out, its owner told; the drill moves on. Slower than a
+    Mine or Tap on a deposit (the economy audit measured 3.7 Ore and 2.2 Crystal a minute), and a Generator alone
+    spends 1.5 Fuel a minute on it. Drawn (yours only: `seamFound(s, ME)`): cracks, orange or violet, inside a dashed
+    outline, baked with the map (`t3PaintTile`) and glowing at night (`t3Glow`); the survey mark, the goods' icon and
+    five pips (`seamPips`), and a drill's dashed line to its seam, over the ground after the night's grade (`t3Marks`).
+    Murmur: none of its own. Its loop: the top drive's stroke over `seamdrill-base`.
+  - **Seed Mast** (`BDEFS.seedmast`, concept B "Charge Mast", accent rose `#f78fc0`; 5 Cement, 3 Alloy, 4 Crystal; key
+    G). Grows a Crystal Seedbed within `SEED.reach` (2): with power it prepares a bed every `SEED.prepEvery` (10) s up
+    to `SEED.most` (6) (`bedNext`, `bedSpotOk`: open ground, not farmland, groves, roads, plans, pipes, track, a rival's
+    or a Trade Post's), seeds a prepared bed with `SEED.seed` (1) Crystal from its hopper (`SEED.hopper` 3, by
+    Hauler: `inp`), and grows its seeded beds a step every `SEED.step` (5) s: seeded, sprouting from `SEED.sprout`
+    (24 steps, 2 minutes), ripe after `SEED.ripe` (84, 7 minutes), when the tile holds `SEED.yield` (3) Crystal as an
+    ordinary Crystal cluster (`S.res`), which a Crystal Tap in reach gathers; gathered, the bed is prepared again and
+    seeded. Six beds net about 1.6 Crystal a minute, below one Tap on a deposit, so the late Chip and Crystal balance
+    stays the deposits' (IDEAS, the economy audit). Without power its beds starve (`S.sbS`, grey) and stop. Layers
+    (`T3_LAYERS`, sparse in saves, hashed when present): `S.sbed` (1 prepared, 2.. growing, `SEED.ripe` + 1 ripe),
+    `S.sbO` (owner + 1), `S.sbS` (starved). A bed built, paved or grown over, or hit by Ring Crystal while growing, is
+    gone (`bedStands`); groves, stalks and humus keep off beds. Masts keep `SEED.apart` (5) tiles apart (`canPlace`);
+    none on Argos (`worldBan`). Murmur (`murmurPower`): a growing field adds `SEED.murmur` (1) charge, as a Refinery;
+    `chargeWorth` 3, as a power plant. Drawn: the bed tile for its look (`seedbed-<look>-<v>`, prepared, seeded,
+    sprouting, ripe, starved; 3 variants) baked with the map in place of the cluster's sprite, its pins and tips lit at
+    night (`seedbed-<look>-glow` in the glow map); the Mast's rings light in turn (`WORK_FPS` 4).
+  - **Thermal Plant** (`BDEFS.thermal`, concept A "Cooling Tower", accent pale sulfur `#c9ef8f`; 6 Cement, 3 Alloy, 1
+    Chip; key T): a Generator (`burner`, `heat: true`) that burns no Fuel, within `THERMAL.radius` (3, a Generator's 4),
+    placed only where a hot tile touches its tile (`thermalHeat`; `thermalHotTile`: lava, `S.lava`, or water in the
+    Cinderlands or the Steamwells (`t2BaseBiome`), or a Steamwells steam vent, decor 4 or 6); gone cold (the lava
+    filled), it says so and stops. It powers factories (the third faster), Seam Drills and Seed Masts; not the
+    megastructures, the Maglev or the Mass Driver, which still want a Generator's Fuel. The Murmur count it as a
+    Generator (`murmurPower`, `chargeWorth`, `murmurCutPower`). Its plume is the shipped steam (`BUILDING_EMITTERS.thermal`).
+  - Art (ART_GUIDE Batch 37): `renderer/b/seamdrill.js`, `seedmast.js`, `thermal.js`, `seedbed.js` (shared `t3kit.js`),
+    `renderer/tools/render_t3.sh` then `install_t3.py`. Mission: **Deep Ground** (Sea and Sky, after Topsoil; the
+    Cinderlands' lava lakes). Tests: `node tools/terraform3-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -4827,6 +4877,18 @@ along a pipe (a wet fringe, a sprinkler at its end), drying when the pipe is cut
 planting on wet desert; the biome shift taking the Rust to the Long Grass; Reclaim clearing a crater, Spread soil;
 where the buildings can't go; a save made mid-process playing on to the same hash; and the same game twice giving the
 same hash. A game without stage 2 has none of its layers.
+
+```bash
+node tools/terraform3-test.js
+```
+
+Terraforming, stage 3: no seams, beds or anything else until a Seam Drill surveys; the seams made from the map's seed
+(the same twice, the map untouched); a drill's survey finding the seams near it for its colony only; no drilling or
+deeper survey without power, a Generator's Fuel making it drill at its rate and survey further, a seam worked out going
+spent; a Seed Mast preparing and seeding its beds, sprouting with power, starving without, ripening into Crystal a
+Crystal Tap gathers and the beds seeded again; a growing field drawing the Murmur; a Thermal Plant only beside hot
+ground, powering a drill with no Fuel; no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
+seam refused; and the same game twice giving the same hash.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

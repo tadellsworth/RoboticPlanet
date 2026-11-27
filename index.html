@@ -873,6 +873,7 @@
           <a href="#hs-roads" data-jump="hs-roads">Roads and traffic</a>
           <a href="#hs-terraform" data-jump="hs-terraform">Terraforming: Graders and earthworks</a>
           <a href="#hs-soil" data-jump="hs-soil">Terraforming: soil, groves and water</a>
+          <a href="#hs-ground" data-jump="hs-ground">Terraforming: seams, Crystal and heat</a>
           <a href="#hs-haul" data-jump="hs-haul">Long hauls</a>
           <a href="#hs-express" data-jump="hs-express">Express highways</a>
           <a href="#hs-rail" data-jump="hs-rail">Freight rail</a>
@@ -1130,6 +1131,16 @@
         <p><b>The Grader's jobs</b> (Build → Terraform, as the earthworks): <b>Spread soil</b> (<kbd>O</kbd>) spreads humus over a tile, a step richer (2 Fiber and 1 Stone, 16 s). <b>Reclaim</b> (<kbd>E</kbd>) clears a crater, ash or scorch from the war, scorched farmland or a grove back to usable ground (20 s; a mature grove's Fiber comes out as a crate). Cutting an irrigation ditch is <b>Dig channel</b>: dug from the pump's water, it carries the water inland.</p>
         <p><b>The land shifts.</b> Every 10 seconds each tile scores a point for improving soil, another for rich, one if it is wet and one if young or mature groves stand on and round it. With 2 points or more it moves toward its biome's next step; with all four it gets there in about ten minutes, with two in about twenty. The Rust (and the Cinderlands, the Bloom and Steamwells) becomes <b>the Long Grass</b>, then <b>Greenreach</b>; the Long Grass becomes Greenreach; the Polar Caps thaw to <b>the Long Grass</b> first, then to Greenreach. Greenreach, Emberwood, Blackwater and the Shoals don't shift. The new biome's ground blends in over the old, its scenery takes root, and its soil follows: Long Grass ground counts as improving soil, and groves on Greenreach ground grow half as fast again. A message tells you when the land first changes.</p>
         <p><b>On the minimap</b> groves show dark green, watered ground a lighter green, and shifted land its new biome's colour.</p>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+      <section id="hs-ground">
+        <h3>Terraforming: seams, Crystal and heat</h3>
+        <p>The last three buildings on the Terraform tab (<kbd>B</kbd> <kbd>7</kbd>) take resources from the ground itself. They are <b>slow</b>: a late-game supplement to your Ore Mines and Crystal Taps, never a replacement. The computer's colonies don't build them.</p>
+        <p><b>Power.</b> The Seam Drill and the Seed Mast work only with power: a <b>Generator</b> with Fuel within 4 tiles (it burns its Fuel for them, as for a factory), or a <b>Thermal Plant</b> within 3. Their panels say when they have none.</p>
+        <p><b>Seam Drill</b> (<kbd>I</kbd>; 6 Cement, 4 Alloy, 2 Chips): a small red derrick, the Deep Core's family. Under every map lie <b>hidden seams</b> of Ore and Crystal, beyond the deposits on the surface. The moment a drill stands it <b>surveys</b> 4 tiles round it (a violet ring sweeps out), and while it has power its survey reaches a tile further every 30 seconds, out to 8. A seam it finds shows for you (only you: a rival's drill finds its own) as <b>glowing cracks</b>, orange for Ore and violet for Crystal, inside a dashed outline, with a <b>survey mark</b> at its middle: the goods' icon and <b>five pips</b> for what's left. The drill works the nearest seam it found, a dashed line to it: <b>2 Ore or 1 Crystal a minute</b>, held for Haulers (12 of each). An Ore seam holds about 60, a Crystal seam about 30. <b>Worked out</b>, a seam goes grey and its mark is crossed out; the drill moves on to the next seam in its survey, or says it has none left. On Argos every seam is Ore.</p>
+        <p><b>Seed Mast</b> (<kbd>G</kbd>; 5 Cement, 3 Alloy, 4 Crystal): Ring Crystal grows on charge, so this mast charges the ground. It grows a <b>Crystal Seedbed</b> on the open ground within 2 tiles of it: it <b>prepares</b> a bed every 10 seconds (up to 6; not on farmland, groves, roads or a rival's land), <b>seeds</b> each with a Crystal Haulers bring it (it keeps 3), and with power grows them: <b>seeded</b>, <b>sprouting</b> (after two minutes), then <b>ripe</b> (about seven minutes), when the bed holds <b>3 Crystal</b> as a cluster of grown Crystal: lighter than Ring Crystal, in a ruled grid, its tips lit at night. A <b>Crystal Tap</b> gathers it like any Crystal: <b>build one right beside the Mast</b>. Once it's gathered the bed is seeded again. Without power the beds <b>starve</b>: they go grey and stop growing until the power comes back. Six beds make about 1.6 Crystal a minute after their seed. Keep Seed Masts 5 tiles apart. <b>A growing field draws the Murmur</b>, a little, as a Refinery does. Not on Argos.</p>
+        <p><b>Thermal Plant</b> (<kbd>T</kbd>; 6 Cement, 3 Alloy, 1 Chip): a cooling tower over a heat well. It goes <b>only right beside hot ground</b>: lava (the Cinderlands' lakes, the Volcano's crater and rivers), the hot water of the Steamwells, or a Steamwells steam vent (placing it shows the hot tiles beside it). It powers what's round it like a Generator, <b>with no Fuel</b>: factories within <b>3 tiles</b> work a third faster, and it powers a Seam Drill or a Seed Mast. Its plume rises while it runs. It costs more than a Generator and reaches a tile less: a reward on volcanic maps, not a must.</p>
+        <p><b>On the minimap</b> your found seams show in their goods' colour (grey once worked out) and seedbeds dark violet.</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
       <section id="hs-haul">
@@ -2545,6 +2556,7 @@
 <script src="js/blueprint.js"></script>
 <script src="js/terraform.js"></script>
 <script src="js/terraform2.js"></script>
+<script src="js/terraform3.js"></script>
 <script src="js/qol.js"></script>
 <script src="js/polish.js"></script>
 <script src="js/polish3.js"></script>

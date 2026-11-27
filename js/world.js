@@ -3463,6 +3463,7 @@ function worldBan(type, t) {
     if (BDEFS[type].wpump && biome() === 'volcanic') return 'No Water Pump in the Cinderlands: its lakes are lava.';
     if (S && S.caves && t !== undefined) { const w = caveBan('grower', t); if (w) return w; }
   }
+  if (BDEFS[type] && BDEFS[type].seedmast && biome() === 'lunar') return 'No Seed Mast on Argos: no Ring Crystal ever fell here to seed from.';
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (BDEFS[type] && BDEFS[type].atmos && biome() === 'lunar') return 'No Atmosphere Engine on Argos: there is no air here to work with.';
   if (S && S.caves) { // (Half underground: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
@@ -4398,6 +4399,9 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   const ban = worldBan(type, t);
   if (ban) return { ok: false, reason: ban };
   if (def.wpump && !tfSides(t).some((u) => S.terrain[u] === T_WATER && !(S.lava && S.lava[u]))) return { ok: false, reason: 'A Water Pump goes on the shore, right beside water (a lake, the sea or a canal).' };
+  // (Terraforming stage 3: a Thermal Plant beside hot ground; a Seed Mast clear of another's beds.)
+  if (def.burner && def.burner.heat && !thermalHeat(t)) return { ok: false, reason: 'A Thermal Plant goes right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells steam vent.' };
+  if (def.seedmast && S.buildings.some((e) => !e.dead && e.owner === owner && BDEFS[e.type].seedmast && dist2(e.x, e.y, i, j) < SEED.apart * SEED.apart)) return { ok: false, reason: `Too close to your other Seed Mast: keep them ${SEED.apart} tiles apart, so each has its own beds.` };
   if (def.pump) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
   } else if (S.res[t] && !(S.res[t] === R_OIL && (S.road[t] || S.plan[t]))) return { ok: false, reason: 'Clear the resources here first.' }; // (oil under a road stays underground: the road rules below decide)
@@ -6155,7 +6159,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; the rest: Terraforming stage 2, T2_LAYERS)
+const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -6492,6 +6496,11 @@ function checkSave(o) {
   if (o.wrecks != null && !(Array.isArray(o.wrecks) && o.wrecks.length <= 4 * WRECK_MAX && o.wrecks.every((w) => obj(w) && Number.isInteger(w.id) &&
     ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
     Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
+  // Terraforming stage 3's seams (S.seams, see t3SeamsMake): numbered in order, on the map, Ore or Crystal, a few tiles each.
+  if (o.seams != null && !(Array.isArray(o.seams) && o.seams.length <= o.W * o.H && o.seams.every((e, k) => obj(e) && e.id === k + 1 &&
+    Number.isInteger(e.x) && Number.isInteger(e.y) && e.x >= 0 && e.y >= 0 && e.x < o.W && e.y < o.H && (e.g === 'ore' || e.g === 'crystal') &&
+    Array.isArray(e.t) && e.t.length >= 1 && e.t.length <= 16 && e.t.every(tileOk) && Number.isInteger(e.m) && e.m > 0 && e.m <= 1000 &&
+    Number.isInteger(e.n) && e.n >= 0 && e.n <= e.m && Number.isInteger(e.f) && e.f >= 0 && e.f < 1 << 8))) bad();
   // War scars: craters and ash as tile and value pairs, scrap piles and bones (numbers on the map).
   for (const k of SPARSE_LAYERS) if (o[k] != null && !(Array.isArray(o[k]) && o[k].length % 2 === 0 && o[k].length <= 2 * o.W * o.H &&
     o[k].every((v, n) => (n % 2 ? Number.isInteger(v) && v > 0 && v < 256 : tileOk(v))))) bad();

@@ -2621,8 +2621,9 @@ const BUILD_KEYS = {
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
   // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
-  // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P).
-  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p' },
+  // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P);
+  // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T).
+  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6', terra: '7' };
 /**
@@ -6660,9 +6661,10 @@ function onMapTap(i, j, wx, wy) {
       if (def.farm) extra = ` <span class="ok">${fertileIn(i, j, def.radius)} fertile tiles in reach.</span>`;
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
       if (def.t2 && typeof t2PlaceText === 'function') extra = t2PlaceText(type, i, j); // (stage 2: js/terraform2.js)
-      if (def.burner) {
+      if (def.t3 && typeof t3PlaceText === 'function') extra = t3PlaceText(type, i, j); // (stage 3: js/terraform3.js)
+      if (def.burner && !def.burner.heat) {
         let n = 0;
-        for (const c of S.buildings) if (!c.dead && c.owner === ME && BDEFS[c.type].work && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
+        for (const c of S.buildings) if (!c.dead && c.owner === ME && (BDEFS[c.type].work || BDEFS[c.type].t3pow) && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
         extra = n ? ` <span class="ok">It would power ${n} building${n === 1 ? '' : 's'} in reach.</span>` : ' <span class="err">Nothing in reach to power: put it among your factories.</span>';
       }
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
@@ -8875,6 +8877,7 @@ function refreshBuildingSheet(b) {
     }
     if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
     if (def.t2 && typeof t2Panel === 'function') parts.push(...t2Panel(b, mine)); // (Composter, Tree Nursery, Water Pump: js/terraform2.js)
+    if (def.t3 && typeof t3Panel === 'function') parts.push(...t3Panel(b, mine)); // (Seam Drill, Seed Mast, Thermal Plant: js/terraform3.js)
     if (def.farm) {
       const crops = reachableRes(b.x, b.y, def.radius, R_CROP), ripe = countResIn(b.x, b.y, def.radius, R_CROP, true, S.zone[tIdx(b.x, b.y)]);
       parts.push(`<div class="kv"><span>${S.wet ? 'Fertile or wet ground in reach' : 'Fertile soil in reach'}</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);

@@ -69,6 +69,9 @@ const changes = [
   // Stage 2 too (SOIL): a Composter placed, and soil spread.
   (d, col) => { const t = tfSpots(d, col)[0] ?? 0, S = d.getS(); return ['place', ['composter', t % S.W, (t / S.W) | 0]]; },
   (d, col) => ['terraform', ['soil', tfSpots(d, col)]],
+  // And stage 3 (SEAM, SEED): a Seam Drill and a Seed Mast placed.
+  (d, col) => { const t = tfSpots(d, col)[1] ?? 0, S = d.getS(); return ['place', ['seamdrill', t % S.W, (t / S.W) | 0]]; },
+  (d, col) => { const t = tfSpots(d, col)[2] ?? 0, S = d.getS(); return ['place', ['seedmast', t % S.W, (t / S.W) | 0]]; },
 ];
 // Three tiles of open ground near colony col's Command Base that can be worked now.
 function tfSpots(d, col) {
@@ -125,7 +128,7 @@ const same = JSON.stringify(S.players.map((P) => P.wf || null)) === JSON.stringi
 console.log(`  ran to ${(S.time / 60).toFixed(1)}m, ${orders} Workforce orders; settings now ${JSON.stringify(S.players.slice(0, 2).map((P) => P.wf || null))}`);
 console.log(`  fingerprints compared ${checks}, differing ${bad}; desyncs seen by the devices ${desyncs.join('/')}; settings the same on both: ${same}`);
 const tf = S.buildings.filter((b) => b.tf).length + Object.keys(S.tfTiles || {}).length;
-console.log(`  terraforming: ${Object.keys(S.tfTiles || {}).length} tiles changed, ${S.buildings.filter((b) => !b.dead && b.tf).length} Earthworks open, ${S.bots.filter((u) => !u.dead && u.type === 'grader').length} Graders, ${S.buildings.filter((b) => !b.dead && b.type === 'composter').length} Composter sites, ${S.buildings.filter((b) => !b.dead && b.tf && b.tf.k === 'soil').length} Spread soil jobs`);
+console.log(`  terraforming: ${Object.keys(S.tfTiles || {}).length} tiles changed, ${S.buildings.filter((b) => !b.dead && b.tf).length} Earthworks open, ${S.bots.filter((u) => !u.dead && u.type === 'grader').length} Graders, ${S.buildings.filter((b) => !b.dead && b.type === 'composter').length} Composter sites, ${S.buildings.filter((b) => !b.dead && b.tf && b.tf.k === 'soil').length} Spread soil jobs, ${S.buildings.filter((b) => !b.dead && (b.type === 'seamdrill' || b.type === 'seedmast')).length} Seam Drill and Seed Mast sites`);
 const ok = tf > 0 && bad === 0 && desyncs.every((x) => x === 0) && rejoined && checks > 60 && same && orders >= 20;
 console.log(ok ? 'workforce lockstep: OK' : 'workforce lockstep: FAILED');
 if (!ok) process.exitCode = 1;

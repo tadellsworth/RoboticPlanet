@@ -931,6 +931,7 @@ function glowTiles(i0, j0, i1, j1) {
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
     drawSeepTile(ctx, i, j, i * TP, j * TP, t, true); // (an oil seep's puddle: its rim and sheen as a faint gleam)
     if (S.res[t] && S.res[t] !== R_STALK && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (the Bloom's veins; Stalks' rings below)
+    if ((S.seams || S.sbed) && typeof t3Glow === 'function') t3Glow(ctx, i, j, t); // (a found seam's cracks and a Crystal Seedbed's pins and tips: js/terraform3.js)
     if (S.hollow) hollowTileGlow(ctx, i, j, t);
     // (rounded shores: each corner glows as what it now shows)
     for (const { fill, dx, dy } of shoreRounds(i, j)) {
@@ -1293,6 +1294,7 @@ function paintTile(ctx, i, j, other, blend) {
     ctx.fillRect(x, y, TP, TP);
   }
   if (terr === T_GROUND && (S.soil || S.wet || S.tform || S.shift) && !S.ramp[t] && typeof t2PaintTile === 'function') t2PaintTile(ctx, i, j, x, y, t); // (soil, water, the biome shift: js/terraform2.js)
+  if ((S.seams || S.sbed) && typeof t3PaintTile === 'function' && t3PaintTile(ctx, i, j, x, y, t)) return; // (a found seam's cracks, a Crystal Seedbed and its grown Crystal: js/terraform3.js)
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
@@ -3139,7 +3141,7 @@ function drawBurnt(ctx, i, j, x, y) {
 }
 
 /** Working loops played slower than 8 frames a second: the Tree Nursery's pivot boom sweeps round in 4 s. */
-const WORK_FPS = { nursery: 4 };
+const WORK_FPS = { nursery: 4, seedmast: 4 }; // (the Seed Mast's rings light in turn, a little slower)
 
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
   // A Stalk is a clump of Lantern Cane drawn in code for its stage (js/reedcane.js; on the map drawStalks draws them, after
@@ -7208,6 +7210,7 @@ function render(dtReal) {
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
+  if ((S.seams || S.sbed) && typeof t3Marks === 'function') t3Marks(ctx, ox, oy, z, v0, v1); // (the found seams' survey marks and a drill's line to its seam: js/terraform3.js)
   drawReedLights(ctx, ox, oy, z, v0, v1); // (zoomed in, each Stalk's rings lit: js/reedcane.js)
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
@@ -8823,6 +8826,7 @@ function drawBadge(ctx, b, x, y, z) {
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
   if (def.t2 && typeof t2Ranges === 'function') { t2Ranges(ctx, type, x, y, ox, oy, z, owner); return; } // (stage 2's reach rings: js/terraform2.js)
+  if (def.t3 && typeof t3Ranges === 'function' && t3Ranges(ctx, type, x, y, ox, oy, z, owner)) return; // (stage 3's: a Seam Drill's survey, a Seed Mast's beds, a Thermal Plant's hot ground; js/terraform3.js)
   if (def.lift) { // (the Orbital Lift: the Generators' reach round its pad, and its fall line: the site's, or the one being placed)
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]);
     ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, (LIFT.reach + 1.5) * z, 0, Math.PI * 2); ctx.stroke();
@@ -8924,7 +8928,7 @@ function drawBoosted(ctx, type, x, y, owner, ox, oy, z) {
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (const c of S.buildings) {
-    if (c.dead || c.owner !== (owner || 0) || !BDEFS[c.type].work || dist2(c.x, c.y, x, y) > r2 || (c.x === x && c.y === y)) continue;
+    if (c.dead || c.owner !== (owner || 0) || !(BDEFS[c.type].work || BDEFS[c.type].t3pow) || dist2(c.x, c.y, x, y) > r2 || (c.x === x && c.y === y)) continue;
     const x0 = ox + c.x * z - z * 0.06, y0 = oy + c.y * z - z * 0.06, x1 = x0 + z * 1.12, y1 = y0 + z * 1.12;
     const corners = () => {
       ctx.beginPath();
@@ -10323,6 +10327,7 @@ function rebuildMinimapBase() {
       if (key) c = mixBiomeRGB(c, R.secondRegion.mm[key], blend);
     }
     if (terr === T_GROUND && (S.grove || S.wet || S.shift) && typeof t2MiniColor === 'function') c = t2MiniColor(t, c); // (groves, irrigated and shifted land: js/terraform2.js)
+    if (terr === T_GROUND && (S.seams || S.sbed) && typeof t3MiniColor === 'function') c = t3MiniColor(t, c); // (found seams and Crystal Seedbeds: js/terraform3.js)
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
     if (terr === T_WATER && ((S.lava && S.lava[t]) || renderBiomeAt(t) === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];

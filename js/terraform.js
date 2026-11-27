@@ -26,14 +26,14 @@ const TF_TOOLS_UI = {
 };
 
 /** The tab's button and its cards (openBuildMenu). */
-function tfTabButton() { return `<button data-g="terra"><kbd>${BUILD_TAB_KEYS.terra}</kbd>Terraform<span class="n">${TF_TOOLS.length + (typeof t2Types === 'function' ? t2Types().length : 0)}</span></button>`; }
+function tfTabButton() { return `<button data-g="terra"><kbd>${BUILD_TAB_KEYS.terra}</kbd>Terraform<span class="n">${TF_TOOLS.length + (typeof t2Types === 'function' ? t2Types().length : 0) + (typeof t3Types === 'function' ? t3Types().length : 0)}</span></button>`; }
 function tfCards() {
   const n = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
   return TF_TOOLS.map((k) => {
     const T = TF_TOOLS_UI[k];
     return `<button class="bcard tf-card" data-tf="${k}" data-g="terra" title="${T.name}"><kbd data-tab="${BUILD_TAB_KEYS.terra}" data-key="${T.key.toUpperCase()}">${T.key.toUpperCase()}</kbd>` +
       `<div class="tf-glyph tf-${k}" aria-hidden="true">${T.glyph}</div><div class="bname">${T.name}</div><div class="bhave">${T.card}</div></button>`;
-  }).join('') + (typeof t2Cards === 'function' ? t2Cards() : '') + `<p class="tf-note" data-g="terra">${n ? `${n} Grader${n === 1 ? '' : 's'} to do the work.` : 'A <b>Grader</b> does the work: order one at the Bot Foundry.'} Not on a rival's land, nor under buildings, roads, track, pipes or resources.</p>`;
+  }).join('') + (typeof t2Cards === 'function' ? t2Cards() : '') + (typeof t3Cards === 'function' ? t3Cards() : '') + `<p class="tf-note" data-g="terra">${n ? `${n} Grader${n === 1 ? '' : 's'} to do the work.` : 'A <b>Grader</b> does the work: order one at the Bot Foundry.'} Not on a rival's land, nor under buildings, roads, track, pipes or resources.</p>`;
 }
 function tfBind(body) { for (const el of body.querySelectorAll('.bcard[data-tf]')) el.onclick = () => tfStart(el.dataset.tf); }
 
