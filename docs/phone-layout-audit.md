@@ -1,6 +1,6 @@
 # Phone layout audit
 
-Status: In progress. Inspected the Custom Game screen and the Gather build tab at 390 × 844 in the in-app browser. The 430 × 932 viewport was also checked for the Terraform, Workforce and Economy panels. Touch emulation, remaining screens and screenshots are unverified.
+Status: In progress. Inspected the Custom Game screen, all build tabs, Army, pause, How to play, Workforce and Economy in the in-app browser; the coverage is not yet complete at both sizes. Touch emulation and remaining screens are unverified.
 
 | Severity | Finding | Location |
 | --- | --- | --- |
@@ -15,3 +15,10 @@ Status: In progress. Inspected the Custom Game screen and the Gather build tab a
 **Unverified — touch target sizes.** With mouse pointer input at 390 × 844, the build tabs measured 31.75 px high, and at 430 × 932 Workforce arrows measured 34 × 34 px and Economy tabs 31.75 px high. However, `style.css:1162` applies 44 px minimum heights to several controls when the pointer is coarse. These mouse measurements alone do not establish that the corresponding phone targets are too small. Verify the affected selectors with actual touch emulation before treating them as defects. Terraform controls, Workforce, Economy, Army, pause and How to play opened; the remaining requested panels and screenshots still require inspection.
 
 At both 390 × 844 and 430 × 932, each of the seven build tabs (Gather, Make, Move, Defend, All, Mega and Terraform) was opened in the in-app browser. The main `#sheet-body` had equal client and scroll widths for each tab, so this check found no horizontal overflow of that container. This does not establish that every card, touch target or nested element is unobscured, and the test used a mouse pointer rather than touch emulation.
+
+Screenshots (in-app browser, mouse pointer; not touch emulation):
+
+- [Terraform and clipped robot labels, 390 × 844](phone-audit-shots/terraform-390.jpg)
+- [Pause and truncated restore-point age, 390 × 844](phone-audit-shots/pause-390.jpg)
+- [Workforce, 430 × 932](phone-audit-shots/workforce-430.jpg)
+- [Economy, 430 × 932](phone-audit-shots/economy-430.jpg)
