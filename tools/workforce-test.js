@@ -174,6 +174,10 @@ console.log(`  Auto order: ${base.wfAutoOrder(P0).order.join(' > ')}`);
   const g = copy(), c = copy();
   for (const q of [g, c]) {
     free(q, 6);
+    // (No High priority left from the computer's days: a High building takes a Worker even when it can't work, by
+    // design, and that's not what's tested here. On seed 4242 the computer had set one of its Smelters High, and that
+    // Smelter, full and waiting for pickup, took the Worker Rebalance freed for the jobs waiting.)
+    for (const b of q.getS().buildings) if (!b.dead && b.owner === P0 && b.prio === 'high') q.applyOrder(P0, 'prio', [b.id, 'normal']);
     run(q, 1);
     const S = q.getS(), want = q.wfAutoOrder(P0);
     // (one factory that can't work, for sure: held at a stock limit of 0)

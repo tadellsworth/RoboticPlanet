@@ -325,7 +325,14 @@ const midSrc = `
   const ns = addBuilding(0, 'nursery', cx + 1, cy + 1, true); addBot(0, 'agribot', cx + 1, cy + 2);
   addBot(0, 'grader', cx - 1, cy);
   until(() => { feed(cp); return grovesOf(ns) >= 3; }, 200);
-  applyOrder(0, 'terraform', ['soil', [tIdx(cx - 2, cy)]]);
+  // (Spread soil beside the Composter: two tiles west if that ground can take it, else the nearest tile that can. The
+  // starter-field floor can lay Ore or Crystal there, and a Grader can't spread soil over a deposit.)
+  let st = -1;
+  for (let d = 0; d <= 6 && st < 0; d++) for (let j = cy - d; j <= cy + d && st < 0; j++) for (let i = cx - 2 - d; i <= cx - 2 + d; i++) {
+    if (Math.max(Math.abs(i - (cx - 2)), Math.abs(j - cy)) !== d || !inMap(i, j)) continue;
+    const t = tIdx(i, j); if (!tfJob(0, 'soil', t).why) { st = t; break; }
+  }
+  applyOrder(0, 'terraform', ['soil', [st]]);
   until(() => { feed(cp); return S.buildings.some((b) => b.tf && b.progress > 0.2); }, 200);
 `;
 const cA = mk(), cB = mk();
