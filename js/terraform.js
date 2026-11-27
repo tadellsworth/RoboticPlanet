@@ -19,18 +19,21 @@ const TF_TOOLS_UI = {
   lower: { card: 'Down a level: Stone out.', key: 'l', name: 'Lower', glyph: '▼', how: 'Lower a tile a level (the earth comes out as Stone). Drag over tiles.' },
   flatten: { card: 'An area to one level.', key: 'f', name: 'Flatten', glyph: '▬', how: 'Drag a rectangle: every tile in it goes to the level of the tile you started on.' },
   fill: { card: 'Water beside land to land.', key: 'h', name: 'Fill shallows', glyph: '◢', how: `Water beside land becomes land, up to ${TERRA.reach} tiles from the original shore. Drag out from the shore for a land bridge.` },
-  dig: { card: 'Land beside water to water.', key: 'c', name: 'Dig channel', glyph: '≈', how: 'Land beside water becomes water: moats, and canals for ships. Drag in from the shore.' },
+  dig: { card: 'Land beside water to water.', key: 'c', name: 'Dig channel', glyph: '≈', how: 'Land beside water becomes water: moats, canals for ships, and irrigation ditches a Water Pump fills. Drag in from the shore.' },
+  // Stage 2 (SOIL): the Grader's soil jobs.
+  soil: { card: 'Barren ground richer.', key: 'o', name: 'Spread soil', glyph: '▦', how: `Spread humus over a tile: it grows a step richer (barren, improving, rich). ${SOIL.spread.fiber} Fiber and ${SOIL.spread.stone} Stone a tile. Drag over tiles.` },
+  reclaim: { card: 'Craters and scorch to ground.', key: 'e', name: 'Reclaim', glyph: '✚', how: 'Clear a crater, scorched or burned ground, or a grove back to usable ground. Drag over tiles.' },
 };
 
 /** The tab's button and its cards (openBuildMenu). */
-function tfTabButton() { return `<button data-g="terra"><kbd>${BUILD_TAB_KEYS.terra}</kbd>Terraform<span class="n">${TF_TOOLS.length}</span></button>`; }
+function tfTabButton() { return `<button data-g="terra"><kbd>${BUILD_TAB_KEYS.terra}</kbd>Terraform<span class="n">${TF_TOOLS.length + (typeof t2Types === 'function' ? t2Types().length : 0)}</span></button>`; }
 function tfCards() {
   const n = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
   return TF_TOOLS.map((k) => {
     const T = TF_TOOLS_UI[k];
     return `<button class="bcard tf-card" data-tf="${k}" data-g="terra" title="${T.name}"><kbd data-tab="${BUILD_TAB_KEYS.terra}" data-key="${T.key.toUpperCase()}">${T.key.toUpperCase()}</kbd>` +
       `<div class="tf-glyph tf-${k}" aria-hidden="true">${T.glyph}</div><div class="bname">${T.name}</div><div class="bhave">${T.card}</div></button>`;
-  }).join('') + `<p class="tf-note" data-g="terra">${n ? `${n} Grader${n === 1 ? '' : 's'} to do the work.` : 'A <b>Grader</b> does the work: order one at the Bot Foundry.'} Not on a rival's land, nor under buildings, roads, track, pipes or resources.</p>`;
+  }).join('') + (typeof t2Cards === 'function' ? t2Cards() : '') + `<p class="tf-note" data-g="terra">${n ? `${n} Grader${n === 1 ? '' : 's'} to do the work.` : 'A <b>Grader</b> does the work: order one at the Bot Foundry.'} Not on a rival's land, nor under buildings, roads, track, pipes or resources.</p>`;
 }
 function tfBind(body) { for (const el of body.querySelectorAll('.bcard[data-tf]')) el.onclick = () => tfStart(el.dataset.tf); }
 
@@ -61,14 +64,14 @@ function tfPreview() {
   const F = UI.tf;
   if (!F) return;
   const plan = new Map(), rows = [], target = tfTarget();
-  let stone = 0, yieldN = 0, time = 0, why = '';
+  let stone = 0, fiber = 0, yieldN = 0, time = 0, why = '';
   for (const t of F.list.slice(0, TERRA.most)) {
     const J = tfJob(ME, F.tool, t, target, plan);
     if (J.why) { rows.push([t, null, J.why, J.same]); if (!why && !J.same) why = J.why; continue; } // (Flatten: a tile already at its level is left alone)
     plan.set(t, J); rows.push([t, J]);
-    stone += J.cost.stone || 0; yieldN += J.yieldN; time += J.time;
+    stone += J.cost.stone || 0; fiber += J.cost.fiber || 0; yieldN += J.yieldN; time += J.time;
   }
-  F.prev = { rows, plan, stone, yieldN, time, why, over: F.list.length > TERRA.most };
+  F.prev = { rows, plan, stone, fiber, yieldN, time, why, over: F.list.length > TERRA.most };
 }
 
 function tfBanner() {
@@ -79,7 +82,7 @@ function tfBanner() {
   const graders = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
   const seg = `<span class="seg tf-seg" id="tf-seg">${TF_TOOLS.map((k) => `<button data-tf="${k}" class="${k === F.tool ? 'on' : ''}"><kbd>${TF_TOOLS_UI[k].key.toUpperCase()}</kbd>${TF_TOOLS_UI[k].name}</button>`).join('')}</span>`;
   const lv = F.tool === 'flatten' ? (tfTarget() !== null ? ` To <b>level ${tfTarget()}</b> (the first tile's).` : ' Start on open ground: its level is the one the rest go to.') : '';
-  const sum = n ? `<b>${n}</b> tile${n === 1 ? '' : 's'}${P.stone ? ` · costs <b>${P.stone}</b> Stone` : ''}${P.yieldN ? ` · yields <b>${P.yieldN}</b> Stone` : ''} · about <b>${fmtClock(P.time / Math.max(1, graders))}</b> of Grader work` : 'Nothing planned yet.';
+  const sum = n ? `<b>${n}</b> tile${n === 1 ? '' : 's'}${P.stone || P.fiber ? ` · costs ${P.fiber ? `<b>${P.fiber}</b> Fiber${P.stone ? ', ' : ''}` : ''}${P.stone ? `<b>${P.stone}</b> Stone` : ''}` : ''}${P.yieldN ? ` · yields <b>${P.yieldN}</b> Stone` : ''} · about <b>${fmtClock(P.time / Math.max(1, graders))}</b> of Grader work` : 'Nothing planned yet.';
   const warn = (P.why ? ` <span class="err">${P.why}</span>` : '') + (P.over ? ` <span class="err">A plan takes ${TERRA.most} tiles at most.</span>` : '') +
     (!graders ? ' <span class="err">No Grader: order one at the Bot Foundry.</span>' : '');
   showBanner(`${seg}<div class="tf-how"><b>${T.name}</b>: ${T.how}${lv}</div><div class="tf-sum">${sum}${warn}</div>`, 'Terraform', 'Done');
@@ -130,7 +133,7 @@ function tfConfirm() {
   act('terraform', [tool, tiles, target], (r) => {
     if (!r || !r.placed) { sfx('error'); toast((r && r.why) || 'Nothing could be planned there.', 'warn'); return; }
     sfx('place'); haptic('order');
-    toast(`${r.placed} Earthworks planned${r.stone ? `: ${r.stone} Stone to bring` : ''}${r.yieldN ? `${r.stone ? ',' : ':'} ${r.yieldN} Stone to dig out` : ''}.${r.graders ? '' : ' Order a Grader at the Bot Foundry to do them.'}`, r.graders ? 'info' : 'warn');
+    toast(`${r.placed} Earthworks planned${r.fiber ? `: ${r.fiber} Fiber and ${r.stone} Stone to bring` : r.stone ? `: ${r.stone} Stone to bring` : ''}${r.yieldN ? `${r.stone ? ',' : ':'} ${r.yieldN} Stone to dig out` : ''}.${r.graders ? '' : ' Order a Grader at the Bot Foundry to do them.'}`, r.graders ? 'info' : 'warn');
     if (S.mission) S.mission.tfPlanned = (S.mission.tfPlanned || 0) + r.placed;
     if (tool === 'flatten') { R.tfFlat = R.tfFlat || new Set(); for (const t of tiles) R.tfFlat.add(t); } // (drawn with Flatten's glyph: looks only)
     UI.tf = { tool, list: [], start: -1, end: -1, prev: null };
@@ -165,7 +168,7 @@ function tfKey(k) {
  */
 
 /** The jobs' tints and glyph colours (the canvas legend): raise warm, lower cool, flatten pale, fill and dig blue. */
-const TF_COL = { up: '#ffc46e', down: '#8fd8ff', flatten: '#ecf0f4', fill: '#78c8ff', dig: '#5fc8ff' };
+const TF_COL = { up: '#ffc46e', down: '#8fd8ff', flatten: '#ecf0f4', fill: '#78c8ff', dig: '#5fc8ff', soil: '#c8925a', clear: '#a6e08c' };
 const TF_FRESH = 180; // (seconds of game time new ground takes to weather into the biome's)
 /** Fresh, turned soil for each biome (RGB): the Rust's red-brown earth, darker and browner in the forests and swamps. */
 const TF_SOIL = {
@@ -284,7 +287,7 @@ function tfInfo(b) {
     const side = b.tf.k === 'fill' ? tfSide(t, (u) => S.terrain[u] === T_GROUND) : b.tf.k === 'dig' ? tfSide(t, (u) => S.terrain[u] === T_WATER) : null;
     if (side) I.dir = [-side[0], -side[1]]; else if (b.tf.k === 'fill' || b.tf.k === 'dig') I.dir = [1, 0];
   }
-  if (b.tf.k === 'down' || b.tf.k === 'up') {
+  if (b.tf.k === 'down' || b.tf.k === 'up' || b.tf.k === 'soil' || b.tf.k === 'clear') {
     // A cut starts on the side its Grader works from and moves away from it (west to east until one is there).
     const g = tfGrader(b);
     if (g && g.task.phase !== 'go' && !I.locked) { const di = Math.sign(Math.round(b.x + 0.5 - g.x)), dj = Math.sign(Math.round(b.y + 0.5 - g.y)); if (di || dj) { I.dir = di ? [di, 0] : [0, dj]; I.locked = true; } }
@@ -421,6 +424,14 @@ function tfSiteGround(ctx, b, x, y, z, ox, oy, saver) {
     ctx.fillStyle = soilFill(); tfRagged(ctx, r[0], r[1], r[2], r[3], sd, z * 0.06); ctx.fill();
     ctx.fillStyle = 'rgba(30,16,8,0.3)'; ctx.fill(); // (wet)
     ctx.strokeStyle = 'rgba(238,246,247,0.55)'; ctx.lineWidth = Math.max(1, z * 0.045); ctx.stroke();
+  } else if (J.k === 'soil' || J.k === 'clear') {
+    if (k <= 0) return;
+    // Stage 2: Spread soil lays dark humus across the tile from the Grader's side, a heap of it ahead of the blade;
+    // Reclaim levels fresh earth over the crater or scorch, the same way.
+    const f = 0.06 + 0.94 * k, r = band(0, f, 1);
+    ctx.fillStyle = soilFill(); tfRagged(ctx, r[0], r[1], r[2], r[3], sd, z * 0.05); ctx.fill();
+    if (J.k === 'soil') { ctx.fillStyle = 'rgba(34,20,10,0.42)'; ctx.fill(); }
+    if (k < 0.95) heap(J.k === 'soil' ? 'fill' : 'spoil', Math.min(0.98, f + 0.08), 0.5, 0.1 + 0.08 * (1 - k), sd % 5);
   } else if (J.k === 'dig') {
     if (k <= 0) return;
     // Dig channel: a trench cut in from the water, the water following it in with a muddy front; spoil berms either side.
@@ -514,6 +525,14 @@ function tfPlanTile(ctx, x, y, z, k, prog, owed, mine, dir, work) {
       ctx.globalAlpha = (mine ? 1 : 0.55) * (work ? 0.8 : 1);
       const R2 = (u, v) => [cx + u * ddx - v * ddy, cy + u * ddy + v * ddx];
       for (const o of [-0.55, 0.55]) both([R2(o * s - s * 0.45, -s * 0.55), R2(o * s + s * 0.15, 0), R2(o * s - s * 0.45, s * 0.55)]);
+    } else if (k === 'soil') { // (stage 2: humus raked in, three furrows over a band of soil)
+      ctx.globalAlpha *= 0.5; ctx.fillStyle = c; ctx.fillRect(cx - s * 1.2, cy - s * 0.9, s * 2.4, s * 1.8); ctx.globalAlpha = (mine ? 1 : 0.55) * (work ? 0.8 : 1);
+      for (const o of [-0.55, 0, 0.55]) both([[cx - s * 1.1, cy + o * s + s * 0.18], [cx - s * 0.35, cy + o * s - s * 0.18], [cx + s * 0.4, cy + o * s + s * 0.18], [cx + s * 1.1, cy + o * s - s * 0.18]]);
+    } else if (k === 'clear') { // (stage 2, Reclaim: a sprout over a levelled line)
+      both([[cx - s * 1.2, cy + s * 0.8], [cx + s * 1.2, cy + s * 0.8]]);
+      both([[cx, cy + s * 0.8], [cx, cy - s * 0.4]]);
+      both([[cx, cy - s * 0.1], [cx - s * 0.7, cy - s * 0.7], [cx - s * 0.1, cy - s * 0.75], [cx, cy - s * 0.1]]);
+      both([[cx, cy - s * 0.3], [cx + s * 0.7, cy - s * 0.95], [cx + s * 0.15, cy - s * 0.95], [cx, cy - s * 0.3]]);
     }
     ctx.globalAlpha = 1;
   }
@@ -546,7 +565,7 @@ function tfDrawPlan(ctx, ox, oy, z, inView) {
     }
     const k = F.tool === 'flatten' ? 'flatten' : J.k, dir = J.k === 'dig' ? tfSide(t, (u) => tfWet(u, F.prev.plan) && u !== t) : null;
     tfPlanTile(ctx, x, y, z, k, 0, false, true, dir, false);
-    if (z >= 22 && J.k !== 'dig') { // (its new level, small in the corner)
+    if (z >= 22 && J.k !== 'dig' && J.k !== 'soil' && J.k !== 'clear') { // (its new level, small in the corner)
       ctx.font = `700 ${Math.max(9, z * 0.2)}px system-ui, sans-serif`;
       ctx.fillStyle = 'rgba(10,12,16,0.75)'; ctx.fillText(String(J.to), x + z * 0.8 + 1, y + z * 0.22 + 1);
       ctx.fillStyle = '#fff'; ctx.fillText(String(J.to), x + z * 0.8, y + z * 0.22);
@@ -615,7 +634,7 @@ function graderPose(u) {
   if (t && t.type === 'build' && t.phase !== 'go') {
     const s = getE(t.site), k = s && s.tf ? s.tf.k : 'up';
     if (s && s.progress > 0.86) return 'finishing';
-    return k === 'dig' ? 'cutting' : k === 'down' ? (s.tf.n > 1 ? 'pushing' : 'cutting') : 'filling';
+    return k === 'dig' || k === 'clear' ? 'cutting' : k === 'down' ? (s.tf.n > 1 ? 'pushing' : 'cutting') : k === 'soil' ? 'pushing' : 'filling';
   }
   return u.path && u.pi < u.path.length ? 'driving' : 'idle';
 }

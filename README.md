@@ -879,7 +879,63 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   robots on the tile step off (ships to water: `moveOff`), routes over it are dropped. The tiles changed are kept in
   `S.tfTiles` (1 or 2, see above) and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
   as before. Rivals don't terraform yet. Later stages (IDEAS.md): blasting cliffs, landslides, flooding. The mission
-  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows.
+  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows. Stage 2 adds the Grader's Spread
+  soil (O) and Reclaim (E): see the next entry.
+- **Terraforming, stage 2: soil, plants and water** (Nov 2026; `SOIL`, `GROVE`, `IRR`, `SHIFT` in `js/defs.js`; the rules
+  in the stage 2 block of `js/sim.js`: `updateComposter`, `soilAdd`, the Nursery's Agribot in `doStaff` (`groveNode`,
+  `grovePlant`), `t2Groves`, `groveSlow`, `groveBurn`, `t2Water`, `t2Shift`, `t2Earthwork`; the cards, panels, rings and
+  drawing in `js/terraform2.js`). The player's alone: no rival builds these or plans the Grader's stage 2 jobs, and a
+  game without any of it has none of the layers and hashes as before (seeded AI-vs-AI games keep their hashes). Per-tile
+  layers, made the first time they're needed (`t2Layer`), saved as sparse layers (`SPARSE_LAYERS`) and hashed when
+  present (`T2_LAYERS`): `S.soil` (0..`SOIL.max` 200), `S.grove` (growth 1..`GROVE.mature`), `S.grvF` (a mature grove's
+  Fiber coming), `S.grvO` (who planted it, owner + 1), `S.wet` (1 wet, 2 under a sprinkler), `S.tform` (toward the next
+  biome step) and `S.shift` (steps taken); `S.burnt` is hashed too once any of them exists. On the **Terraform tab**
+  (`BUILD_KEYS.terra`, `t2Cards`) beside the Grader's tools; `BDEFS[].t2`, banned on Argos, in the Hollow and under the
+  caves' roof (`worldBan`), and the Water Pump on lava (the Cinderlands).
+  - **Composter** (`BDEFS.composter`, concept A "Drum", accent `#d6a04a`; 2 Cement, 2 Fiber; key M): Haulers fill its
+    hopper (`SOIL.hopper` 4) with `SOIL.batch` (1 Fiber, 1 Stone); it burns a batch every `SOIL.every` (15) s, and each
+    open tile within `SOIL.reach` (4) of it (`soilOpen`: ground, nothing built or laid, not a rival's) gains `SOIL.gain`
+    (10): barren below `SOIL.improving` (64), improving below `SOIL.rich` (160), rich from there; under two minutes to
+    improving, about four to rich. Rich soil becomes farmland (`S.fert`, not on scorched ground). `soilLv`: crops grow
+    `SOIL.crop` [1, 1.25, 1.5] as fast (`cropRate`, in `growStalks`) and give `SOIL.yield` [1, 1, 2] Fuel (the farm's
+    harvest), drawn 12% bigger a level (`drawResource`); a Grove Planter's stalk groves hold `SOIL.stalk` [3, 4, 5] Fiber.
+    Its panel counts the rich, improving and barren tiles in reach; placing it shows the ring and each tile's level.
+  - **Tree Nursery** (`BDEFS.nursery`, concept C "Pivot"; 3 Fiber, 2 Cement; key N; crew: an Agribot): its Agribot gathers
+    ripe groves first, then plants (`groveNode`) open ground within `GROVE.reach` (4), up to `GROVE.most` (18), never on
+    a lane (`groveLane`: every third row and column from the Nursery), farmland, scorched ground, roads, plans, pipes,
+    track, resources or a rival's land, `GROVE.plantTime` (4) s a grove. Every `GROVE.step` (2) s each grove grows a
+    step (`t2Groves`; twice as fast on Greenreach ground after a shift, `GROVE.forest`): saplings below `GROVE.young`
+    (40 steps, 80 s), young below `GROVE.mature` (120, 4 minutes), then mature; a mature grove bears a Fiber every
+    `GROVE.fiberEvery` (45 steps, 90 s: `S.grvF`), which the Agribot gathers (`GROVE.gatherTime` 3 s) into the Nursery's
+    stock (`out.fiber` 6) for Haulers. A foe's ground robot in a grove moves at `GROVE.slow` [0.85, 0.7, 0.55] of its
+    speed by stage (`groveSlow`, in `speedMul`; the owner's and allies' at full speed; leaves swirl round it:
+    `t2SlowTell`); rivals simply cope. Building, a road, track or pipe on a grove clears it (`clearDecor`), and a Grader's
+    earthworks there too. Napalm and a foe's Torch flame burn it (`groveBurn`): gone, the tile scorched (`S.burnt`).
+  - **Water Pump** (`BDEFS.wpump`, concept B "Screw Lift"; art key `wpump`, as the Oil Pump has `pump`; 3 Cement, 1 Alloy;
+    key P): only right beside water (`canPlace`), never lava. Every `IRR.every` (4) s (`t2Water`) each working pump
+    sends its water along its owner's pipe joined to it (`S.pipe`, the same network as Crude and Fuel: `pipeEnd` joins it)
+    and along canals a Grader dug (water tiles in `S.tfTiles`), up to `IRR.reach` (60) tiles: the ground within
+    `IRR.fringe` (1) of them is wet, within `IRR.spray` (2) of the pump or of a pipe's open end (`pipeSprinkler`: a
+    sprinkler, drawn with its spray) wetter. `S.wet` is made again each time (cut the pipe and it dries). Bio Farms plant
+    on wet ground (`cropSoil`, in `findCropSpot` and `fertileIn`), and crops there grow `IRR.crop` (1.2) as fast.
+  - **The Grader's jobs:** Spread soil (`tfJob` tool 'soil', job `k: 'soil'`; key O): `SOIL.spread` (2 Fiber, 1 Stone),
+    `SOIL.spreadTime` (16) s, `SOIL.spreadGain` (64) soil; Reclaim (tool 'reclaim', `k: 'clear'`; key E): clears a crater,
+    ash, scorched soil or a grove (`t2Scarred`), `SOIL.reclaimTime` (20) s, a mature grove's Fiber out as a crate
+    (`t2Earthwork`: neither changes the ground's level, so no `terrainChanged`). An irrigation ditch is Dig channel.
+  - **The biome shift** (`t2Shift`, every `SHIFT.every` 10 s): each ground tile scores a point for improving soil, one
+    for rich, one if wet and one with `SHIFT.cover` (2) young or mature groves on and round it (`t2Score`); with
+    `SHIFT.need` (2) or more its `S.tform` rises by the score, and at `SHIFT.full` (240) it takes a step along
+    `SHIFT.chain` from its own biome (`t2BaseBiome`: the map's, or the second biome's where they blend): the Rust,
+    Cinderlands, the Bloom and Steamwells to the Long Grass, then Greenreach; the Long Grass to Greenreach; the Polar Caps
+    to Greenreach. About 10 minutes a step with all four points, 20 with two. Drawn with the two-biome blend's look
+    (`t2PaintTile`: the next biome's ground texture blended in through noise, by `tform` and `shift`), its scenery taking
+    root (a decor plant drawn with the new biome's art: `t2ArtBiome` in `drawPlant`); Long Grass ground counts as improving
+    soil (`soilLv`), Greenreach grows groves twice as fast.
+  - Drawn (looks only, `js/terraform2.js`): humus darkening the ground and wet ground greening (with a damp edge) baked
+    with the map; the groves (`grove-<stage>-<variant>`, rendered 1-tile pieces) and sprinklers drawn with the ground and
+    graded with it (`t2Ground`); the minimap's groves, irrigated and shifted land (`t2MiniColor`); the Nursery's loop at
+    4 frames a second (`WORK_FPS`). Missions: **Topsoil** (Sea and Sky, after Cut and Fill). Tests:
+    `node tools/terraform2-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -4748,6 +4804,19 @@ land bridge a Worker walks over to an island, a fill dragged out to open sea sto
 (and still refused past its new land, before and after a save), a canal joining two lakes that a Ferry then sails through, a robot on a
 flooding tile stepping off, a save made mid-job loading and playing on to the same hash, and the same plan twice
 giving the same hash.
+
+```bash
+node tools/terraform2-test.js
+```
+
+Terraforming, stage 2: a Composter taking the ground in its reach from barren to improving to rich (rich soil is
+farmland), crops on rich soil growing faster and an Agribot bringing 2 Fuel from one; a Tree Nursery planting groves off
+its lanes, the groves growing from saplings to young to mature and bearing Fiber the Agribot gathers, a foe's robot
+slowed in one (and its owner's not); napalm burning a grove and Reclaim clearing the scorched ground; a Water Pump's water
+along a pipe (a wet fringe, a sprinkler at its end), drying when the pipe is cut, along a dug canal, and a Bio Farm
+planting on wet desert; the biome shift taking the Rust to the Long Grass; Reclaim clearing a crater, Spread soil;
+where the buildings can't go; a save made mid-process playing on to the same hash; and the same game twice giving the
+same hash. A game without stage 2 has none of its layers.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

@@ -2801,7 +2801,7 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    into land (land bridges to islands, more ground on water maps) or drain marsh. Moats (flood a trench before your
    walls) and canals (join lakes so ships sail inland). Blast cliffs into slopes with charges (new attack routes; a
    landslide onto an enemy road below).
-2. **Soil, plants and climate:** compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
+2. **Soil, plants and climate** (stage 2 BUILT Nov 27 2026: soil, groves, irrigation and the biome shift; see below): compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
    crops on rich soil). Tree nurseries spread groves (slow Fiber/wood; cover that slows enemy robots). Irrigation:
    pump water by pipe or canal to dry land so farms grow there (big lever on desert biomes). Local climate (the
    Atmosphere Engine taken further): weather stations calming sandstorms or bringing rain; cooling lava ground into rich
@@ -2845,6 +2845,36 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
   Design; the owner picked concept A, "Dozer", now rendered and installed with the ground effects and the plans'
   overlays (ART_GUIDE Batch 35). Open: should a raised tile show its new cliff face while it is being raised (the
   bake only repaints it when the job is done)?
+
+**Stage 2, soil, plants and water: BUILT (Nov 27 2026; README "Terraforming, stage 2", ART_GUIDE Batch 36,
+`tools/terraform2-test.js`, the mission Topsoil).** The Composter (Fiber + Stone into soil in a ring: barren, improving,
+rich; rich soil is farmland, richer soil faster crops and more Fuel), the Tree Nursery (groves with lanes, saplings to
+young to mature, a slow Fiber trickle its Agribot gathers, foes slowed in them; they burn and can be cleared), the Water
+Pump (water along pipes and dug canals, wet ground green and farmable even in desert, sprinklers at pipe ends), the
+biome shift (soil, water and grove cover over time: the Rust to the Long Grass to Greenreach, drawn with the two-biome
+blend), and the Grader's Spread soil and Reclaim (craters, scorch, groves) on the Terraform tab. Calls made, for the
+owner:
+- **The fiber trickle goes to the Nursery's own Agribot**, not a Harvester: the Agribot already plants for the
+  Nursery, and a Harvester's job is stalk groves (a different plant, cut down for good).
+- **Water uses the existing pipe**, not a water-pipe variant: a pump joined to an oil line irrigates along it too. A
+  separate water pipe would be clearer if that confuses players.
+- **Rich soil becomes farmland (S.fert)** rather than a separate "plantable" flag, so everything that already reads
+  fertile soil (Bio Farm placement, napalm, a Torch's Scorch the earth) works on it; scorched ground needs Reclaim first.
+- **Groves keep lanes** by leaving every third row and column from the Nursery unplanted, and never block building
+  (placing over one clears it).
+- **The biome shift moves tiles one at a time** (each by its own soil, water and grove cover), so a region shifts as its
+  tiles do; a step takes 10 minutes with everything, 20 with two of the four. Long Grass ground counts as improving
+  soil; Greenreach grows groves twice as fast. The Polar Caps thaw straight to Greenreach; forests, swamps and the
+  Shoals don't shift.
+- **Ditches are Dig channel**: a canal dug from the pump's water carries it. No separate ditch tool.
+- **Stage 2 is banned on Argos, in the Hollow and under the caves' roof**, and the Water Pump in the Cinderlands (lava).
+
+**Stage 2, still open:**
+- Rivals don't use stage 2 (the owner's call); they cope with groves slowing them and with shifted ground. Should the
+  AI route round a foe's mature groves?
+- Should the shift bring the new biome's animals (wildlife.js reads the map's biome, not the tile's)?
+- Water and the Atmosphere Engine's rain don't interact yet (rain could count as wet).
+- A Composter's inputs could be other wastes later (Crude sludge, scrap) once the economy has them.
 
 ## Done: Argos on the main menu (owner, Nov 26)
 
