@@ -205,6 +205,7 @@ function mpMenuSettings(final, people) {
     murmur: murmurLevelOk(m.murmur) ? m.murmur : 'active', // (Off, Quiet or Active: every device makes the same Murmur)
     scars: scarsPref(), // (War scars: the host's, so every device scars the land alike)
     teams: !colony && !!m.teams && tot === 4, teamOf: !colony && m.teams && tot === 4 ? mpTeamSeats() : null, mods: modList(m.mods, mode),
+    greenWin: colony && m.cgoal !== 'free', // (co-op Colony's Goal, Made ready or Free play: the host's pick, the same game on every device)
     sum: mpSummary(size),
   };
 }
@@ -278,7 +279,7 @@ function mpHostName() { return (NET.seats.find((s) => s.seat === NET.host) || {}
 function mpSummary(size = menuSize()) {
   if (UI.menu.mode === 'horde') return mpHordeSettings(false).sum;
   const m = UI.menu, bits = [];
-  if (m.mode === 'colony') bits.push('Colony, co-op');
+  if (m.mode === 'colony') bits.push('Colony, co-op', m.cgoal === 'free' ? 'Free play' : `Made ready (green ${Math.round(GREEN.goal * 100)}%)`);
   else if (mpCoopSeats().length) bits.push('Co-op');
   // (four colonies: as many as asked for, or as the map type is made for: Twin Valleys and Long Haul 2v2 take four)
   const colony = m.mode === 'colony', mode = colony ? 'colony' : 'versus';
@@ -547,7 +548,7 @@ function mpGameOpts(s, humans) {
   return {
     seed: s.seed, difficulty: s.diff, mode: s.mode === 'colony' ? 'colony' : 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke, mega: !!s.mega, // (Megastructures: a host from before them sent none, and had none)
     upWin: !!s.upWin, // (the Great Uplink win: a host from before it sent none, and had it off)
-   
+    greenWin: s.mode === 'colony' && !s.horde && !!s.greenWin, // (co-op Colony's Made ready goal: a host from before it sent none, and had it off)
     biome: s.biome, biome2: s.biome2, players: total, style: docKeyOf(s.style),
     styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,
     // (The Murmur: as the host set them; a host from before the setting sent none, and had none.)

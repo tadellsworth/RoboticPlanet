@@ -1649,7 +1649,7 @@ const MISSIONS = [
     intro: [
       'The Grader has four more jobs on <b>Build → Terraform</b> (<kbd>6</kbd>), dragged in a line like Walls and cheaper than them. They stand for everyone, your robots included.',
       'An <b>Earth Bank</b> (<kbd>K</kbd>) stops vehicles and heavy robots (Bulwarks, trucks, Graders); other robots climb over slowly, and yours behind it take less fire. A <b>Fire Trench</b> (<kbd>X</kbd>) slows anyone crossing; yours in it take half the fire. <b>Dragon\'s Teeth</b> (<kbd>Z</kbd>) stop the heavy ones and let small robots through.',
-      'Shells and bombs wear them down to a breach, and so do warbots told to: select them and right-click (or tap) the earthwork. Drag the same tool over a worn one to repair it. <b>Cave in</b> (<kbd>V</kbd>) collapses a Murmur tunnel for good, and the exits it cuts off from their nest.',
+      'Shells and bombs wear them down to a breach, and so do warbots told to: select them and right-click (or tap) the earthwork. To open a gap in your own, hold <kbd>Ctrl</kbd> as you right-click it, or under a finger tap <b>Breach</b> on the selection bar first. Drag the same tool over a worn one to repair it. <b>Cave in</b> (<kbd>V</kbd>) collapses a Murmur tunnel for good, and the exits it cuts off from their nest.',
       'A <b>Sluice</b> (<kbd>U</kbd>) on a lake shore floods the low ground beyond it when you open it. A <b>Sap Head</b> (<kbd>Q</kbd>) digs a tunnel along a route you plan from it, and your robots go through when it breaks out.',
     ],
     mode: 'colony', seed: 31, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 11, war: true, wildlife: true, murmur: 'quiet', limit: [0, 0, 30],

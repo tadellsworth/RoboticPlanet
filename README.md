@@ -1118,7 +1118,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     `EW.fixTime` 10 s). Your own bank and teeth stop your own heavy robots too (decided by the owner, Nov 27 2026: leave
     a gap, or a Wall and Gate). **Attack an earthwork** (`ORDERS.command` with `ew`, `orderEwShoot`, `ewShoot`,
     `ewSpot`): with warbots selected, a right-click (or tap) on a foe's (or no one's) tile (`ewOrderAt` in
-    `js/terraform4.js`; your own or an ally's with Ctrl, Alt or Cmd held) gives them the task
+    `js/terraform4.js`; your own or an ally's with Ctrl, Alt or Cmd held, or under a finger after **Breach** on the selection
+    bar: `#sel-breach`, `t4BreachOffered`, `UI.breachArm`, `t4BreachTap` sets `INPUT.force` for that order, the own and
+    allied earthworks in view outlined in coral in `t4Marks`) gives them the task
     `{ type: 'ewshoot', tile, go, acc }`: they go to the nearest tile they can stand on within `armyBldReach` (`ewSpot`)
     and shoot it, a heavy robot at `EW.breach` (2) a shot, a light warbot at `EW.light` (0.25) of that, the fractions
     added up on the task and taken off a whole point at a time (`ewHit`). Breached, the order ends (`ewShootDone`): a
@@ -1213,8 +1215,12 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     0.1 ms on a Medium map. Not hashed (worked out from what is); kept in saves (`checkSave`).
   - **Made ready** (Colony; `settings.greenWin`, the setup's Goal row, `UI.menu.cgoal`, `ready` by default, or `free`;
     `newGame` only sets it when asked, so older games and the tests read as before): at `GREEN.goal` (60%) of the open
-    land `S.winner` 0, `S.endHow` `green` (not in missions, Contingency battles, Horde, or after Keep playing; not in
-    co-op Colony yet). The end: `NARRATOR.madeReady`, the kicker "Ithaca I made ready", `overFlare` with tone `green`
+    land `S.winner` 0, `S.endHow` `green` (not in missions, Contingency battles, Horde, or after Keep playing). In
+    **co-op Colony** the host's Goal goes round with the lobby's settings (`mpMenuSettings` `greenWin`, read back by
+    `mpGameOpts` on every device, so it is part of the game each device makes; a host from before it sent none: Free
+    play); the shared colony is colony 0, so its green land counts as one colony's (whoever greened it), and every
+    device runs colony 0 and sees the same VICTORY. Tested headless by `tools/coop-green-test.js` (two devices over the
+    lockstep, a reload, the win on both; Free play never ends). The end: `NARRATOR.madeReady`, the kicker "Ithaca I made ready", `overFlare` with tone `green`
     (the TERRAFALL flare in leaf green `#7be05a`, `.o-flare.green`, `#screen-over.won-green`). A scripted focused game
     (Composters and Tree Nurseries across the land from 10 minutes, the Atmosphere Engine at 20) gets there in 32 to 48
     minutes on Medium, Large and Huge maps.
@@ -4383,7 +4389,7 @@ hour in, one drizzle in eight found no spot before, one in sixty now). None in t
   tall building is picked by its picture too (`buildingUpperAt`: the solid pixels of its art and turning head above its
   tiles, a Mooring Mast's cup, a Keep's walls; the one in front where they overlap; the Walking Factory's whole sprite,
   `walkerAtTap`; Passenger Town's buildings, `townAtTap`), robots drawn in front of it still first. Keys:
-  **B** build, then **1–6** a tab (Gather, Make, Move, Defend, Mega, Terraform; **Tab** steps; a new game opens on Gather, then on the last one used) and the
+  **B** build, then **1–6** a tab (Gather, Make, Move, Defend, Mega, Terraform; **Tab** steps; a new game opens on Gather, then on the last one used; on a phone up to 480 px wide the six tabs tighten their letters and padding to fit across without scrolling, `body.deck .build-tabs` in style.css) and the
   letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D or B;
   R is Ore Mine on Gather and Refinery on Make; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
@@ -4900,6 +4906,8 @@ tools/atlas/              atlas.py draws the atlas of Ithaca I (LORE.md) and the
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/menu-test.js        the main menu: every destination opens (two taps at most) and Esc / Back return (Playwright)
+tools/breach-touch-test.js Breach on the selection bar under a finger: armed, then a tap on your own Earth Bank shoots it (Playwright)
+tools/coop-green-test.js  co-op Colony's Goal over the lockstep: the host's Made ready (or Free play) on every device, the win on both
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when

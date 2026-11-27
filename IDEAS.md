@@ -24,7 +24,11 @@ mission Made Ready.
 - **Made ready is the default Colony goal** (the setup's new Goal row: Made ready or Free play). Reaching it wins, and
   Keep playing goes on as Colony did, so nothing is lost for a player who only wanted to build; one who wants no end at
   all picks Free play (remembered). `newGame` only sets it when asked, so missions, the tests and older saves are as
-  before. Not in co-op Colony yet (the lobby's settings don't carry it).
+  before. **Co-op Colony: DONE (Nov 27 2026).** The lobby's settings carry the Goal (`greenWin`: the host picks Made
+  ready or Free play in the multiplayer settings; the lobby's line says which) and every device makes the same game
+  from them. Call made: the shared colony's land counts the same way as alone (it is one colony, colony 0, whoever
+  greened a tile), not each person's land added up, since in shared co-op nobody has land of their own. The win is
+  everyone's (they all run colony 0). `tools/coop-green-test.js`.
 - **What counts as green:** improving or rich soil, any grove, wet ground (pumps, the Engine's rain, the Reservoir's
   banks), shifted ground and an Engine's Green, and **graded ground** (anything the Graders or the Leveller changed, the
   "reclaimed ground" of the brief: the narrator's "prepared to Accord standard"). Scorched ground never counts. In
@@ -58,6 +62,12 @@ mission Made Ready.
 - Versus greening (the canvas's optional "Also win by" chip, held 5 minutes): the owner said Versus doesn't need it.
 - The Greening panel's History series beside the Statistics graphs (it keeps its own last hour for now).
 - Should the banks reach further, or the lake raise the water table round it? (2 tiles deep now.)
+
+## The Build menu's tabs on a phone (fixed Nov 27 2026)
+
+At 390 px the tab bar cut off "Terraform" (six tabs since Mega). DONE: on screens up to 480 px wide the tabs tighten
+their letters and padding (and shrink a little more under 360 px) so all six fit across at 390 and 430 px without
+scrolling sideways, full names kept; the desktop look is unchanged.
 
 ## A lighter dusk on slow devices (built Nov 27 2026, Auto only: open questions)
 
@@ -3088,8 +3098,9 @@ Calls made, for the owner to confirm or change:
   or an ally's) sends them to shoot that tile till it breaches (`orderEwShoot`, task `ewshoot`): a heavy robot at the
   full 2 a shot, a light warbot at `EW.light` (25%) of it, so heavy robots and blasts stay the real way to breach. A
   coral reticle marks the tile; breached, the order ends and a group's units go back to their flag. Rivals don't use it.
-  Open: on a touch screen there's no way yet to order it on your own earthworks (no Ctrl); a "Force attack" toggle on
-  the selection bar would do it, if play shows it's needed. `EW.light` to tune in play-testing.
+  **Touch: DONE (Nov 27 2026)**: under a finger the selection bar has **Breach** while you or an ally have an earthwork
+  standing; it arms the next tap as the order on an earthwork, your own or an ally's too (your and your allies' in view
+  outlined in coral), then it's off. `tools/breach-touch-test.js`. `EW.light` to tune in play-testing.
 - **The Sluice floods by its own rules, not the Dam map's:** the Dam turns the flood plain into fords and back
   (`terrainChanged` each time, about 15 ms a tile batch), which costs too much for a building a player can open again
   and again. The Sluice's flood is a layer (`S.fld`) drawn over the ground, closing routes while under water and
