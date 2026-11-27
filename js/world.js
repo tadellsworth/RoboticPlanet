@@ -3204,10 +3204,11 @@ function orbitalMap(seed, W, H, cfg) {
     if (s.ax === 'v') { mark(bare, s.x0 - 3, s.y0 - 4, s.x1 + 3, s.y0 - 1); mark(bare, s.x0 - 3, s.y1 + 1, s.x1 + 3, s.y1 + 4); }
     else { mark(bare, s.x0 - 4, s.y0 - 3, s.x0 - 1, s.y1 + 3); mark(bare, s.x1 + 1, s.y0 - 3, s.x1 + 4, s.y1 + 3); }
   }
-  for (const r of plats) if (r.kind !== 'home') { const cx = Math.round((r.x0 + r.x1) / 2), cy = Math.round((r.y0 + r.y1) / 2); mark(bare, cx - 2, cy - 2, cx + 2, cy + 2); }
+  for (const r of plats) if (r.kind !== 'home' && r.id <= r.tw) { const cx = Math.round((r.x0 + r.x1) / 2), cy = Math.round((r.y0 + r.y1) / 2); mark(bare, cx - 2, cy - 2, cx + 2, cy + 2); mark(bare, W - 1 - cx - 2, H - 1 - cy - 2, W - 1 - cx + 2, H - 1 - cy + 2); } // (a deck's middle, and its twin's turned half round)
   // The control boxes: one on each deck at each end of a bridge, on clear ground just beside the head.
   const bx = [];
   for (const s of br) for (const end of [0, 1]) {
+    if (s.id % 2) { const o = bx.find((b) => b.br === s.id - 1 && b.end === 1 - end); if (o) bx.push({ id: bx.length, br: s.id, end, x: W - 1 - o.x, y: H - 1 - o.y, owner: -1 }); continue; } // (a twin bridge's boxes are its original's, turned half round)
     const cand = [];
     for (const d of [2, 3]) for (const side of [-1, 1]) {
       const along = side < 0 ? (s.ax === 'v' ? s.x0 - 2 : s.y0 - 2) : (s.ax === 'v' ? s.x1 + 2 : s.y1 + 2);
