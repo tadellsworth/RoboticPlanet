@@ -2698,7 +2698,8 @@ const SHEET_KEYS = {
   'sh-sluice': ['o', 'Open or shut the Sluice'],
   'sh-sap': ['t', 'Plan the sap'],
   'sh-level': ['f', 'Leveller: Level a hill'],
-  'sh-lvstop': ['c', 'Leveller: Stop cutting'],
+  'sh-ridge': ['h', 'Leveller: Raise a ridge'], // (H for heap: R is Lay road, on its panel while it has no road)
+  'sh-lvstop': ['c', 'Leveller: Stop cutting or raising'],
   'sh-stormoff': ['c', 'Call the storm off'],
   'rl-recall': ['c', 'Call back a rally'],
   'sh-land': ['l', 'Choose the beach'],

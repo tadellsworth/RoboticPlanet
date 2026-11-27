@@ -2134,7 +2134,22 @@ over it at 6 a second while it works (still where it stopped), dark while knocke
 basin's tiles become the game's water, its shore and foam), the banks as watered ground (stage 2's look), the basin's
 outline while placing (teal; red where something is in the way) and while it fills, the hill a Leveller cuts (tan,
 dashed) and the dust and a pulsing tan square at the tile it bites, the meter's ring, the panel and the minimap layer.
-The boom doesn't slew toward the cut (IDEAS); about 32 files, 450 KB.
+About 32 files, 450 KB.
+
+**The boom slews toward its work** (Nov 2026, with the ridge mode): `renderer/b/leveller.js` takes `hd=1..3`, the upper
+works (crawler, house, boom, wheel, counter-boom) turned round the turntable to north-north-east, south-east (a little
+short of a quarter turn past it, so the wheel stays in the frame) and south-south-west; the discharge boom runs from the
+side of the house nearer the stacker. `renderer/tools/render_t5_slew.sh` then `install_t5_slew.py`: `leveller-hH@T`
+at every time of day and `leveller-hH-work-0..3`, 36 files, 421 KB. In the game `t5Heading` picks the heading nearest
+the tile it cuts or piles onto (the plain art is heading 0, west-north-west) and keeps it when it stops; each heading
+has its own beacon in `MEGA_LAMPS` (`leveller-h1..3`). It snaps from one to the next.
+
+**The ridge** is drawn in code (`t5Marks`, `t5RidgeTiles`, `t5Dust`): while planning, the Leveller's reach as a dashed tan
+ring, the plan's tiles tinted cut-stone tan by how far they rise with each tile's new level in white, the line dashed
+white from a ringed start, and what it leaves out outlined and crossed in red; while it rises, the tiles still to go
+outlined dashed tan (each one's level when the Leveller is selected), and at the tile it piles onto a heap of spoil
+growing toward the next batch, clods falling into it, the dust and the pulsing tan square of the cut. The raised ground
+itself is the game's own levels and cliffs.
 
 ### Batch 41: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
 

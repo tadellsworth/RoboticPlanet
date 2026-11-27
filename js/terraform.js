@@ -78,6 +78,7 @@ function tfBanner() {
   const F = UI.tf;
   if (!F) return;
   if (F.tool === 'sap') { sapBanner(); return; } // (stage 4: a Sap Head's route: js/terraform4.js)
+  if (F.tool === 'ridge') { ridgeBanner(); return; } // (stage 5: a Leveller's ridge: js/terraform5.js)
   tfPreview();
   const T = TF_TOOLS_UI[F.tool], P = F.prev, n = P.plan.size;
   const graders = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
@@ -97,6 +98,7 @@ function tfPaint(i, j, first) {
   const F = UI.tf;
   if (!F || !inMap(i, j)) return;
   if (F.tool === 'sap') { sapPaint(i, j, first); return; }
+  if (F.tool === 'ridge') { ridgePaint(i, j, first); return; }
   const t = tIdx(i, j);
   if (F.tool === 'flatten') {
     if (first) F.start = t;
@@ -116,6 +118,7 @@ function tfTap(i, j) {
   const F = UI.tf;
   if (!F || !inMap(i, j)) return;
   if (F.tool === 'sap') { sapTap(i, j); return; }
+  if (F.tool === 'ridge') { ridgeTap(i, j); return; }
   const t = tIdx(i, j);
   if (F.tool === 'flatten') {
     if (F.start < 0 || F.list.length > 1 || F.start === t) { F.start = t; F.end = t; F.list = [t]; }
@@ -132,6 +135,7 @@ function tfTap(i, j) {
 function tfConfirm() {
   const F = UI.tf;
   if (F && F.tool === 'sap') { sapConfirm(); return; }
+  if (F && F.tool === 'ridge') { ridgeConfirm(); return; }
   if (!F || !F.prev || !F.prev.plan.size) return;
   const tiles = [...F.prev.plan.keys()], tool = F.tool, target = tfTarget() ?? 0;
   act('terraform', [tool, tiles, target], (r) => {
@@ -555,7 +559,7 @@ function tfPlanTile(ctx, x, y, z, k, prog, owed, mine, dir, work) {
 /** The plan being made (the Terraform mode): each tile's job as it will be placed, refused tiles crossed out. */
 function tfDrawPlan(ctx, ox, oy, z, inView) {
   const F = typeof UI !== 'undefined' && UI.tf;
-  if (R.mode !== 'terra' || !F || !F.prev || F.tool === 'sap') return; // (a sap's route: t4Marks)
+  if (R.mode !== 'terra' || !F || !F.prev || F.tool === 'sap' || F.tool === 'ridge') return; // (a sap's route: t4Marks; a ridge: t5Marks)
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const [t, J, , same] of F.prev.rows) {

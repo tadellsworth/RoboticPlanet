@@ -6894,6 +6894,12 @@ function checkSave(o) {
     if (b.lvTs != null && !(BDEFS[b.type].lvl && Array.isArray(b.lvTs) && b.lvTs.length <= 4 * (LVL.reach * 2 + 3) ** 2 && b.lvTs.every(tileOk))) bad();
     if (b.lvN != null && !(Number.isInteger(b.lvN) && b.lvN >= 0 && b.lvN <= LVL.batch)) bad();
     if (b.lvDone != null && b.lvDone !== 0 && b.lvDone !== 1) bad();
+    // (its ridge: the line it was given, the tiles it raises and the level each goes to, the Stone taken for the next level)
+    if (b.rgLine != null && !(BDEFS[b.type].lvl && Array.isArray(b.rgLine) && b.rgLine.length >= 2 && b.rgLine.length <= LVL.ridgeMost && b.rgLine.every(tileOk))) bad();
+    if (b.rgTs != null && !(BDEFS[b.type].lvl && Array.isArray(b.rgTs) && Array.isArray(b.rgTo) && b.rgTs.length === b.rgTo.length && b.rgTs.length <= LVL.ridgeMost * (2 * LVL.ridgeSide + 1) ** 2 &&
+      b.rgTs.every(tileOk) && b.rgTo.every((v) => Number.isInteger(v) && v >= 0 && v <= TERRA.top))) bad();
+    if (b.rgTo != null && b.rgTs == null) bad();
+    for (const k of ['rgPaid', 'rgWait', 'rgDone']) if (b[k] != null && b[k] !== 0 && b[k] !== 1) bad();
     if (b.rvNo != null && typeof b.rvNo !== 'string') bad();
     if (b.aeBoltN != null && !(Number.isInteger(b.aeBoltN) && b.aeBoltN >= 0)) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();

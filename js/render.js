@@ -12414,6 +12414,8 @@ const MEGA_LAMPS = {
   reservoir: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.363, 0.248, 'r'], [0.555, 0.222, 'r'], [0.752, 0.248, 'r'], [0.235, 0.32, 'w'], [0.765, 0.32, 'w'], [0.47, 0.6, 'o']] },
   leveller: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.643, 0.385, 'r'], [0.235, 0.32, 'w'], [0.765, 0.32, 'w'], [0.785, 0.61, 'w'], [0.57, 0.75, 'o']] },
 };
+// (the Leveller with its boom slewed round, leveller-h1..3: its beacon turns with the house; tools/install_t5_slew.py prints it)
+for (const [h, bx, by] of [[1, 0.606, 0.431], [2, 0.549, 0.386], [3, 0.586, 0.354]]) MEGA_LAMPS[`leveller-h${h}`] = { pad: MEGA_LAMPS.leveller.pad, lamps: [[bx, by, 'r'], ...MEGA_LAMPS.leveller.lamps.slice(1)] };
 const _megaNightLayers = new WeakMap();
 /**
  * Megastructure sprite `night` (its re-lit image) lit at night for colony colour `col` (see MEGA_LAMPS): one canvas the
@@ -12469,10 +12471,10 @@ function drawMegaArt(ctx, art, cx, cy, s, b) {
   drawArtRaw(ctx, late ? B : A, cx, cy, s);
   if (over > 0.002) { ctx.globalAlpha = ga * over; drawArtRaw(ctx, late ? A : B, cx, cy, s); ctx.globalAlpha = ga; }
 }
-/** Megastructure b's lights at night over its sprite `art` (drawn at cx, cy, tile size s): see MEGA_LAMPS. */
-function megaNight(ctx, art, cx, cy, s, owner, b) {
+/** Megastructure b's lights at night over its sprite `art` (drawn at cx, cy, tile size s): see MEGA_LAMPS (under `lampKey`, if it has its own: a Leveller's slewed boom). */
+function megaNight(ctx, art, cx, cy, s, owner, b, lampKey) {
   if (!TOD.active || R.inMap || !b || !b.id || !b.built || !art || !Array.isArray(art.anchor)) return;
-  const L = MEGA_LAMPS[b.type], on = Math.min(1, TOD.state.lights || 0);
+  const L = MEGA_LAMPS[lampKey || b.type] || MEGA_LAMPS[b.type], on = Math.min(1, TOD.state.lights || 0);
   if (!L || on < 0.01 || nightDark(b)) return;
   const st = TOD.state, name = st.a === 'night' || st.b === 'night' ? 'night' : st.a !== 'day' ? st.a : st.b;
   const v = todVariant(art, name), col = PLAYER_COLORS[owner] || '#ffd9a0';

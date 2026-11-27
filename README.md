@@ -1169,7 +1169,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **Terraforming, stage 5: big projects and greening** (Nov 2026, the owner's picks from the stage 5 canvas; `RSV`,
   `LVL`, `GREEN` in `js/defs.js`; the rules in the stage 5 block of `js/sim.js`: `rsvBasin`, `t5Blocked`, `t5Power`,
   `t5Feeds`, `updateReservoir`, `rsvStage`, `rsvBanks`, `rsvSoil`, `lvlHill`, `lvlCuttable`, `lvlPick`, `setLevelAim`,
-  `levelStop`, `updateLeveller`, `lvlCommit`, `greenOpen`, `greenKind`, `greenOwner`, `greenRain`, `greenTick`,
+  `levelStop`, `updateLeveller`, `lvlCommit`, `ridgeOk`, `ridgePlan`, `setLevelRidge`, `ridgePick`, `updateRidge`,
+  `ridgeCommit`, `greenOpen`, `greenKind`, `greenOwner`, `greenRain`, `greenTick`,
   `greenShare`; the panels, the aim, the drawing, the meter, the Greening panel and the minimap layer in
   `js/terraform5.js`). The player's alone: rivals never build them and only meet the lakes and the levelled ground (their
   routes, zones and the sea follow `terrainChanged`). Seeded AI-vs-AI games keep their hashes.
@@ -1202,7 +1203,23 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     those) that `lvlCuttable` allows (open, its own or no one's, no step steeper than a level or than it already was:
     stage 1's rule; a ramp left leading nowhere goes), one `terrainChanged` a batch, `LVL.stone` (2) Stone a level into
     its hopper, `LVL.cap` (60) at most (full, it waits; `out` makes it a Haulers' pickup). `S.tfTiles` marks the cut
-    ground. Done: `b.lvDone`. `ORDERS.levelStop`. A ridge (banking earth into a line) is not built (IDEAS).
+    ground. Done: `b.lvDone`. `ORDERS.levelStop` (either mode; what is cut or piled stays).
+    **Raise a ridge** (Nov 2026, its second mode; `ORDERS.levelRidge`, `setLevelRidge`; panel button `#sh-ridge`, key H:
+    R is Lay road on the same panel): a line of 2 to `LVL.ridgeMost` (12) tiles, each beside the last (dragged straight
+    or tapped end to end in the Terraform mode, tool `ridge`), within `LVL.reach` of its square. `ridgePlan` leaves out
+    a line tile it can't raise (`ridgeOk`: water, rock, lava, tide or a fault, out of reach, `t5Blocked`, resources, a
+    rival's land, already `TERRA.top`); each unbroken run wants `LVL.ridgeH` (2) levels above its own ground in its
+    middle and a level less toward its ends; the ground it may raise is that and the open ground up to `LVL.ridgeSide`
+    (2) tiles out. The crest is capped by the ground round it that it can't raise (stage 1's rule: no step steeper than
+    a level, or than it was; an upper bound relaxed over the tiles), then the shoulders rise only as far as the crest
+    needs; a line tile left level says `no room for its slopes`. `b.rgLine`, `b.rgTs`/`b.rgTo` (the tiles and their
+    levels, the line's first). Each level's `LVL.ridgeStone` (2) Stone is taken from storage before it is piled
+    (`canPay`/`takeGood`, a Wall's way; `b.rgPaid`; with none to spare it waits, `b.rgWait`, looking three times a second,
+    burning no Fuel). With power a level every `LVL.ridgeEvery` (4) s; every `LVL.batch` levels `ridgeCommit` raises
+    them, each the next `ridgePick` (the lowest ground of the ridge, the most to go of those) that `ridgeRaisable`
+    allows, one `terrainChanged` a batch; robots on a rising tile step aside off the ridge (`moveOff`), routes over it
+    are dropped. Done (`b.rgDone`) when nothing more can be raised; Stone taken for a level with nowhere to go goes into
+    its hopper. `P.stats.ridged`. A 12-tile ridge on flat ground: 38 levels, 76 Stone, about 2.5 minutes.
   - **The greening meter** (`greenTick`, every `GREEN.every` 30 ticks while anything green or graded is in the game, or
     in Colony): `S.gm` { `of` open land, `n` green tiles a colony, `k` the player's by kind, `h` its share a minute,
     the last 60 }. Open land (`greenOpen`): ground with no building, road, track or ramp, no lava or tidal flat, and no
@@ -1220,15 +1237,20 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     minutes on Medium, Large and Huge maps.
   - Interface (`js/terraform5.js`): the placing banner's line and the basin outlined teal (or what's in the way red,
     `t5Ranges`); the Reservoir's panel (three teal stage lamps, the banks, power) and the Leveller's (Level a hill `F`,
-    the aim mode `startAim`/`t5AimBanner`/`t5AimFire`, the hill outlined tan; Stop cutting `C`; its hopper); the hill
-    and the dust at the cut on the map (`t5Marks`); the buildings (`t5DrawBuilding`, `t5DrawSite`, `MEGA_LAMPS`).
+    the aim mode `startAim`/`t5AimBanner`/`t5AimFire`, the hill outlined tan; Raise a ridge `H`, `ridgeStart`,
+    `ridgePaint`/`ridgeTap`/`ridgeBanner`/`ridgeConfirm`: the preview tints each tile tan by its rise with its new level,
+    the line dashed, what's left out crossed in red; Stop `C`; its hopper, the ridge's levels and Stone); the hill, the
+    ridge (outlined tan, each tile's level when selected) and the dust at the work, and the spoil falling onto a ridge
+    (`t5Marks`, `t5Dust`); the buildings (`t5DrawBuilding`, `t5DrawSite`, `MEGA_LAMPS`). The Leveller's boom slews to
+    the quarter its work tile lies in (`t5Heading`: `leveller` or `leveller-h1..3`, their own beacon in `MEGA_LAMPS`).
     The meter: a ring in the top bar's land chip (`t5Chip`; tap it), the Greening panel (`openGreening`, Shift+G,
     sheet `green`), the minimap's Green layer (`R.greenMap`, `t5MiniGreen`; the GREEN tag at its foot, `t5MiniTag`;
     on while the panel is open), the win card in a Made ready game (`t5WinCard`).
   - Art (ART_GUIDE Batch 42): `renderer/b/reservoir.js`, `leveller.js` and `t5kit.js`; `renderer/tools/render_t5.sh`
     then `install_t5.py` (each without its moving parts at every time of day, the moving parts in 4 frames, two build
-    stages). Mission: **Made Ready** (Sea and Sky, after Deep Ground: build a Reservoir, fill its basin, cut levels off a
-    mesa with a Leveller, make a share of the land ready). Tests: `node tools/terraform5-test.js`.
+    stages); the Leveller's other three headings `render_t5_slew.sh` then `install_t5_slew.py`. Mission: **Made Ready**
+    (Sea and Sky, after Deep Ground: build a Reservoir, fill its basin, cut levels off a mesa with a Leveller, raise
+    levels of ridge, make a share of the land ready). Tests: `node tools/terraform5-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -5197,7 +5219,12 @@ two-level mesa down to its own level a level every 6 s with no step of more than
 hopper and a ramp left leading nowhere gone; its full hopper waiting and Haulers emptying it; the meter matching a count
 by hand by kind, counting soil, groves, shifted and graded ground and not barren soil or a built tile, worked out once a
 second; the Colony goal won at 60% and not before, and not without the setting; saves mid-fill and mid-cut passing
-`checkSave` and playing on the same; the same game twice the same.
+`checkSave` and playing on the same; the same game twice the same. The ridge: raised to its planned levels (2 up in the
+middle, 1 at the ends, shoulders beside it, none at an end on the plateau's edge), never a step of more than a level, a
+level every 4 s and one `terrainChanged` a batch of 4, 2 Stone a level from storage, a Worker on the line stepping aside
+and a route across it going round; left out on a road, resources, water, a rival's land and a building; refused too long,
+broken, out of reach or by a rival; waiting for Stone without burning Fuel; a save mid-raise passing `checkSave`, in the
+hash, playing on the same; the same ridge twice the same.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

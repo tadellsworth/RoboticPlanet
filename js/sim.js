@@ -6162,6 +6162,9 @@ function doStaff(u, t, dt) {
  * (s of powered work), b.rsvFuel (s left of the Fuel it last took), b.rsvGens (the Generators it took it from), b.rsvS
  * (s toward the banks' next soil). A Leveller: b.lvAim (the tile it was aimed at), b.lvTs (the hill's tiles then),
  * b.lvAcc (s toward the next level), b.lvN (levels cut and not yet put to the ground), b.lvFuel, b.lvGen, b.lvDone.
+ * Raising a ridge instead (ridgePlan): b.rgLine (the line it was given), b.rgTs and b.rgTo (the tiles it raises, the
+ * line's first, and the level each goes to), b.rgPaid (1: the next level's Stone is taken), b.lvAcc and b.lvN as it cuts
+ * (levels piled and not yet put to the ground), b.rgDone.
  */
 const T5_LAYERS = ['rsvBank'];
 
@@ -6409,21 +6412,28 @@ function setLevelAim(b, t) {
   if (!b.built) return 'It isn\'t built yet.';
   const H = lvlHill(b, t | 0);
   if (H.why) return H.why;
-  b.lvAim = t | 0; b.lvTs = H.ts; b.lvAcc = 0; b.lvDone = 0;
-  if (lvlPick(b) < 0) { b.lvAim = undefined; b.lvTs = undefined; return 'Nothing there it can cut: buildings, roads or resources stand on it, or a cut would leave too steep a cliff.'; }
+  const was = b.lvTs;
+  b.lvTs = H.ts;
+  const ok = lvlPick(b) >= 0;
+  b.lvTs = was;
+  if (!ok) return 'Nothing there it can cut: buildings, roads or resources stand on it, or a cut would leave too steep a cliff.';
+  levelStop(b); // (off what it was doing: what it cut or piled stays)
+  b.lvAim = t | 0; b.lvTs = H.ts; b.lvAcc = 0; b.lvDone = 0; b.rgDone = 0;
   return '';
 }
-/** Call Leveller b off its hill (what it has cut stays cut). */
+/** Call Leveller b off its hill or its ridge (what it has cut or piled stays; Stone taken for a level not yet piled goes into its hopper). */
 function levelStop(b) {
   if (!b || b.dead || !BDEFS[b.type].lvl) return;
-  if (b.lvN) lvlCommit(b);
+  if (b.lvN) { if (b.rgTs) ridgeCommit(b); else lvlCommit(b); }
+  if (b.rgTs) ridgeEnd(b);
   b.lvAim = undefined; b.lvTs = undefined; b.lvAcc = 0;
 }
 
-/** The Leveller, each tick: its power, a level off a tile every LVL.every s, the Stone into its hopper. */
+/** The Leveller, each tick: its power, a level off a tile every LVL.every s, the Stone into its hopper (or, raising a ridge, updateRidge). */
 function updateLeveller(b, dt) {
   b.working = false;
-  if (b.lvAim === undefined || b.lvAim === null) { b.status = b.lvDone ? 'Done: the hill is level. Aim it at another (Level a hill)' : 'Idle: aim it at a hill or mesa within reach (Level a hill on its panel)'; return; }
+  if (b.rgTs) { updateRidge(b, dt); return; }
+  if (b.lvAim === undefined || b.lvAim === null) { b.status = b.rgDone ? 'Done: the ridge is raised. Raise another (Raise a ridge) or level a hill' : b.lvDone ? 'Done: the hill is level. Aim it at another (Level a hill)' : 'Idle: aim it at a hill or mesa within reach (Level a hill on its panel), or raise a ridge'; return; }
   const room = Math.floor((LVL.cap - (b.stock.stone || 0)) / LVL.stone) - (b.lvN || 0);
   if (room <= 0) { if (b.lvN) lvlCommit(b); b.status = 'Its STONE hopper is full: Haulers carry the Stone off'; return; }
   if (!t5Power(b, dt, 1, LVL.powReach, LVL.genFuel, 'lvFuel', 'lvGens')) {
@@ -6473,6 +6483,196 @@ function lvlCommit(b) {
     const c = bCentre(b);
     postMsg(b.owner, 'Your Leveller has cut the hill down: the ground is graded to standard.', c.x, c.y, 'good');
   }
+}
+
+/*
+ * Raise a ridge (LVL.ridge*): a line of tiles the Leveller piles earth onto, LVL.ridgeH levels above its ground in the
+ * middle of each unbroken run and a level less at its ends, with shoulders beside it so every step stays one a Ramp could
+ * climb (stage 1's rule). Each level's Stone comes from storage before it is piled (takeGood: a Wall's way).
+ */
+/** Why Leveller b can't raise tile t ('' if it can): its land, its reach, what stands on it. */
+function ridgeOk(b, t) {
+  if (S.terrain[t] === T_WATER) return 'water';
+  if (S.terrain[t] !== T_GROUND) return 'not open ground';
+  if ((S.lava && S.lava[t]) || (S.tidal && S.tidal[t]) || (S.fault && S.fault[t])) return 'unsteady ground';
+  if (footDist(b, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5) > LVL.reach) return 'out of reach';
+  const w = t5Blocked(t);
+  if (w) return w;
+  if (S.res[t]) return 'resources';
+  if (S.owner[t] >= 0 && S.owner[t] !== b.owner) return 'a rival\'s land';
+  if (S.elev[t] >= TERRA.top) return 'as high as the ground goes';
+  return '';
+}
+
+/**
+ * The ridge Leveller b would raise along `line` (tile indices, each beside the last): { ts, to (the level each of ts goes
+ * to; the line's tiles first), rows (each line tile's '' or why it is left out), levels, stone } or { why }. The crest is
+ * capped by the ground round it that it can't raise (each step at most a level, or no steeper than it was), and the
+ * shoulders rise only as far as the crest needs: the highest crest it can make, then the least earth that takes.
+ */
+function ridgePlan(b, line) {
+  const N = S.W * S.H;
+  if (!Array.isArray(line) || line.length < 2) return { why: 'Drag a line of 2 tiles or more.' };
+  if (line.length > LVL.ridgeMost) return { why: `A ridge is ${LVL.ridgeMost} tiles long at most.` };
+  for (let k = 0; k < line.length; k++) {
+    const t = line[k];
+    if (!Number.isInteger(t) || t < 0 || t >= N) return { why: 'Outside the map.' };
+    if (line.indexOf(t) !== k || (k && !tfSides(line[k - 1]).includes(t))) return { why: 'A ridge runs tile by tile, each beside the last.' };
+  }
+  const rows = line.map((t) => ridgeOk(b, t)), want = new Map();
+  for (let k = 0; k < line.length;) { // (each unbroken run: LVL.ridgeH in its middle, a level less toward its ends)
+    if (rows[k]) { k++; continue; }
+    let e = k;
+    while (e + 1 < line.length && !rows[e + 1]) e++;
+    for (let q = k; q <= e; q++) want.set(line[q], Math.min(TERRA.top, S.elev[line[q]] + Math.min(LVL.ridgeH, 1 + Math.min(q - k, e - q))));
+    k = e + 1;
+  }
+  // The ground it may raise: the line's good tiles and the open ground up to LVL.ridgeSide tiles out from them.
+  const E = new Map(), q = [...want.keys()];
+  for (const t of q) E.set(t, 0);
+  for (let h = 0; h < q.length; h++) {
+    const d = E.get(q[h]);
+    if (d >= LVL.ridgeSide) continue;
+    for (const u of tfSides(q[h])) if (!E.has(u) && !line.includes(u) && !ridgeOk(b, u)) { E.set(u, d + 1); q.push(u); }
+  }
+  const step = (x, y) => Math.max(1, Math.abs(S.elev[x] - S.elev[y])); // (the steepest a step between them may be: stage 1's rule)
+  const ub = new Map(), to = new Map();
+  for (const t of q) {
+    let u = want.has(t) ? want.get(t) : TERRA.top;
+    for (const v of tfSides(t)) if (S.terrain[v] === T_GROUND && !E.has(v)) u = Math.min(u, S.elev[v] + step(t, v));
+    ub.set(t, u);
+  }
+  for (let ch = true, n = 0; ch && n < 4 * q.length; n++) {
+    ch = false;
+    for (const t of q) for (const v of tfSides(t)) if (E.has(v)) { const c = ub.get(v) + step(t, v); if (c < ub.get(t)) { ub.set(t, c); ch = true; } }
+  }
+  for (const t of q) to.set(t, want.has(t) ? Math.max(S.elev[t], ub.get(t)) : S.elev[t]);
+  for (let ch = true, n = 0; ch && n < 4 * q.length; n++) {
+    ch = false;
+    for (const t of q) for (const v of tfSides(t)) if (E.has(v)) { const c = Math.min(ub.get(t), to.get(v) - step(t, v)); if (c > to.get(t)) { to.set(t, c); ch = true; } }
+  }
+  const ts = [], lv = [];
+  let levels = 0;
+  for (const t of q) if (to.get(t) > S.elev[t]) { ts.push(t); lv.push(to.get(t)); levels += to.get(t) - S.elev[t]; }
+  for (let k = 0; k < line.length; k++) if (!rows[k] && to.get(line[k]) <= S.elev[line[k]]) rows[k] = 'no room for its slopes';
+  return { ts, to: lv, rows, levels, stone: levels * LVL.ridgeStone };
+}
+
+/** Raise Leveller b's ridge along `line` (an order: levelRidge). '' or why not. */
+function setLevelRidge(b, line) {
+  if (!b || b.dead || !BDEFS[b.type].lvl) return 'That Leveller is gone.';
+  if (!b.built) return 'It isn\'t built yet.';
+  const P = ridgePlan(b, line);
+  if (P.why) return P.why;
+  if (!P.ts.length) { const k = P.rows.findIndex((r) => r); return `Nothing along that line it can raise${k >= 0 ? `: ${P.rows[k]}` : ''}.`; }
+  levelStop(b); // (off what it was doing: what it cut or piled stays)
+  b.rgLine = line.slice(); b.rgTs = P.ts; b.rgTo = P.to; b.rgPaid = 0; b.rgDone = 0; b.lvDone = 0; b.lvAcc = 0; b.lvN = 0;
+  return '';
+}
+
+/** Can Leveller b pile a level onto the k-th tile of its ridge now: below its level, still open, no step left too steep? */
+function ridgeRaisable(b, k) {
+  const t = b.rgTs[k], e = S.elev[t];
+  if (e >= b.rgTo[k] || ridgeOk(b, t)) return false;
+  for (const u of tfSides(t)) {
+    if (S.terrain[u] !== T_GROUND) continue;
+    const v = S.elev[u];
+    if (Math.abs(e + 1 - v) > Math.max(1, Math.abs(e - v))) return false; // (stage 1's rule: every step one a Ramp can climb)
+  }
+  return true;
+}
+/** The tile Leveller b piles onto next: the lowest ground of its ridge, the most to go of those, the line's first (-1: none). */
+function ridgePick(b) {
+  let best = -1, be = Infinity, bl = -1;
+  for (let k = 0; k < (b.rgTs || []).length; k++) {
+    if (!ridgeRaisable(b, k)) continue;
+    const t = b.rgTs[k], e = S.elev[t], l = b.rgTo[k] - e;
+    if (e < be || (e === be && l > bl)) { best = t; be = e; bl = l; }
+  }
+  return best;
+}
+/** The levels still to pile onto Leveller b's ridge. */
+function ridgeLeft(b) {
+  let n = 0;
+  for (let k = 0; k < (b.rgTs || []).length; k++) n += Math.max(0, b.rgTo[k] - S.elev[b.rgTs[k]]);
+  return n;
+}
+
+/** The Leveller raising a ridge, each tick: the next level's Stone from storage, its power, a level every LVL.ridgeEvery s. */
+function updateRidge(b, dt) {
+  if (!b.rgPaid) {
+    if (b.rgWait && S.tick % 10 !== b.id % 10) return; // (waiting for Stone: it looks again three times a second)
+    if (!canPay(b.owner, { stone: LVL.ridgeStone })) {
+      if (b.lvN) ridgeCommit(b);
+      if (b.rgTs) { b.rgWait = 1; b.status = `Waiting for Stone: ${LVL.ridgeStone} from storage for each level it piles`; }
+      return;
+    }
+    takeGood(b.owner, 'stone', LVL.ridgeStone);
+    b.rgPaid = 1; b.rgWait = 0;
+  }
+  if (!t5Power(b, dt, 1, LVL.powReach, LVL.genFuel, 'lvFuel', 'lvGens')) {
+    if (b.lvN) ridgeCommit(b);
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power. It comes back at dawn.' : `Stopped: no power (a Generator with Fuel within ${LVL.powReach} tiles)`;
+    return;
+  }
+  b.working = true;
+  b.lvAcc = (b.lvAcc || 0) + dt * (S.players[b.owner] ? S.players[b.owner].mult : 1);
+  if (b.lvAcc >= LVL.ridgeEvery) {
+    b.lvAcc -= LVL.ridgeEvery;
+    b.lvN = (b.lvN || 0) + 1;
+    b.rgPaid = 0;
+    if (b.lvN >= LVL.batch || b.lvN >= ridgeLeft(b)) ridgeCommit(b);
+  }
+  if (!b.rgTs) return; // (done in that batch)
+  const left = ridgeLeft(b) - (b.lvN || 0);
+  b.status = `Raising the ridge: ${left} level${left === 1 ? '' : 's'} of earth to go, ${LVL.ridgeStone} Stone a level from storage`;
+}
+
+/** Leveller b's ridge so far (b.lvN levels) goes onto the ground: each the next tile ridgePick gives, all at once (one terrainChanged). */
+function ridgeCommit(b) {
+  const n = b.lvN || 0, up = [], P = S.players[b.owner];
+  b.lvN = 0;
+  for (let k = 0; k < n; k++) {
+    const t = ridgePick(b);
+    if (t < 0) break;
+    groveClear(t);
+    S.tfTiles = S.tfTiles || {};
+    if (!S.tfTiles[t]) S.tfTiles[t] = 1;
+    S.elev[t]++;
+    if (S.decor) S.decor[t] = 0;
+    if (S.burnt && S.burnt[t]) delete S.burnt[t];
+    for (const u of tfSides(t)) if (S.ramp[u] && !tfRampHolds(u)) { S.ramp[u] = 0; S.tfTiles[u] = S.tfTiles[u] || 1; }
+    up.push(t);
+  }
+  if (n > up.length) bump(b.stock, 'stone', (n - up.length) * LVL.ridgeStone); // (Stone for levels with nowhere left to go: into its hopper)
+  if (up.length) {
+    if (P) P.stats.ridged = (P.stats.ridged || 0) + up.length;
+    for (const t of up) { const i = t % S.W, j = (t / S.W) | 0; for (let y = j - 1; y <= j + 1; y++) for (let x = i - 1; x <= i + 1; x++) if (inMap(x, y)) markDirty(x, y); }
+    terrainChanged();
+    // Robots on the rising ground step aside, off the ridge; routes over it are worked out again.
+    const set = new Set(up), plan = new Set(b.rgTs);
+    for (const u of S.bots) {
+      if (u.dead || u.inside || u.dropping || u.under || BOTS[u.type].air || BOTS[u.type].sea) continue;
+      const at = tIdx(Math.floor(u.x), Math.floor(u.y));
+      if (set.has(at)) {
+        const to = nearestTile(at, (v) => !plan.has(v) && S.terrain[v] === T_GROUND && !S.bAt[v] && !(S.ewK && S.ewK[v]));
+        if (to >= 0) moveOff(u, to, 0); else dropPath(u);
+      } else if (u.path && u.path.slice(u.pi).some((v) => set.has(v))) dropPath(u);
+    }
+    const t = up[up.length - 1];
+    addFx('dustcloud', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 1.2 });
+  }
+  if (ridgePick(b) < 0) {
+    const all = !ridgeLeft(b), c = bCentre(b);
+    ridgeEnd(b);
+    b.rgDone = 1;
+    postMsg(b.owner, all ? 'Your Leveller has raised its ridge: routes go round it now.' : 'Your Leveller has raised its ridge as far as it can: something stands in the way of the rest.', c.x, c.y, 'good');
+  }
+}
+/** Leveller b leaves its ridge (finished or called off): Stone it took for a level not yet piled goes into its hopper. */
+function ridgeEnd(b) {
+  if (b.rgPaid) bump(b.stock, 'stone', LVL.ridgeStone);
+  b.rgLine = undefined; b.rgTs = undefined; b.rgTo = undefined; b.rgPaid = 0; b.rgWait = 0; b.lvAcc = 0;
 }
 
 /** Is a meter's worth of greening in this game (anything green, or a Colony game, whose top bar shows it)? */
@@ -22895,6 +23095,7 @@ function hashState() {
     if (b.rv) { int(b.id); int(b.rv.lv); int(b.rv.st); int(b.rv.ts.length); }
     if (b.rsvT || b.rsvFuel || b.rsvS) { int(b.id); num(b.rsvT || 0); num(b.rsvFuel || 0); num(b.rsvS || 0); for (const g of b.rsvGens || []) int(g); }
     if (b.lvAim !== undefined || b.lvN || b.lvFuel || b.lvDone) { int(b.id); int(b.lvAim ?? -1); int((b.lvTs || []).length); num(b.lvAcc || 0); int(b.lvN || 0); num(b.lvFuel || 0); int(b.lvDone || 0); for (const g of b.lvGens || []) int(g); }
+    if (b.rgTs || b.rgDone) { int(b.id); int(b.rgPaid || 0); int(b.rgWait || 0); int(b.rgDone || 0); for (const t of b.rgLine || []) int(t); for (let k = 0; k < (b.rgTs || []).length; k++) { int(b.rgTs[k]); int(b.rgTo[k]); } } // (a ridge: its second mode)
   }
   for (const k of T4_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (earthworks, floods, caved tunnels: stage 4)
   for (const b of S.buildings) { // (a Sluice's flood, a Sap Head's sap, what a flood knocked out: stage 4)

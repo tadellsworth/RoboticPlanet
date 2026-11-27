@@ -29,6 +29,8 @@ for (const t of [0, 1]) TOD_KEYS.push(`deepcore@${t}`);
 for (const t of [0, 1]) TOD_KEYS.push(`atmos@${t}`);
 // Terraforming stage 5 (renderer/tools/install_t5.py): the Reservoir and the Leveller (their moving parts, one set, are graded in code).
 for (const t of [0, 1]) TOD_KEYS.push(`reservoir@${t}`, `leveller@${t}`);
+// (and the Leveller with its boom slewed round to the other three quarters: install_t5_slew.py)
+for (const h of [1, 2, 3]) for (const t of [0, 1]) TOD_KEYS.push(`leveller-h${h}@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);
 // The Grader (renderer/tools/install_grader.py): its driving and work frames and the earth ahead of its blade.

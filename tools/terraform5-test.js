@@ -7,7 +7,9 @@
 // a level into its hopper for the Haulers. The greening meter counts the open land made green, the same as a count by
 // hand, and only from what the layers hold; a Colony game with the Made ready goal is won at GREEN.goal. Saves made
 // mid-fill and mid-cut pass checkSave and play on exactly as the game they came from; the same game twice comes out the
-// same. Run: node tools/terraform5-test.js
+// same. Its second mode, Raise a ridge: raised to its planned levels with no step steeper than a level, 2 Stone a level
+// from storage (waiting, burning no Fuel, while there is none), left out where it can't go, a robot on it stepping
+// aside and a route going round it; a save mid-raise and the same ridge twice. Run: node tools/terraform5-test.js
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -148,6 +150,76 @@ const hop = run(mk(), `
 `);
 check('Leveller: with its hopper full it waits; Haulers carry the Stone off', hop.waited && hop.s1 < hop.s0, hop);
 
+// ---- the Leveller's second mode: a ridge raised along a line on the plateau west of the base (its west end on the
+// plateau's edge, a level above the low ground beyond: no room there for a crest)
+const RIDGE = `
+  const lv = addBuilding(0, 'leveller', L.x - 5, L.y - 7, true);
+  gens(L.x - 1, L.y - 8, 1);
+  const Y = L.y - 2, line = []; for (let i = L.x - 8; i <= L.x + 3; i++) line.push(tIdx(i, Y));
+  const stoneHave = () => { let n = 0; for (const b of S.buildings) if (!b.dead && b.owner === 0) n += supplyOf(b, 'stone'); return n; };
+  const steepNow = () => { for (let t = 0; t < S.W * S.H; t++) { if (S.terrain[t] !== T_GROUND || !S.tfTiles || !S.tfTiles[t]) continue; for (const u of tfSides(t)) if (S.terrain[u] === T_GROUND && Math.abs(S.elev[t] - S.elev[u]) > 1) return true; } return false; };
+  Object.assign(globalThis, { lv, Y, line, stoneHave, steepNow });
+`;
+const cR = mk();
+const ridge = run(cR, `
+  ${colony(5)}
+  ${RIDGE}
+  const P = ridgePlan(lv, line), e0 = P.ts.map((t) => S.elev[t]);
+  const X = L.x - 2, before = findPath(X, Y - 3, X, Y + 2, 0);
+  // a Worker standing on the line, where the crest goes
+  const w = addBot(0, 'worker', X + 0.5, Y + 0.5); w.task = null;
+  const why = applyOrder(0, 'levelRidge', [lv.id, line]);
+  const s0 = stoneHave(), t0 = S.time;
+  let steep = 0, tc = 0, onRidge = 0; const was = terrainChanged; globalThis.terrainChanged = () => { tc++; was(); };
+  until(() => { if (S.tick % 60 === 0 && steepNow()) steep++; if (S.tick % 15 === 0 && P.ts.some((t, k) => S.elev[t] > e0[k] && tIdx(Math.floor(w.x), Math.floor(w.y)) === t)) onRidge++; return !lv.rgTs; }, 900);
+  globalThis.terrainChanged = was;
+  const after = findPath(X, Y - 3, X, Y + 2, 0);
+  return { why, levels: P.levels, n: P.ts.length, crest: line.map((t) => S.elev[t]), rows: P.rows, reached: P.ts.every((t, k) => S.elev[t] === P.to[k]), maxUp: Math.max(...P.to.map((v, k) => v - e0[k])),
+    mins: (S.time - t0) / 60, used: s0 - stoneHave(), steep, tc, onRidge, done: lv.rgDone, ridged: S.players[0].stats.ridged, status: lv.status,
+    before: before ? before.length : -1, after: after ? after.length : -1, crosses: after ? after.some((t) => P.ts.includes(t)) : true, marked: P.ts.every((t) => S.tfTiles[t] === 1) };
+`);
+check('ridge: raised to its planned levels, 2 up in the middle and 1 at the ends, shoulders beside it; none where the plateau\'s edge leaves no room', ridge.why === '' && ridge.reached && ridge.done === 1 && ridge.maxUp === LVL.ridgeH &&
+  ridge.crest[0] === 1 && ridge.crest[1] === 2 && ridge.crest[5] === 3 && ridge.crest[11] === 2 && /no room/.test(ridge.rows[0]) && ridge.ridged === ridge.levels && ridge.marked, ridge);
+check('ridge: never a step of more than a level, a level every 4 s, one terrainChanged a batch of 4', ridge.steep === 0 && Math.abs(ridge.mins - (ridge.levels * LVL.ridgeEvery) / 60) < 0.5 && ridge.tc === Math.ceil(ridge.levels / LVL.batch), ridge);
+check('ridge: 2 Stone a level taken from storage', ridge.used === ridge.levels * LVL.ridgeStone, ridge);
+check('ridge: a Worker on the line steps aside; a route across it goes round it', ridge.onRidge === 0 && ridge.before > 0 && ridge.after > ridge.before + 4 && !ridge.crosses, ridge);
+
+// ---- where a ridge can't go, and waiting for Stone
+const refuse = run(mk(), `
+  ${colony(5)}
+  ${RIDGE}
+  const at = (k) => line[k];
+  S.road[at(3)] = 1; S.res[at(5)] = R_ORE; S.amt[at(5)] = 50; S.terrain[at(7)] = T_WATER;
+  terrainChanged();
+  S.owner[at(9)] = 1; // (a rival's land: after the territory is worked out again)
+  const P = ridgePlan(lv, line), e = line.map((t) => S.elev[t]);
+  const long = []; for (let i = L.x - 8; i <= L.x + 5; i++) long.push(tIdx(i, Y));
+  const gap = [line[0], line[2]], far = [tIdx(L.x + 12, L.y + 4), tIdx(L.x + 13, L.y + 4)];
+  const whyLong = applyOrder(0, 'levelRidge', [lv.id, long]), whyGap = applyOrder(0, 'levelRidge', [lv.id, gap]), whyFar = applyOrder(0, 'levelRidge', [lv.id, far]);
+  const foe = applyOrder(1, 'levelRidge', [lv.id, line]);
+  // no Stone to spare: it waits, burning no Fuel; Stone comes in and it goes on
+  for (const b of S.buildings) if (b.owner === 0 && b.stock.stone) b.stock.stone = 0;
+  const g = S.buildings.find((b) => b.type === 'generator' && b.owner === 0 && Math.abs(b.x - (L.x - 1)) < 1);
+  const why = applyOrder(0, 'levelRidge', [lv.id, line]);
+  const f0 = g.stock.fuel; until(() => false, 30);
+  const waited = { status: lv.status, fuel: f0 - g.stock.fuel, up: line.some((t, k) => S.elev[t] !== e[k]), working: lv.working };
+  L.stock.stone = 40; until(() => S.players[0].stats.ridged >= 4, 60);
+  const left = [3, 5, 7, 9].map((k) => S.elev[line[k]] === e[k]);
+  return { rows: P.rows, whyLong, whyGap, whyFar, foe, why, waited, ridged: S.players[0].stats.ridged, left, steep: steepNow() };
+`);
+check('ridge: not on a road, resources, water or a rival\'s land (each left out, the rest raised)', /road/.test(refuse.rows[3]) && /resources/.test(refuse.rows[5]) && /water/.test(refuse.rows[7]) && /rival/.test(refuse.rows[9]) &&
+  refuse.why === '' && refuse.left.every(Boolean) && !refuse.steep, refuse);
+check('ridge: refused too long, broken, out of reach, or by a rival', /at most/.test(refuse.whyLong) && /each beside the last/.test(refuse.whyGap) && /out of reach/.test(refuse.whyFar) && /gone/.test(refuse.foe), refuse);
+check('ridge: with no Stone in storage it waits and burns no Fuel; with Stone it goes on', /Waiting for Stone/.test(refuse.waited.status) && refuse.waited.fuel === 0 && !refuse.waited.up && !refuse.waited.working && refuse.ridged >= 4, refuse);
+const bld = run(mk(), `
+  ${colony(5)}
+  ${RIDGE}
+  const d = addBuilding(0, 'depot', L.x - 3, Y, true);
+  const P = ridgePlan(lv, line);
+  return { rows: P.rows, at: line.indexOf(tIdx(L.x - 3, Y)), raised: P.ts.some((t) => S.bAt[t]) };
+`);
+check('ridge: not on a building (left out; nothing raised under it)', bld.at >= 0 && /building/.test(bld.rows[bld.at]) && !bld.raised, bld);
+
 // ---- the greening meter: the same as a count by hand, and only from the layers
 const cG = mk();
 const meter = run(cG, `
@@ -223,6 +295,31 @@ check('...and plays on exactly as the game it came from', a.h === b.h && a.st ==
 const twice = () => { const c = mk(); mid(c); return goOn(c); };
 const t1 = twice(), t2 = twice();
 check('the same game twice comes out the same (fill, cut, meter)', t1.h === t2.h && t1.cut === t2.cut, { t1, t2 });
+
+// ---- a save mid-raise, played on; the same ridge twice
+const midR = (c) => run(c, `
+  ${colony(9)}
+  ${RIDGE}
+  const w = addBot(0, 'worker', L.x - 1.5, Y + 0.5); w.task = null;
+  applyOrder(0, 'levelRidge', [lv.id, line]);
+  until(() => S.players[0].stats.ridged >= 8 && lv.lvN > 0 && lv.rgPaid, 300);
+  const h0 = hashState(); lv.rgTo[3]--; const h1 = hashState(); lv.rgTo[3]++;
+  return { up: S.players[0].stats.ridged, n: lv.lvN, paid: lv.rgPaid, hashed: h0 !== h1 };
+`);
+const cRA = mk(), cRB = mk();
+const mr = midR(cRA);
+const savedR = run(cRA, 'return serializeGame();');
+let saveROk = true;
+try { run(cRB, `checkSave(JSON.parse(${JSON.stringify(savedR)})); return 1;`); } catch (e) { saveROk = String(e); }
+const loadedR = run(cRB, `deserializeGame(${JSON.stringify(savedR)}); const lv = S.buildings.find((b) => b.type === 'leveller'); return { h: hashState(), ts: lv.rgTs.length, line: lv.rgLine.length };`);
+const hR0 = run(cRA, 'return hashState();');
+const goOnR = (c) => run(c, `for (let k = 0; k < 30 * 200; k++) { if (k % 30 === 0) for (const u of S.bots) u.bat = 100; simStep(SIM_STEP); } const lv = S.buildings.find((b) => b.type === 'leveller'); let e = 0; for (let t = 0; t < S.W * S.H; t++) if (S.tfTiles && S.tfTiles[t]) e += S.elev[t]; return { h: hashState(), up: S.players[0].stats.ridged, done: lv.rgDone, e };`);
+const ra = goOnR(cRA), rb = goOnR(cRB);
+check('a save made mid-raise (levels piled, Stone taken) passes checkSave and loads to the same state; the ridge is in the hash', saveROk === true && mr.n > 0 && mr.paid === 1 && mr.hashed && loadedR.h === hR0 && loadedR.ts > 0 && loadedR.line === 12, { saveROk, mr, loadedR, hR0 });
+check('...and plays on exactly as the game it came from, to the finished ridge', ra.h === rb.h && ra.up === rb.up && ra.e === rb.e && ra.done === 1, { ra, rb });
+const tw = () => { const c = mk(); midR(c); return goOnR(c); };
+const r1 = tw(), r2 = tw();
+check('the same ridge twice comes out the same', r1.h === r2.h && r1.up === r2.up && r1.e === r2.e, { r1, r2 });
 
 console.log(fails ? `${fails} failed` : 'all passed');
 process.exit(fails ? 1 : 0);

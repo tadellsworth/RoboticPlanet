@@ -1599,9 +1599,16 @@ const RSV_STAGE_NAMES = ['dry', 'puddling', 'half full', 'full'];
  * its STONE hopper (`cap` at most: full, it waits for the Haulers). The cut ground changes in batches of `batch` levels
  * (one terrainChanged a batch). Tiles with a building, road, track, pipe, ramp, resources or an earthwork on them, or a
  * rival's, are left standing. It opens `at` s into a free-play game. Not on Argos nor in the Hollow.
- * (A ridge, banking the earth into a line: not built; see IDEAS.)
+ * Its second mode, Raise a ridge (an order: levelRidge): a line dragged from its panel, 2 to `ridgeMost` tiles, each
+ * beside the last, within `reach` of its square. Each unbroken run of the line rises `ridgeH` levels above its own ground,
+ * a level less at its two ends; the ground beside a crest (up to `ridgeSide` tiles out) rises with it as a shoulder, so no
+ * step is steeper than a level (stage 1's rule: the ends and the sides are steps a Ramp could climb). The line can't go on
+ * a building, road, track, pipe, ramp, earthwork, resources, a rival's land, water, rock or neutral ground (it breaks
+ * there); nor can a shoulder. With power it piles a level onto a tile every `ridgeEvery` s, the lowest ground first, each
+ * level `ridgeStone` Stone taken from storage before it is piled (a Wall's way: no Hauler; it waits while there is none),
+ * in batches of `batch` levels (one terrainChanged a batch). Robots on a tile as it rises step aside.
  */
-const LVL = { at: 900, reach: 8, powReach: 4, genFuel: 60, every: 6, stone: 2, cap: 60, batch: 4 };
+const LVL = { at: 900, reach: 8, powReach: 4, genFuel: 60, every: 6, stone: 2, cap: 60, batch: 4, ridgeMost: 12, ridgeH: 2, ridgeSide: 2, ridgeEvery: 4, ridgeStone: 2 };
 /*
  * GREEN, the greening meter ("Land made ready"): each colony's share of the map's open land that is green. Open land is
  * ground (not rock, a chasm, the void, lava, tidal flats or water) with nothing built or laid on it (no building, road,
@@ -2035,7 +2042,7 @@ const BDEFS = {
   },
   leveller: {
     name: 'Leveller', short: 'Leveller',
-    desc: 'A bucket-wheel excavator on four track units: aim it at a hill or mesa within 8 tiles (Level a hill on its panel, then tap the hill) and it cuts it down to its own level, a level off a tile every 6 seconds, the highest first, every step left one a Ramp can climb. Each level cut is 2 Stone in its STONE hopper (60 at most), and Haulers carry it off. It needs power: a Generator with Fuel within 4 tiles (a Fuel a minute). The ground it cuts counts as land made ready. One per colony; it opens 15 minutes into a game.',
+    desc: 'A bucket-wheel excavator on four track units: aim it at a hill or mesa within 8 tiles (Level a hill on its panel, then tap the hill) and it cuts it down to its own level, a level off a tile every 6 seconds, the highest first, every step left one a Ramp can climb. Each level cut is 2 Stone in its STONE hopper (60 at most), and Haulers carry it off. Or Raise a ridge on its panel: drag a line of up to 12 tiles within its reach, and it piles the earth there 2 levels high (a level less at the ends, the ground beside it rising as a shoulder, so every step is one a Ramp can climb), a level every 4 seconds for 2 Stone taken from storage. Robots go round the ridge. It needs power: a Generator with Fuel within 4 tiles (a Fuel a minute). The ground it cuts counts as land made ready. One per colony; it opens 15 minutes into a game.',
     cost: { cement: 50, alloy: 40, chip: 12 }, lvl: true, mega: true, foot: 3, out: { stone: 60 }, armor: 100, buildTime: 240,
   },
   atmos: {
