@@ -2600,7 +2600,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   pile on its tile (`dropLoot`, called by `destroyBuilding`; up to `LOOT_MAX`), and a robot destroyed with a load
   drops it (`dropCarried`). On a player's own land its Haulers (a Freight Truck for a big pile; workers with no
   Haulers) collect piles and take them to storage (`dispatch` step 4d, `doCrate`) while no enemy robot or gun is
-  within `CRATE_SAFE` tiles (`foesNear`). Idle or victorious warbots nearby carry one crate each to their side's
+  within `CRATE_SAFE` tiles (`foesNear`). A pile no robot of theirs that can leave the roads finds a way to (walled in by
+  buildings or Earthworks sites, on a ledge) is left by all of that player's robots for `CRATE_RETRY` (10) s (`l.noReach`,
+  per player; every idle robot used to search the whole map for it every tick, and a few Graders' dug Stone ringed by
+  their own sites took a game from 4 ms a step to 70). Idle or victorious warbots nearby carry one crate each to their side's
   nearest garrison and go back for more (`doLoot`; none where their side has no garrison on that ground, `lootNear`:
   stranded across the water they picked a crate up and put it back every tick); a rival's stays home instead while its colony, with a decisive lead,
   gathers an army it already has for a march or a storm (`lootHeld`: `P.massFor` with `lead` and as many armed warbots

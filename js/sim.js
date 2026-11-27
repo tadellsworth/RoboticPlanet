@@ -2305,7 +2305,13 @@ function dispatch(p) {
         }
         if (chosen < 0) break;
         const u = idle.splice(chosen, 1)[0];
-        if (!assignCrate(u, l, good, Math.min(amount, lootLeft(l) - (l.claimed || 0), carryOf(u, good)))) idle.push(u);
+        if (!assignCrate(u, l, good, Math.min(amount, lootLeft(l) - (l.claimed || 0), carryOf(u, good)))) {
+          idle.push(u);
+          // No way there for a robot that can go off road (the pile walled in by buildings or Earthworks sites, on a
+          // ledge): the player's robots leave it for CRATE_RETRY s. Every idle one used to search the whole map for
+          // it every tick (one remembered failure each, so two piles out of reach kept them all trying).
+          if (!roadBound(u)) { (l.noReach = l.noReach || {})[p] = S.time + CRATE_RETRY; break; }
+        }
       }
     }
   }
@@ -4335,6 +4341,20 @@ function graderWork(u, s) {
   if (S.tick % 40 === u.id % 40) addFx('dustcloud', s.x + 0.5, s.y + 0.5, { r: 0.6 });
 }
 
+/**
+ * Has player p a Grader? Worked out once a tick for all players (every waiting site asks every tick: a plan of a
+ * hundred sites used to go through every robot a hundred times a tick).
+ */
+let _tfHas = { S: null, tick: -1, has: null };
+function tfHasGrader(p) {
+  if (_tfHas.S !== S || _tfHas.tick !== S.tick) {
+    const has = new Set();
+    for (const u of S.bots) if (!u.dead && BOTS[u.type].grader) has.add(u.owner);
+    _tfHas = { S, tick: S.tick, has };
+  }
+  return _tfHas.has.has(p);
+}
+
 /** What an Earthworks site shows on its panel. */
 function tfStatus(b) {
   const g = tfGrader(b), owed = storeFunded(b) ? stillOwed(b) : null;
@@ -4344,7 +4364,7 @@ function tfStatus(b) {
   if (b.unlinked && !tfReady(b)) return 'No road to storage yet';
   if (!tfReady(b)) return b.tf.k === 'soil' ? 'Waiting for Fiber and Stone' : 'Waiting for Stone';
   if (g) return 'A Grader is on its way';
-  if (!S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].grader)) return 'Waiting for a Grader: order one at the Bot Foundry';
+  if (!tfHasGrader(b.owner)) return 'Waiting for a Grader: order one at the Bot Foundry';
   return b.tfNoAt > S.time - 45 ? 'No Grader can get beside it: it needs free ground beside it that your robots can reach' : 'Waiting for a Grader';
 }
 

@@ -1134,6 +1134,7 @@ const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
 const LOOT_KEEP = 1e9;    // ...or never, for crates that were always there (the Hollow's side chambers): its `until`
 const CRATE_SAFE = 6;     // haulers collect crates on their own land only with no enemy robot (or gun) within this many tiles
+const CRATE_RETRY = 10;   // seconds a player's robots leave a pile of crates none of them found a way to (walled in by sites, say) before trying again
 const FLAG_LOOT = 8;      // warbots holding a flag carry home crates lying this many tiles from it, with no enemy (the Murmur too) as near (flagLoot)
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.

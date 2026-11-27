@@ -195,6 +195,23 @@ const moat = run(mk(), `
 `);
 check('no robot is left standing in new water: it steps off onto dry land', moat.off && moat.onLand, moat);
 
+// ---- dug Stone walled in by Earthworks sites: the robots don't search the whole map for it every tick (CRATE_RETRY)
+const walled = run(mk(), `
+  ${colony('', 5)}
+  const a = open(L.x, L.y + 6, 4, 12), ai = a % S.W, aj = (a / S.W) | 0;
+  const ring = [];
+  for (let j = aj - 1; j <= aj + 1; j++) for (let i = ai - 1; i <= ai + 1; i++) if (i !== ai || j !== aj) ring.push(tIdx(i, j));
+  const r = applyOrder(0, 'terraform', ['raise', ring]); // (no Grader: the sites stand, a wall round the tile)
+  addLoot(ai, aj, { stone: 2 }, false, 0);
+  let tries = 0;
+  const of = findPath;
+  globalThis.findPath = function (sx, sy, gx, gy, ...rest) { if (gx === ai && gy === aj) tries++; return of(sx, sy, gx, gy, ...rest); };
+  until(() => false, 30);
+  globalThis.findPath = of;
+  return { placed: r.placed, tries, left: (S.loot || []).filter((l) => l.x === ai && l.y === aj).length };
+`);
+check('crates no robot can reach (ringed by Earthworks sites) are tried a few times, not by every idle robot every tick', walled.placed === 8 && walled.left === 1 && walled.tries > 0 && walled.tries <= 12, walled);
+
 // ---- save and load mid-job: the loaded game plays on exactly as the one it came from
 const midSrc = `
   ${colony('Lakes', 23)}
