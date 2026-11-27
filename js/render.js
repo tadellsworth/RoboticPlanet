@@ -1292,6 +1292,7 @@ function paintTile(ctx, i, j, other, blend) {
     ctx.fillStyle = `rgba(101,153,57,${green})`;
     ctx.fillRect(x, y, TP, TP);
   }
+  if (terr === T_GROUND && (S.soil || S.wet || S.tform || S.shift) && !S.ramp[t] && typeof t2PaintTile === 'function') t2PaintTile(ctx, i, j, x, y, t); // (soil, water, the biome shift: js/terraform2.js)
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
@@ -1328,7 +1329,10 @@ function paintTile(ctx, i, j, other, blend) {
  */
 function drawPlant(ctx, v, i, j, x, y, glow) {
   const mix = R.biomeMix?.[tIdx(i, j)] || 0;
-  const local = secondBiomePlant(i, j, S.seed, mix) ? R.secondRegion : R.primaryRegion;
+  const local0 = secondBiomePlant(i, j, S.seed, mix) ? R.secondRegion : R.primaryRegion;
+  // (Ground the biome shift moved on grows its new biome's scenery: js/terraform2.js)
+  const sb = S.shift && S.shift[tIdx(i, j)] && typeof t2ArtBiome === 'function' ? t2ArtBiome(tIdx(i, j)) : null;
+  const local = sb ? { biome: sb, look: BIOME_LOOK[sb] || BIOME_LOOK.desert } : local0;
   const b = local?.biome || R.biome || 'desert', sd = 911;
   let n = 0;
   while (ART[`plant-${b}-${n + 1}`]) n++;
@@ -3134,13 +3138,17 @@ function drawBurnt(ctx, i, j, x, y) {
   }
 }
 
+/** Working loops played slower than 8 frames a second: the Tree Nursery's pivot boom sweeps round in 4 s. */
+const WORK_FPS = { nursery: 4 };
+
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
   // A Stalk is a clump of Lantern Cane drawn in code for its stage (js/reedcane.js; on the map drawStalks draws them, after
   // the ground round them). Here, as an icon (drawDepletedRes), its foot is set a little low so the clump sits in the middle.
   if (type === R_STALK && typeof reedArt === 'function') { drawArt(ctx, reedArt(0, reedState(grow, amt), 'art'), cx, cy + s * 0.28, s); return; }
   const art = ART[RES[type].key] || (type === R_VEIN ? ART['vein-hollow'] : null); // (the Bloom veins' art comes with the Hollow's)
   if (art) {
-    const sc = type === R_STALK || type === R_VEIN ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
+    const lv = type === R_CROP && (S.soil || S.shift) && inMap(i, j) ? soilLv(tIdx(i, j)) : 0; // (richer soil: a bigger, riper crop, SOIL)
+    const sc = (type === R_STALK || type === R_VEIN ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount)) * (1 + 0.12 * lv);
     ctx.globalAlpha = (type === R_STALK || type === R_CROP || type === R_VEIN) && grow < 1 ? 0.85 : 1;
     drawArt(ctx, art, cx, cy, s * sc);
     ctx.globalAlpha = 1;
@@ -3389,7 +3397,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     if (b && BDEFS[type].mega) drawMegaArt(ctx, art, cx, cy, s, b); else drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && !art.anchor ? b.aim : 0);
     if (b && BDEFS[type].mega) megaNight(ctx, art, cx, cy, s, owner, b); // (the Lance's and the Dome's lights at night)
     // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
-    if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
+    if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * (WORK_FPS[type] || 8)) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
     if (icbm && icbm.up > 0) drawSiloIcbm(ctx, b, cx, cy, s, icbm.up, icbm.m);
     if (icbm && icbm.m && !R.inMap) drawNukeSiloAlarm(ctx, b, cx, cy, s, icbm.m);
@@ -6032,6 +6040,7 @@ function drawBot(ctx, u, sx, sy, s) {
 
 /** A robot's battery bar (low: orange; flat: flashing red) and health bar. */
 function botBars(ctx, u, sx, sy, s) {
+  if (S.grove && typeof t2SlowTell === 'function') t2SlowTell(ctx, u, sx, sy, s); // (slowed in a foe's grove: leaves swirl round it, js/terraform2.js)
   if (u.owner === ME && !R.clean && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
     const crit = u.bat < BATTERY.critical;
@@ -7190,6 +7199,7 @@ function render(dtReal) {
   if (S.dam && typeof damGround === 'function') damGround(ctx, ox, oy, z, v0, v1); // (The Dam: the flood, the lakebed: js/dam.js)
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
   if (typeof tfGround === 'function') tfGround(ctx, ox, oy, z, inView); // (the ground of Earthworks being dug and filled, fresh soil, track marks: js/terraform.js)
+  if ((S.grove || S.wet) && typeof t2Ground === 'function') t2Ground(ctx, ox, oy, z, v0, v1); // (groves, sprinklers and their spray, graded with the ground: js/terraform2.js)
   if (S.cave) caveGrade(ctx, ox, oy, z); else todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); } // (Half underground: the sky's light, sunset and weather stay out of the caves)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
@@ -8812,6 +8822,7 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
+  if (def.t2 && typeof t2Ranges === 'function') { t2Ranges(ctx, type, x, y, ox, oy, z, owner); return; } // (stage 2's reach rings: js/terraform2.js)
   if (def.lift) { // (the Orbital Lift: the Generators' reach round its pad, and its fall line: the site's, or the one being placed)
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]);
     ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, (LIFT.reach + 1.5) * z, 0, Math.PI * 2); ctx.stroke();
@@ -10311,6 +10322,7 @@ function rebuildMinimapBase() {
       const key = c === MM_COLORS.ground ? 'ground' : c === MM_COLORS.water ? 'water' : c === MM_COLORS.rock ? 'rock' : null;
       if (key) c = mixBiomeRGB(c, R.secondRegion.mm[key], blend);
     }
+    if (terr === T_GROUND && (S.grove || S.wet || S.shift) && typeof t2MiniColor === 'function') c = t2MiniColor(t, c); // (groves, irrigated and shifted land: js/terraform2.js)
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
     if (terr === T_WATER && ((S.lava && S.lava[t]) || renderBiomeAt(t) === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];

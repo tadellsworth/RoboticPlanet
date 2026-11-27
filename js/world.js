@@ -3227,6 +3227,8 @@ function gatherReach(i, j, type) {
 function scorched(t) { return !!(S.scorch && S.scorch[t] > S.time); }
 /** Was tile t fertile soil, burned for good by napalm or a Torch (S.burnt: see scorchSoil)? Nothing grows there again. */
 function burntSoil(t) { return !!(S.burnt && S.burnt[t]); }
+/** Can a Bio Farm plant a crop on tile t: fertile soil, or wet ground (a Water Pump's: IRR) not scorched, and no grove on it? */
+function cropSoil(t) { return !!((S.fert[t] || (S.wet && S.wet[t] && S.terrain[t] === T_GROUND && !burntSoil(t))) && !(S.grove && S.grove[t])); }
 
 /** Is the resource on tile t a rich deposit (much more than usual, out towards the frontier)? */
 function richRes(t) {
@@ -3454,6 +3456,13 @@ function hollowOn() { return !!(S && S.hollow); }
  * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
 function worldBan(type, t) {
+  // (Terraforming stage 2: nothing to grow on the moon or under a cavern roof, and no water in the lava lakes.)
+  if (BDEFS[type] && BDEFS[type].t2) {
+    if (biome() === 'lunar') return 'Nothing grows on Argos: there is no air or water here for soil, groves or irrigation.';
+    if (hollowOn()) return 'Nothing grows in the Hollow: no light reaches the cavern floor.';
+    if (BDEFS[type].wpump && biome() === 'volcanic') return 'No Water Pump in the Cinderlands: its lakes are lava.';
+    if (S && S.caves && t !== undefined) { const w = caveBan('grower', t); if (w) return w; }
+  }
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (BDEFS[type] && BDEFS[type].atmos && biome() === 'lunar') return 'No Atmosphere Engine on Argos: there is no air here to work with.';
   if (S && S.caves) { // (Half underground: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
@@ -3545,9 +3554,10 @@ function makeDecor() {
   return d;
 }
 
-/** A road, planned road or building clears the plants on its tile for good. */
+/** A road, planned road or building clears the plants on its tile for good (and a grove: GROVE; not an Earthworks site: its Grader does). */
 function clearDecor(t) {
   if (S.decor && S.decor[t]) { S.decor[t] = 0; S.dirtyTiles.push(t); }
+  if (S.grove && S.grove[t]) { const b = S.bAt[t] ? getE(S.bAt[t]) : null; if (!(b && BDEFS[b.type].earthwork)) { groveClear(t); S.dirtyTiles.push(t); } }
 }
 
 /** Every Command Base starts with a ring of road around it, the start of the colony's road network. */
@@ -4231,7 +4241,7 @@ function fertileIn(cx, cy, radius) {
   for (let j = Math.max(0, cy - radius); j <= Math.min(S.H - 1, cy + radius); j++) {
     for (let i = Math.max(0, cx - radius); i <= Math.min(S.W - 1, cx + radius); i++) {
       const t = j * S.W + i;
-      if (!S.fert[t] || S.bAt[t] || S.ramp[t] || S.zone[t] !== zone || (i === cx && j === cy)) continue;
+      if (!cropSoil(t) || S.bAt[t] || S.ramp[t] || S.zone[t] !== zone || (i === cx && j === cy)) continue;
       if (dist2(i, j, cx, cy) <= r2) n++;
     }
   }
@@ -4387,6 +4397,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
   const ban = worldBan(type, t);
   if (ban) return { ok: false, reason: ban };
+  if (def.wpump && !tfSides(t).some((u) => S.terrain[u] === T_WATER && !(S.lava && S.lava[u]))) return { ok: false, reason: 'A Water Pump goes on the shore, right beside water (a lake, the sea or a canal).' };
   if (def.pump) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
   } else if (S.res[t] && !(S.res[t] === R_OIL && (S.road[t] || S.plan[t]))) return { ok: false, reason: 'Clear the resources here first.' }; // (oil under a road stays underground: the road rules below decide)
@@ -6144,7 +6155,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash', 'crk']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand)
+const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; the rest: Terraforming stage 2, T2_LAYERS)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -6332,7 +6343,7 @@ function checkSave(o) {
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     // an Earthworks site's job (TERRA): raise or lower to a level, fill or dig
-    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
+    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig', 'soil', 'clear'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
     if (b.type === 'earthwork' && b.tf == null) bad();
     if (b.keepStaff != null && b.keepStaff !== 1) bad(); // (Keep staffed: ORDERS.keepStaff)
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();

@@ -1458,6 +1458,45 @@ const MISSIONS = [
     ],
   },
 
+  // Terraforming, stage 2: soil, groves and water (SOIL, GROVE, IRR, SHIFT), after the Grader's earthworks.
+  {
+    id: 'greening', name: 'Topsoil', chapter: 'Sea and Sky',
+    brief: 'The Pathfinder sowed this shore from its seed vaults; the Rust took it back. Make soil, plant a grove and water a field on the dry ground.',
+    intro: [
+      '<b>Build → Terraform</b> (<kbd>7</kbd>) also holds three buildings that work the land slowly, over the long game.',
+      'A <b>Composter</b> (<kbd>M</kbd>) turns a Fiber and a Stone a batch into humus: the ground in its ring goes from barren to improving to rich. Rich soil is farmland, and crops on it grow faster and give twice the Fuel.',
+      'A <b>Tree Nursery</b> (<kbd>N</kbd>) has an Agribot plant groves, leaving lanes. They grow from saplings to young trees to a mature grove that bears Fiber, and enemy robots crawl through them.',
+      'A <b>Water Pump</b> (<kbd>P</kbd>) goes beside water. Its water runs along the pipe joined to it and along canals a Grader digs; wet ground turns green, and Bio Farms plant on it, desert or not.',
+      'Soil, water and groves together slowly shift the land itself: the Rust to the Long Grass, then to Greenreach.',
+      'The Grader has two new jobs: <b>Spread soil</b> (<kbd>O</kbd>) and <b>Reclaim</b> (<kbd>E</kbd>), which clears craters and burned ground.',
+    ],
+    mode: 'colony', seed: 31, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 11, limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT7, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.fiber += 40; L.stock.stone += 40; L.stock.cement += 20; L.stock.alloy += 8; L.stock.chip += 4; L.stock.fuel += 10;
+      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (one for the Tree Nursery: the colony's own works its Bio Farm)
+      S.players[0].stats.startBots = S.players[0].stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'composter', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Terraform</b> (<kbd>7</kbd>) → <b>Composter</b> (<kbd>M</kbd>), beside open ground.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='composter']" },
+      { kind: 'richSoil', n: [4, 6, 9], text: 'Enrich {n} tiles to rich soil', at: 'composter',
+        count: (P, S) => { let n = 0; if (S.soil) for (let t = 0; t < S.soil.length; t++) if (S.soil[t] >= SOIL.rich && S.owner[t] === 0) n++; return n; },
+        hint: 'Haulers feed the Composter a Fiber and a Stone a batch: tap it to watch its ring turn rich.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='composter']" },
+      { kind: 'groves', n: [2, 3, 4], text: 'Grow {n} groves to young trees', at: 'nursery',
+        count: (P, S) => { let n = 0; if (S.grove) for (let t = 0; t < S.grove.length; t++) if (S.grove[t] >= GROVE.young && S.grvO[t] === 1) n++; return n; },
+        hint: '<b>Terraform</b> (<kbd>7</kbd>) → <b>Tree Nursery</b> (<kbd>N</kbd>): its Agribot plants groves round it.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='nursery']" },
+      { kind: 'wetCrops', n: [2, 3, 4], text: 'Grow {n} crops on watered dry ground', at: 'wpump',
+        count: (P, S) => { let n = 0; if (S.wet) for (let t = 0; t < S.wet.length; t++) if (S.wet[t] && S.res[t] === R_CROP && !S.fert[t] && S.owner[t] === 0) n++; return n; },
+        hint: '<b>Water Pump</b> (<kbd>P</kbd>) by the lake, pipe out from it (Paths → Pipe), a Bio Farm by the wet ground.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='wpump'], .bcard[data-t='farm']" },
+    ],
+  },
+
   // Chapter 6, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)

@@ -562,6 +562,44 @@ const NAVAL_ON = true; // ships and Ports on naval maps (false switches them off
  * the work, else straight from storage as the work goes (a Wall's way); filling's always comes from storage.
  */
 const TERRA = { time: 24, stone: 4, dug: 2, fill: 8, fillTime: 40, reach: 6, dig: 3, digTime: 36, top: 4, most: 48 };
+/*
+ * Terraforming, stage 2: soil, plants and water (the player's: rivals never build these, see t2Tick in sim.js and the
+ * Terraform tab). Everything here is per tile, in layers made the first time they're needed (S.soil, S.grove, S.wet...).
+ *
+ * SOIL: a Composter (BDEFS.composter) burns a batch (`batch`, brought by Haulers to its `hopper`) every `every` s while
+ * it has one, and every open tile within `reach` of it gains `gain` soil (0 to `max`): barren below `improving`,
+ * improving below `rich`, rich from there. Rich soil is farmland (S.fert): Bio Farms plant on it. On richer soil crops
+ * grow `crop` times as fast and give `yield` Fuel each (barren, improving, rich), and a Grove Planter's stalk groves
+ * hold `stalk` Fiber. The Grader's Spread soil job (Build → Terraform) brings `spread` and adds `spreadGain` in
+ * `spreadTime` s; its Reclaim job clears a crater, ash, scorched soil or a grove in `reclaimTime` s.
+ */
+const SOIL = { reach: 4, every: 15, batch: { fiber: 1, stone: 1 }, hopper: 4, gain: 10, improving: 64, rich: 160, max: 200,
+  crop: [1, 1.25, 1.5], yield: [1, 1, 2], stalk: [3, 4, 5], spread: { fiber: 2, stone: 1 }, spreadTime: 16, spreadGain: 64, reclaimTime: 20 };
+/*
+ * GROVE: a Tree Nursery's Agribot (BDEFS.nursery) plants groves on open ground within `reach` (up to `most` of them),
+ * leaving open lanes (every third row and column from the Nursery stays clear: groveLane), `plantTime` s a grove. A grove
+ * grows a step every `step` s: saplings until `young` steps, young until `mature`, then mature (forest ground: Greenreach
+ * after a biome shift, `forest` times as fast). A mature grove bears a Fiber every `fiberEvery` steps, which the
+ * Nursery's Agribot gathers (`gatherTime` s) and Haulers take from the Nursery. A foe's robots in a grove move at `slow`
+ * of their speed (saplings, young, mature); groves burn (Torches, napalm) and can be cleared (Reclaim, or built over).
+ */
+const GROVE = { reach: 4, most: 18, plantTime: 4, step: 2, young: 40, mature: 120, fiberEvery: 45, gatherTime: 3, slow: [0.85, 0.7, 0.55], forest: 1.5 };
+/*
+ * IRR (irrigation): every `every` s each working Water Pump (BDEFS.wpump, built beside water) sends water along the
+ * pipes joined to it (its owner's) and along canals a Grader dug (water tiles in S.tfTiles), up to `reach` tiles of them.
+ * The ground within `fringe` of a watered pipe or canal is wet, and within `spray` of a pipe's end (a sprinkler) or the
+ * pump. Wet ground (S.wet) turns green, lets Bio Farms plant crops on any ground (desert too), and crops on it grow `crop`
+ * times as fast.
+ */
+const IRR = { every: 4, reach: 60, fringe: 1, spray: 2, crop: 1.2 };
+/*
+ * SHIFT (the biome shift): every `every` s each tile scores a point for improving soil, one more for rich, one if wet
+ * and one if `cover` groves (young or mature) stand on it and round it. With `need` points or more, its terraform level
+ * (S.tform) rises by its score; at `full` the tile shifts a step along its biome's `chain` (S.shift): the Rust to the
+ * Long Grass to Greenreach. Long Grass ground counts as improving soil, Greenreach's grows groves faster. Slow: a
+ * long-game reward (about 10 to 20 minutes a step). Drawn with the two biomes' blend (biomeMixAt's look).
+ */
+const SHIFT = { every: 10, need: 2, cover: 2, full: 240, chain: { desert: ['savanna', 'jungle'], volcanic: ['savanna', 'jungle'], alien: ['savanna', 'jungle'], springs: ['savanna', 'jungle'], savanna: ['jungle'], polar: ['jungle'] } };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
@@ -1648,6 +1686,19 @@ const BDEFS = {
     name: 'Earthworks', desc: 'Ground being raised, lowered, filled or dug by a Grader (Build → Terraform). When the Grader is done the site goes and the new ground stays.',
     cost: { stone: 1 }, earthwork: true, armor: 4, buildTime: 20,
   },
+  // Terraforming, stage 2 (SOIL, GROVE, IRR, SHIFT): on the Terraform tab. `t2`: the player's alone (rivals never build them).
+  composter: {
+    name: 'Composter', desc: 'A rotary drum that turns Fiber and Stone into humus and spreads it round. Haulers bring a Fiber and a Stone for each batch; every open tile in reach grows richer over time, from barren to improving to rich. Rich soil is farmland, and crops on richer soil grow faster and give more Fuel.',
+    cost: { cement: 2, fiber: 2 }, compost: true, t2: true, inp: SOIL.batch, hopper: SOIL.hopper, radius: SOIL.reach, armor: 8, buildTime: 10,
+  },
+  nursery: {
+    name: 'Tree Nursery', desc: 'An Agribot plants groves of Earth trees on open ground nearby, leaving lanes between them. They grow from saplings to young trees to a mature grove, which bears Fiber now and then for the Agribot to gather. Enemy robots crawl through them. Groves burn, and can be cleared.',
+    cost: { fiber: 3, cement: 2 }, staff: true, crew: 'agribot', nursery: true, t2: true, radius: GROVE.reach, out: { fiber: 6 }, armor: 8, buildTime: 10,
+  },
+  wpump: {
+    name: 'Water Pump', desc: 'Built beside water, it lifts it into the pipes joined to it and along canals a Grader dug. The ground beside them turns green and wet, sprinklers water round each pipe\'s end, and Bio Farms can plant crops on wet ground, even desert.',
+    cost: { cement: 3, alloy: 1 }, wpump: true, t2: true, armor: 8, buildTime: 10,
+  },
   repair: {
     name: 'Repair Station',
     desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
@@ -1792,7 +1843,8 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal',
+  'composter', 'nursery', 'wpump']; // (the last three on the Terraform tab, with its tools: js/terraform2.js)
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -2638,6 +2690,9 @@ const FLAVOR = {
   paver: 'Every road built to passenger standard. No passengers yet.',
   grader: 'Levels the ground the Pathfinder surveyed for the arks. The survey is thirty-one years old; the ground has moved.',
   earthwork: 'Cut and fill, to the Accord grade. Somebody will want a level place to land.',
+  composter: 'Humus to the Accord soil standard, bagged and stacked. The gardens it was for are still on the plan.',
+  nursery: 'Seed stock from the Pathfinder\'s vaults, planted out on schedule. Shade for a park nobody has walked in.',
+  wpump: 'Lifts water to the fields at the rate set for a colony of four thousand. The rate has not been revised.',
   express: 'Arterial, built to the standard. Speed limit posted. Nobody reads it.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',

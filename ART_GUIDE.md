@@ -2080,6 +2080,38 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 36: Terraforming stage 2, the Composter, Tree Nursery, Water Pump and groves (installed; soil, water and the shift drawn in code)
+
+Stage 2 of terraforming (Nov 2026; README, "Terraforming, stage 2") went through Claude Design: the concept canvas
+https://claude.ai/artifact/1bsbpFiHTePyrnikd7Mxgn showed three concepts for each building, the groves, the soil, the
+irrigation, the biome shift and the Grader's new jobs. The owner said "do your picks": **Composter concept A "Drum"**,
+**Tree Nursery concept C "Pivot"**, **Water Pump concept B "Screw Lift"**. Rendered with `renderer/` like the other
+buildings (the 57° view on the shared pad, 512 px, `B3D` framing; both teams, the third and fourth recoloured from the
+rival's, `recolorArt`; morning, evening and night), each with an 8-frame working loop of only its moving parts
+(`part=work`, the rest depth only: `renderer/b/worklib.js`) at every time of day. Scenes: `renderer/b/composter.js`,
+`nursery.js`, `wpump.js`, `grove.js`, `sprinkler.js` (shared parts in `t2kit.js`); `renderer/tools/render_t2.sh`
+renders them all (about 140 renders, 40 minutes), `renderer/tools/install_t2.py` installs them as WebP. Drawn by
+`js/terraform2.js` and the usual building code.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `composter@0`, `@1` (+ times of day) | A long rotary drum on roller cradles, fed by a conveyor from a hopper of straw, spilling humus onto a heap; a vent stack over a biofilter, a control hut, bagged humus on pallets. Its accent is an earthy amber (`#d6a04a`), not the Chip Fab's lime | As any building |
+| `composter-work-0`…`7` (+ times of day) | The drum turning one rib's pitch a loop (seamless: seven ribs, no hatch on it) and the steam off the stack and the heap | Over it while it composts, 8 a second |
+| `nursery@0`, `@1`, `nursery-base@0`, `@1` (+ times of day) | A round bed of saplings in rings, older at the rim, a centre pivot; a seed store and pump skid. `-base`: without the boom | `nursery-base` under the loop while it works (as the Oil Pump's `pump-base`) |
+| `nursery-work-0`…`7` (+ times of day) | The pivot's two-armed boom on wheeled towers, sweeping half a turn a loop, its drop sprinklers misting | Played at 4 a second (`WORK_FPS`): a full sweep every 4 s |
+| `wpump@0`, `@1` (+ times of day) | An Archimedes screw in an open trough lifting water from a sump on the water side to a header tank; pipes out of the front; a drive house, a kiosk. Key `wpump` (the Oil Pump has `pump`) | As any building |
+| `wpump-work-0`…`7` (+ times of day) | The screw's flights turning a full turn a loop, the spill into the tank | Over it while it works |
+| `grove-1-1`…`grove-3-4` | A grove, one tile (14 world units across: the crowns reach a little past it), 256 px, on a shadow catcher, seen like the plants (orthographic, 70°): stage 1 staked saplings with mulch rings and guards, 2 young trees, 3 mature broadleaves and spruce; four variants of which trees stand where. Re-cut from the canvas's 3 × 3 groves | `t2Ground`, with the ground (graded for the time of day with it, so no re-lit versions): 1.4 tiles across, the variant from the tile's hash; a mature grove bearing Fiber shows pale seed tufts |
+| `sprinkler` | An impact sprinkler head on a riser, a brass collar, a stake with an orange flag, 128 px | At a watered pipe's open end (`pipeSprinkler`), with its spray in code: a jet sweeping round, drops falling in a ring (not on Saver) |
+
+Drawn in code (`js/terraform2.js`), baked with the map: humus darkening barren ground as it enriches, with crumbs
+(rich soil is drawn as the fertile soil it becomes); wet ground greening with tufts and a darker damp edge; the biome
+shift blending the next biome's own ground texture in through noise (the two-biome blend's look, `biomeMixAt`), its
+scenery (the new biome's plant art) taking root. Leaves swirl round a robot slowed in a foe's grove (`t2SlowTell`).
+The Grader's Spread soil and Reclaim use its existing work frames and the Earthworks' ground (`tfSiteGround`: humus or
+fresh earth laid across from its side) with their own glyphs (furrows, a sprout). The minimap shows groves dark green,
+watered ground green and shifted land its new biome's colour.
+
 ### Batch 35: the Grader and the Earthworks (installed; the ground and the plans drawn in code)
 
 Stage 1 of terraforming (Nov 2026; README, "Terraforming, stage 1") needed a new robot and a new kind of site. Their
