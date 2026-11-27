@@ -3003,17 +3003,22 @@ Mine or a Tap on a deposit, so the audit's Chip and Crystal conclusions hold (do
 the Grader's **Earth Bank**, **Fire Trench** and **Dragon's Teeth** (dragged like Walls, rendered as per-tile pieces
 that join), its **Cave in** of Murmur tunnels, the **Sluice** (Radial Gates) and the **Sap Head** (Tunnel Bore A).
 Calls made, for the owner to confirm or change:
-- **Earthworks are terrain, for everyone.** Your own trucks and Bulwarks can't cross your bank either (a Gate-like
-  "your side passes" would make a bank a free Wall). The heavy set (`EW.heavy`): trucks, Tankers, Road Trains,
+- **Earthworks are terrain, for everyone.** DECIDED by the owner (Nov 27 2026): blocking stays as it is. Your own
+  trucks and Bulwarks can't cross your bank or teeth either (a Gate-like "your side passes" would make a bank a free
+  Wall): leave a gap, or build that stretch as a Wall and Gate. How to play says so. The heavy set (`EW.heavy`): trucks, Tankers, Road Trains,
   Crawlers, the Howitzer, Bulwarks, Graders and Brutes. Trucks and Tankers rarely meet one (earthworks never go on
   roads). The Murmur climb over everything but are slowed; their Brutes are heavy for routes the colony plans, not for
   the Murmur's own night routes (unchanged).
 - **Cover:** a bank covers your robots within 1.6 tiles behind it (60% of the damage) from fire from beyond a tile and
   a half; a trench halves any fire on your robots in it, shells and bombs too. A foe's earthworks give you nothing.
 - **Damage:** blasts (anything that leaves a crater: shells, bombs, missiles) and a foe's heavy army robots in the way
-  (2 a shot). Light warbots don't shoot earthworks: they climb over. Should a player be able to order warbots to shoot an
-  enemy earthwork (an Attack order on its tile)? Not built: today only a heavy army robot whose route runs through one
-  breaks it, and blasts.
+  (2 a shot). **Attack order on an earthwork: BUILT (owner's decision, Nov 27 2026).** With warbots selected, a
+  right-click or tap on a foe's Earth Bank, Fire Trench or Dragon's Teeth (Ctrl, Alt or Cmd + right-click for your own
+  or an ally's) sends them to shoot that tile till it breaches (`orderEwShoot`, task `ewshoot`): a heavy robot at the
+  full 2 a shot, a light warbot at `EW.light` (25%) of it, so heavy robots and blasts stay the real way to breach. A
+  coral reticle marks the tile; breached, the order ends and a group's units go back to their flag. Rivals don't use it.
+  Open: on a touch screen there's no way yet to order it on your own earthworks (no Ctrl); a "Force attack" toggle on
+  the selection bar would do it, if play shows it's needed. `EW.light` to tune in play-testing.
 - **The Sluice floods by its own rules, not the Dam map's:** the Dam turns the flood plain into fords and back
   (`terrainChanged` each time, about 15 ms a tile batch), which costs too much for a building a player can open again
   and again. The Sluice's flood is a layer (`S.fld`) drawn over the ground, closing routes while under water and
@@ -3027,9 +3032,9 @@ Calls made, for the owner to confirm or change:
   roughly where (2 tiles off), every 20 s a rival at most, when the head passes under or beside one of its buildings or
   Walls; a computer rival's forts answer it as a raid (`P.raided`). The exit has 20 strength. Robots go through as if
   the sap were a road 0.6 times its length, out of reach meanwhile.
-- **Rivals don't build any of it** (stage 4 is the player's, like 2 and 3). They route round earthworks and floods,
-  their heavy army robots shoot through, their forts answer a tremor. Teaching a Warden to bank its front is the next
-  step if play shows they need it.
+- **Rivals don't build any of it** (stage 4 is the player's, like 2 and 3). DECIDED by the owner (Nov 27 2026): no
+  change for now; revisit after play-testing. They route round earthworks and floods, their heavy army robots shoot
+  through, their forts answer a tremor. Teaching a Warden to bank its front is the next step if play shows they need it.
 - **Not built (follow-ups):** the canvas's runner-ups as upgrade tiers (Gabion Berm, Slit Trench), the caved-in exit's
   rendered look (`tunnel.js c=collapsed`: today the exit just goes, its groove drawn in code), the Mole (a robot bore),
   the Sluice's opening as an 8-frame loop (it switches between shut and open, the spill animated in code), and the flood

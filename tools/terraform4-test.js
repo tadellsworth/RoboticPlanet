@@ -7,7 +7,8 @@
 // out buildings, and closing the ground to routes while the water stands; a Cave in on a Murmur tunnel caves it to a
 // groove the Murmur never dig through and cuts off the exits beyond it; a Sap Head digs its route a tile at a time (its
 // owner alone sees it), a rival feels a tremor as it passes under, it breaks out into an exit its owner's robots go
-// through, and the rival can shoot it down; saves made mid-flood and mid-dig pass checkSave and play on exactly as the
+// through, and the rival can shoot it down; warbots ordered to attack an earthwork tile shoot it (light ones at EW.light of
+// a heavy robot's rate) till it breaks, then go back to their group or stand free; saves made mid-flood and mid-dig pass checkSave and play on exactly as the
 // game they came from; and the same game twice comes out the same. Run: node tools/terraform4-test.js
 const fs = require('node:fs');
 const path = require('node:path');
@@ -181,6 +182,89 @@ const army = run(mk(), `
 `);
 check('a foe\'s heavy army robot shoots a way through Dragon\'s Teeth in its way and walks on through the gap', army.breachedT > 0 && army.at[0] === army.c[0] && army.at[1] === army.c[1] && army.gaps >= 1 && army.breachStat >= 1, army);
 check('a heavy robot never plans through its own side\'s earthworks', !army.ownPath, army);
+
+// ---- an Attack order on an earthwork tile: light warbots at EW.light of a heavy robot's shot, heavy ones at full; it ends at the breach
+const ATK = `
+  ${versus(11)}
+  ${RING}
+  const c = openSq(L.x, L.y, 4, 6), ci = c % S.W, cj = (c / S.W) | 0;
+  for (const n of ['ewK', 'ewO', 'ewH']) t4Layer(n);
+  const set = (i, j, k, o) => { const t = tIdx(i, j); S.ewK[t] = k; S.ewO[t] = o + 1; S.ewH[t] = EW.kinds[EW_KINDS[k]].hp; return t; };`;
+const atk = run(mk(), `
+  ${ATK}
+  const foeBank = set(ci, cj, 1, 1);
+  const ws = [0, 1, 2].map((k) => { const w = addBot(0, 'warbot', ci + 4, cj - 1 + k); w.ammo = 999; return w; });
+  const r = applyOrder(0, 'command', [ws.map((w) => w.id), { i: ci, j: cj, ew: 1 }]);
+  const tasks = ws.map((w) => w.task && w.task.type);
+  let endT = -1;
+  until(() => { for (const w of ws) w.ammo = Math.max(w.ammo, 900); if (S.ewH[foeBank] === 0 && endT < 0) endT = S.time; return endT >= 0; }, 300);
+  const breached = S.ewH[foeBank] === 0;
+  until(() => false, 1);
+  const after = ws.map((w) => w.task ? w.task.type : null);
+  return { r, tasks, breached, endT, after, stat: S.players[0].stats.ewBreached, msgTheirs: S.msgs.some((m) => m.p === 1 && /breached/.test(m.text)) };
+`);
+check('Attack on a foe\'s Earth Bank tile (right-click it): the selected warbots take it as an earthwork order', atk.r.kind === 'ewshoot' && atk.r.n === 3 && atk.tasks.every((k) => k === 'ewshoot'), atk);
+check('...shoot it till it is breached, then the order ends (they stand free); it counts as a breach for us', atk.breached && atk.after.every((k) => k !== 'ewshoot') && atk.stat === 1, atk);
+// the rate: one warbot in reach against a bank, shot by shot (EW.breach x EW.light), and a Bulwark at the full EW.breach
+const rate = run(mk(), `
+  ${ATK}
+  const t = set(ci, cj, 1, 1), w = addBot(0, 'warbot', ci + 2.5, cj + 0.5); w.ammo = 999; w.bat = 100;
+  applyOrder(0, 'command', [[w.id], { i: ci, j: cj, ew: 1 }]);
+  const a0 = w.ammo, h0 = S.ewH[t];
+  until(() => w.ammo <= a0 - 8, 30);
+  const light = { shots: a0 - w.ammo, lost: h0 - S.ewH[t] };
+  // a Bulwark of ours against our own Dragon's Teeth (Ctrl + right-click: the same order)
+  const tt = set(ci, cj + 3, 3, 0), b = addBot(0, 'bulwark', ci + 2.5, cj + 3.5); b.bat = 100;
+  applyOrder(0, 'command', [[b.id], { i: ci, j: cj + 3, ew: 1 }]);
+  const g0 = S.ewH[tt]; let n = 0, cd = 0;
+  until(() => { if (b.cd > cd) n++; cd = b.cd; return n >= 6; }, 30);
+  const heavy = { shots: n, lost: g0 - S.ewH[tt], task: b.task && b.task.type };
+  // no earthwork on the tile: the same right-click is a move order
+  const m = applyOrder(0, 'command', [[w.id], { i: ci + 3, j: cj + 6, ew: 1 }]);
+  // our trench breached by our own order: no "your trench is breached" message
+  const tr = set(ci - 3, cj, 2, 0); S.ewH[tr] = 1; const w2 = addBot(0, 'warbot', ci - 1.5, cj + 0.5); w2.ammo = 99;
+  applyOrder(0, 'command', [[w2.id], { i: ci - 3, j: cj, ew: 1 }]);
+  until(() => S.ewH[tr] === 0, 30);
+  return { light, heavy, move: m.kind, ownTrench: S.ewH[tr], ownMsg: S.msgs.some((m) => m.p === 0 && /Fire Trench is breached/.test(m.text)), EW: EW.light };
+`);
+check(`a light warbot shooting an earthwork takes off EW.light (${EW.light}) of a heavy robot's ${EW.breach} a shot`, rate.light.shots >= 8 && Math.abs(rate.light.lost - Math.floor(rate.light.shots * EW.breach * EW.light)) <= 1, rate);
+check('a heavy robot (a Bulwark) ordered at our own Dragon\'s Teeth shoots them at the full rate', rate.heavy.task === 'ewshoot' && Math.abs(rate.heavy.lost - rate.heavy.shots * EW.breach) <= EW.breach, rate);
+check('the order on a tile with no earthwork is a move; your own trench breached on your order: no warning about it', rate.move === 'move' && rate.ownTrench === 0 && !rate.ownMsg, rate);
+// a group's unit goes back to its flag when the tile breaks
+const grp = run(mk(), `
+  ${ATK}
+  const t = set(ci, cj, 1, 1);
+  const ws = [0, 1].map((k) => { const w = addBot(0, 'warbot', ci + 3, cj + k); w.ammo = 999; return w; });
+  const gid = applyOrder(0, 'agNew', [ws.map((w) => w.id)]);
+  until(() => false, 3);
+  S.ewH[t] = 4;
+  applyOrder(0, 'command', [ws.map((w) => w.id), { i: ci, j: cj, ew: 1 }]);
+  const on = ws.map((w) => w.task && w.task.type);
+  until(() => S.ewH[t] === 0, 60);
+  until(() => false, 1);
+  const g = agById(gid);
+  return { gid: typeof gid, on, back: ws.map((w) => w.task && w.task.type === 'hold' && w.task.rally === g.flag) };
+`);
+check('a group\'s warbots on the order go back to their group\'s flag once the tile is breached', grp.gid === 'number' && grp.on.every((k) => k === 'ewshoot') && grp.back.every(Boolean), grp);
+// saved mid-order: checkSave passes, it loads and plays on the same; a damaged order is refused
+const cE = mk(), cE2 = mk();
+run(cE, `
+  ${versus(11)}
+  // (ground as the map made it, nothing changed by hand: a save only keeps what the game itself changed)
+  const line = run(L.x, L.y, 7, 5, 12), ci = line[0] % S.W, cj = (line[0] / S.W) | 0;
+  for (const n of ['ewK', 'ewO', 'ewH']) t4Layer(n);
+  for (const t of [line[1], line[2]]) { S.ewK[t] = 1; S.ewO[t] = 2; S.ewH[t] = 8; } // (worn down already; Ammo as a warbot carries it)
+  const ws = [0, 1, 2].map((k) => addBot(0, 'warbot', ci + 6.5, cj - 0.5 + k));
+  applyOrder(0, 'command', [ws.map((w) => w.id), { i: ci + 2, j: cj, ew: 1 }]);
+  until(() => S.ewH[line[2]] < 6, 60);
+  globalThis.ESAVE = serializeGame(); return 0;`);
+const ES = JSON.stringify(vm.runInContext('ESAVE', cE));
+const eMid = run(cE2, `const o = JSON.parse(${ES}); checkSave(o); deserializeGame(${ES}); ${HELP} return { n: S.bots.filter((u) => u.task && u.task.type === 'ewshoot').length, h: hashState() >>> 0 };`);
+const eNow = run(cE, 'return hashState() >>> 0;');
+const eA = run(cE, 'until(() => false, 40); return { h: hashState() >>> 0, gap: S.ewH.some((v, t) => S.ewK[t] && !v) };'), eB = run(cE2, 'until(() => false, 40); return { h: hashState() >>> 0, gap: S.ewH.some((v, t) => S.ewK[t] && !v) };');
+check('saved mid-order: it passes checkSave, loads with the order on, and plays on exactly as the game it came from', eMid.n === 3 && eMid.h === eNow && eA.h === eB.h && eA.gap, { eMid, eNow, eA, eB });
+const eBad = run(mk(), `const o = JSON.parse(${ES}); o.bots.find((u) => u.task && u.task.type === 'ewshoot').task.tile = -5; try { checkSave(o); return 'accepted'; } catch (e) { return 'refused'; }`);
+check('checkSave refuses a damaged earthwork order', eBad === 'refused', eBad);
 
 // ---- the Sluice: where it goes, the flood's stages, what the water does, and it going down
 const POND = `${RING}

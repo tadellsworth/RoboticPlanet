@@ -7219,7 +7219,7 @@ function render(dtReal) {
   drawLavaGlow(ctx, ox, oy, z);
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
-  if (typeof t4Marks === 'function' && (S.tremors || R.mode === 'terra' || S.buildings.some((b) => b.sap))) t4Marks(ctx, ox, oy, z, v0, v1); // (your saps' routes, the tremors you feel: js/terraform4.js)
+  if (typeof t4Marks === 'function' && (S.tremors || S.ewK || R.mode === 'terra' || S.buildings.some((b) => b.sap))) t4Marks(ctx, ox, oy, z, v0, v1); // (your saps' routes, the tremors you feel, the earthworks your warbots are shooting: js/terraform4.js)
   if ((S.seams || S.sbed) && typeof t3Marks === 'function') t3Marks(ctx, ox, oy, z, v0, v1); // (the found seams' survey marks and a drill's line to its seam: js/terraform3.js)
   drawReedLights(ctx, ox, oy, z, v0, v1); // (zoomed in, each Stalk's rings lit: js/reedcane.js)
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)

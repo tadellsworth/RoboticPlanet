@@ -5095,8 +5095,8 @@ function ewHit(t, dmg, by) {
     S.ewVer = (S.ewVer || 0) + 1;
     addFx('dustcloud', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 0.9 });
     const o = ewOwner(t), P = S.players[o];
-    if (P && !(P.ewBreachT > S.time - 20)) { P.ewBreachT = S.time; postMsg(o, `${['', 'Your Earth Bank is', 'Your Fire Trench is', 'Your Dragon\'s Teeth are'][k]} breached. A Grader repairs it: drag the same tool over it (Build, 6).`, t % S.W, (t / S.W) | 0, 'bad'); }
-    if (by >= 0 && S.players[by]) S.players[by].stats.ewBreached = (S.players[by].stats.ewBreached || 0) + 1;
+    if (P && by !== o && !(P.ewBreachT > S.time - 20)) { P.ewBreachT = S.time; postMsg(o, `${['', 'Your Earth Bank is', 'Your Fire Trench is', 'Your Dragon\'s Teeth are'][k]} breached. A Grader repairs it: drag the same tool over it (Build, 6).`, t % S.W, (t / S.W) | 0, 'bad'); }
+    if (by >= 0 && by !== o && S.players[by]) S.players[by].stats.ewBreached = (S.players[by].stats.ewBreached || 0) + 1;
   }
 }
 
@@ -5125,6 +5125,84 @@ function ewBreachHit(u, t) {
   shotFx(u.x, u.y, x + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, y + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
   if (isMe(u.owner) || isMe(ewOwner(t))) sfx('hit');
   ewHit(t, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * EW.breach, u.owner);
+}
+
+/*
+ * An Attack order on an earthwork tile (ORDERS.command with `ew`: right-click a foe's, Ctrl or Alt + right-click your
+ * own or an ally's): the selected warbots go within reach of the tile and shoot it until it is breached, a heavy robot at
+ * EW.breach a shot, a light warbot at EW.light of that (task { type: 'ewshoot', tile, go: the tile they head for to get
+ * in reach, -1 not chosen yet, acc: the shots' damage not yet taken off, miss: routes that failed }). Foes that come at
+ * them are fought first, as on any order. Breached (or gone), the order ends: a group's unit goes back to its flag, the
+ * rest stand free (and go home, as idle warbots do). Rivals never give it: their heavy armies break through on the way.
+ */
+/** Send player owner's selected warbots (ids) to shoot the earthwork on tile t. How many went (result.blocked: no route). */
+function orderEwShoot(owner, ids, t, result) {
+  if (!S.ewK || !ewAt(t)) return 0;
+  const x = (t % S.W) + 0.5, y = ((t / S.W) | 0) + 0.5;
+  const armed = orderable(owner, ids).filter((u) => { const bt = BOTS[u.type]; return botArmed(u) && !(bt.siege || bt.air || bt.sea || bt.rail || bt.magpod); });
+  const go = new Map();
+  const bots = armed.filter((u) => {
+    if (!u.inside && dist2(u.x, u.y, x, y) <= sq(armyBldReach(u))) { go.set(u, -1); return true; }
+    const g = ewSpot(u, t);
+    if (g < 0 || !armyOrderRoute(u, g % S.W, (g / S.W) | 0, false)) return false;
+    go.set(u, g);
+    return true;
+  });
+  if (result) result.blocked = armed.length - bots.length;
+  for (const u of bots) { readyForOrder(u); u.task = { type: 'ewshoot', tile: t, go: go.get(u), acc: 0 }; }
+  marchTogether(bots);
+  return bots.length;
+}
+
+/** The tile robot u stands on to shoot the earthwork on tile t: the nearest to it it can stand on in reach, or -1. */
+function ewSpot(u, t) {
+  const ti = t % S.W, tj = (t / S.W) | 0, reach = armyBldReach(u) - 0.3, R0 = Math.ceil(reach), heavy = ewHeavy(u.type);
+  const here = u.inside ? getE(u.inside) : null, ux = here ? here.x + 0.5 : u.x, uy = here ? here.y + 0.5 : u.y;
+  const zone = S.zone[tIdx(Math.floor(ux), Math.floor(uy))];
+  let best = -1, bd = Infinity;
+  for (let j = tj - R0; j <= tj + R0; j++) for (let i = ti - R0; i <= ti + R0; i++) {
+    if (!inMap(i, j)) continue;
+    const v = tIdx(i, j);
+    if ((i - ti) * (i - ti) + (j - tj) * (j - tj) > reach * reach || !walkable(v) || S.bAt[v] || S.zone[v] !== zone || t4Shut(v, heavy) || (v === t && heavy)) continue;
+    const d = dist2(i + 0.5, j + 0.5, ux, uy);
+    if (d < bd) { bd = d; best = v; }
+  }
+  return best;
+}
+
+/** Warbot u's earthwork order done (breached, gone, or it can't): back to its group's flag, or free. */
+function ewShootDone(u) {
+  u.task = null; u.path = null;
+  const g = u.grp ? agById(u.grp) : null;
+  if (g) agJoin(g, agFlag(g), [u]);
+}
+
+/** Warbot u on its earthwork order (updateArmy, when no foe is in the way): to its spot, then shoot the tile till it breaks. */
+function ewShoot(u, t, dt, power) {
+  if (!S.ewK || !ewAt(t.tile) || !botArmed(u)) { ewShootDone(u); return; }
+  const bt = BOTS[u.type], x = (t.tile % S.W) + 0.5, y = ((t.tile / S.W) | 0) + 0.5, reach = armyBldReach(u);
+  if (dist2(u.x, u.y, x, y) <= reach * reach) {
+    u.path = null; u.vel = 0;
+    if (!bt.shield) u.face = datan2(y - u.y, x - u.x);
+    if (u.cd > 0) return;
+    if (!(bt.shield || (botTank(u.type) ? botArmed(u) : useAmmo(u)))) return;
+    u.cd = bt.shield ? BULWARK.reload : 1.0;
+    u.fought = 1;
+    shotFx(u.x, u.y, x + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, y + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: bt.shield ? '#c89bff' : PLAYER_COLORS[u.owner], structure: true });
+    if (isMe(u.owner) || isMe(ewOwner(t.tile))) sfx('hit');
+    t.acc = (t.acc || 0) + EW.breach * (ewHeavy(u.type) ? 1 : EW.light) * power;
+    const n = Math.floor(t.acc);
+    if (n >= 1) { t.acc -= n; ewHit(t.tile, n, u.owner); }
+    if (!ewAt(t.tile)) ewShootDone(u);
+    return;
+  }
+  if (!(t.go >= 0)) { t.go = ewSpot(u, t.tile); u.path = null; }
+  if (t.go < 0) { ewShootDone(u); return; }
+  const r = travel(u, t.go % S.W, (t.go / S.W) | 0, dt);
+  if (r === null || (r && dist2(u.x, u.y, x, y) > reach * reach)) { // (no way there, or there and still not in reach: another spot)
+    t.go = -1; t.miss = (t.miss || 0) + 1;
+    if (t.miss > 4) ewShootDone(u);
+  }
 }
 
 /**
@@ -9495,6 +9573,7 @@ function warbotAct(u, dt) {
   }
   if (t.type === 'loot') { doLoot(u, t, dt); return; }
   if (t.type === 'escort') { doEscort(u, t, dt); return; }
+  if (t.type === 'ewshoot') { ewShoot(u, t, dt, power); return; } // (shooting an earthwork tile: stage 4)
   if (t.type === 'refill') {
     // A Torch going to fill its tank where Fuel is kept, then back to what it was doing (or a garrison).
     const c = getE(t.bld), g = (botTank(u.type) || { good: 'fuel' }).good;
