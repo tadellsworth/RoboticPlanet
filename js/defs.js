@@ -840,16 +840,20 @@ const GUNSHIP = { range: 4.5, hold: 3, reload: 0.7, craft: 3, bot: 2.2, bld: 3 }
 const PDT = { ground: 3, reload: 0.2, craft: 1.5, bot: 0.8, rounds: 30, spin: 0.5, turn: 6 };
 /**
  * Drifting asteroids (space maps: S.space.rocks; spaceSetup and spaceTick in js/sim.js). Rocks drift through the void on
- * set lanes, never over a deck or a rock: each lane is a straight run of void at least `clear` tiles from any ground (and
- * the map's edge), `len` tiles long ([least, most]); a rock swings along it and back, easing at each end, at about `speed`
- * tiles a second. Lanes and rocks come in pairs, each the other's twin by the map's half turn, so both colonies meet the
- * same. Kinds: plain (a hazard: a craft that clips one takes SPACE.bump), Ore-bearing and Crystal-bearing (`amt` of their
- * good). A Mine or a Crystal Tap within `reach` tiles of a passing Ore or Crystal rock mines it as it goes, `mine` goods a
- * second (staffed, and with room in its store). A Shuttle tows an Ore or Crystal rock to its pad, where it is broken up
- * into a field of up to `tiles` deposit tiles beside the pad. A rock towed away or mined out drifts back in on its lane
- * `respawn` s later. `r`: each kind's size (tiles from its middle). `kinds`: the lane pairs on each map.
+ * set orbits (S.space.lanes), never over a deck or a rock: each is an ellipse, every point of it on a tile at least
+ * `clear` tiles' steps from any ground (a whole tile of void between) and `edge` tiles from the map's edge. Where the whole ellipse fits, the rock goes
+ * round and round it (a loop, `loop` tiles round: [least, most]); where only a stretch of it does, it swings along that
+ * arc and back, easing at each end (`len` tiles long: [least, most]); either way at about `speed` tiles a second, and
+ * no thinner than `thin` tiles across its narrow way. Where a rock is follows from the time alone. Orbits and rocks come
+ * in pairs, each the other's twin by the map's half turn, so both colonies meet the same (an orbit round the map's very
+ * middle is its own twin: its two rocks go round half a turn apart). Kinds: plain (a hazard: a craft that clips one
+ * takes SPACE.bump), Ore-bearing and Crystal-bearing (`amt` of their good). A Mine or a Crystal Tap within `reach` tiles
+ * of a passing Ore or Crystal rock mines it as it goes, `mine` goods a second (staffed, and with room in its store). A
+ * Shuttle tows an Ore or Crystal rock to its pad, where it is broken up into a field of up to `tiles` deposit tiles
+ * beside the pad. A rock towed away or mined out drifts back in on its orbit `respawn` s later. `r`: each kind's size
+ * (tiles from its middle). `kinds`: the orbit pairs on each map.
  */
-const DRIFT = { speed: 0.22, clear: 2, len: [8, 26], reach: 5, mine: 0.5, respawn: 240, tiles: 6, amt: { ore: 36, crystal: 28 },
+const DRIFT = { speed: 0.22, clear: 2, edge: 1.5, thin: 0.75, len: [8, 26], loop: [12, 64], reach: 5, mine: 0.5, respawn: 240, tiles: 6, amt: { ore: 36, crystal: 28 },
   r: { plain: 0.7, ore: 0.85, crystal: 0.8, salvage: 0.9, junk: 1.15 }, kinds: { asteroids: ['ore', 'crystal', 'plain', 'plain'], orbital: ['ore', 'crystal', 'plain'],
     graveyard: ['salvage', 'salvage', 'salvage', 'salvage', 'junk', 'junk', 'junk'] },
   // The Graveyard (GRAVE): `salvage`, wreckage a Shuttle tows to its Launch Pad, where it is broken down for these goods (into

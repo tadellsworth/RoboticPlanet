@@ -5083,8 +5083,18 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
           }
           if (near < Infinity) s += Math.max(0, 44 - near) * 0.9; // (stronger than the pull toward the enemy base)
         }
-        // Space: a derelict module its land would cover, not ours yet (the Hulk's haul most of all).
-        if (S.space) for (const m of S.space.mods) { if (modHolder(m) === p) continue; const dm = dist(i, j, m.x + 1, m.y + 1); if (dm <= BDEFS.outpost.terr - 1) s += (m.k === 'hulk' && !m.done ? 26 : 16) - dm; }
+        // Space: a derelict module its land would take in (its shore tile), not ours yet (the Hulk's haul most of all), and
+        // the way to the nearest free one (a chain of Outposts, as toward an Uplink; one across the void counts a little less).
+        if (S.space) {
+          let near = Infinity;
+          for (const m of S.space.mods) {
+            if (modHolder(m) === p || S.owner[m.st] === p || (m.k === 'hulk' && m.done)) continue;
+            const si = m.st % S.W, sj = (m.st / S.W) | 0, dm = dist(i, j, si, sj);
+            if (dm <= BDEFS.outpost.terr - 1.5) s += AI_SPACE.grabValue[m.k] + 6 - dm;
+            if (m.owner < 0) near = Math.min(near, S.zone[m.st] === S.zone[j * S.W + i] ? dm : dm + 6); // (one on another rock: a Dropship lands Workers there once it's in reach, aiSpaceGrab)
+          }
+          if (near < Infinity) s += Math.max(0, 36 - near) * 0.5;
+        }
         if (S.grave && S.grave.owner !== p) { const am = graveMid(), dm = dist(i + 0.5, j + 0.5, am.x, am.y); if (dm <= BDEFS.outpost.terr - 0.5) s += 34 - dm; } // (The Graveyard: the Arbiter's relay, in our land)
         // Crossroads for three: the rich quarter no one landed in draws expansion too.
         if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
@@ -5938,10 +5948,17 @@ function aiDam(p, lander) {
  *     a new target every AI_SPACE.gunEvery s; with none, they wait on guard at their pad.
  *   - Point-Defence: one from AI_SPACE.pd s, and one more for every two enemy Gunships (up to `pdMost`), at once if the
  *     enemy has any.
- *   - Its Outposts lean toward the derelict modules no one holds (aiSearchSpot).
+ *   - Its Outposts lean toward the derelict modules no one holds (aiSearchSpot: one its land would take in, and the way
+ *     to the nearest on that ground), and from AI_SPACE.grab s it goes after one (aiSpaceGrab, every `grabEvery` s): an
+ *     Outpost site whose land takes the module in, the Salvage Hulk with its haul first (`grabValue`). Where its Workers
+ *     can walk, they build it as any site; on a rock no one can walk to (The Ring), Medium and up, a Dropship lands
+ *     `grabWorkers` Workers there first (no warbots: its defence stays home; Workers landed let an Outpost go up there:
+ *     workersLanded), then the site goes up and the Shuttle flies it its goods (Supply by air). Not while it is short of Workers or an army (`grabArmy` of its threshold), nor more than one at a
+ *     time; a site not built in `grabGive` s is called off, and the next waits `grabGap` s.
  */
 const AI_SPACE = { pad: 360, pad2: 900, shuttle: 480, gun: 720, guns: { easy: 0, medium: 1, normal: 2, hard: 3, warlord: 3 }, gunEvery: 20, pdMargin: 1.5,
-  pd: 840, pdMost: 3, towGap: 150, towShort: 25, supplyEvery: 30 };
+  pd: 840, pdMost: 3, towGap: 150, towShort: 25, supplyEvery: 30,
+  grab: 540, grabEvery: 15, grabGive: 420, grabGap: 90, grabWorkers: 2, grabArmy: 0.6, grabValue: { hulk: 30, dock: 20, solar: 16 } };
 /** How much a rival's Gunships want to wreck each kind of enemy building (the rest: 2). */
 const AI_GUN_VALUE = { launchpad: 9, foundry: 8, smelter: 7, fab: 7, refinery: 6, armory: 6, generator: 5, pump: 4, mine: 4, tap: 4, depot: 3, outpost: 3, turret: 3, minigun: 3, charger: 3 };
 
@@ -5952,6 +5969,86 @@ function aiPads(p, me, kinds) {
   if (S.time < AI_SPACE.pad) return 0;
   return S.time >= AI_SPACE.pad2 || aiArmyOf(p) >= AI_AIR.second ? 2 : 1;
 }
+/**
+ * The derelict module rival p goes after next, and where an Outpost of its would take it in: { m, i, j, foot } (foot: its
+ * Workers can walk there from home; else the spot is on a deck or rock they can only be landed on, where it may go once
+ * they stand there: workersLanded) or null. Only one out in no one's land yet (one in a rival's is a war aim, one in ours
+ * is coming) with no enemy warbots by it, the Salvage Hulk while its haul is in it first (AI_SPACE.grabValue), the nearer
+ * home the better. `only`: that module alone.
+ */
+function aiGrabSpot(p, L, only) {
+  const R = BDEFS.outpost.terr - 1.5, R0 = Math.ceil(R), hz = homeZone(p);
+  let best = null, bs = -Infinity;
+  for (const m of S.space.mods) {
+    if ((only && m !== only) || m.owner >= 0 || S.owner[m.st] >= 0 || (m.k === 'hulk' && m.done)) continue;
+    if (S.bots.some((v) => !v.dead && v.owner >= 0 && v.owner !== p && foes(v.owner, p) && isArmy(v) && botArmed(v) && dist2(v.x, v.y, m.x + 1, m.y + 1) <= 64)) continue; // (not into a rival's guns)
+    const si = m.st % S.W, sj = (m.st / S.W) | 0, z = S.zone[m.st], walk = reachZone(p, m.st);
+    for (let j = sj - R0; j <= sj + R0; j++) for (let i = si - R0; i <= si + R0; i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.zone[t] !== z || dist2(i, j, si, sj) > R * R || (S.owner[t] >= 0 && S.owner[t] !== p)) continue;
+      const s = AI_SPACE.grabValue[m.k] - dist(i, j, L.x, L.y) * 0.3 + (z === hz ? 6 : 0);
+      if (s <= bs || wouldBlock(t)) continue;
+      const r = canPlace(p, 'outpost', i, j, true);
+      if (!r.ok && (walk || !/cannot reach this spot/.test(r.reason) || reachMap(p)[t] > BUILD_REACH - 2)) continue; // (out of reach on foot: all but that is checked, and a tile or two inside its reach, for a road side)
+      bs = s; best = { m, i, j, foot: z === hz || walk };
+    }
+  }
+  return best;
+}
+
+/**
+ * Rival p's grab of a derelict module (P.spGrab: { mod, i, j, foot, site, since, sent }): see AI_SPACE. Where it walks,
+ * the site goes up at once; out on a rock, the Dropship lands Workers first (they make the rock a place an Outpost can
+ * go: workersLanded), then the site goes up and the Shuttle flies it its goods.
+ */
+function aiSpaceGrab(p, me, lvl, L) {
+  const P = S.players[p], G = P.spGrab;
+  P.spGrabT = S.time;
+  const ready = () => aiPlanes(p).ready.find((u) => (u.bat ?? 100) > 50);
+  if (G) {
+    const m = S.space.mods.find((q) => q.id === G.mod), b = G.site ? getE(G.site) : null;
+    const live = m && modHolder(m) < 0 && S.time - G.since < AI_SPACE.grabGive && (!G.site || (b && !b.dead && b.owner === p && !b.built));
+    if (live && !G.site) {
+      // Out on a rock: once its Workers stand there, the site; until then a Dropship lands them (again, if none got there).
+      const z = S.zone[tIdx(G.i, G.j)];
+      if (workersLanded(p, z)) {
+        const T = canPlace(p, 'outpost', G.i, G.j, true).ok ? G : aiGrabSpot(p, L, m);
+        if (T && placeSite(p, 'outpost', T.i, T.j).ok) { const s = getE(S.bAt[tIdx(T.i, T.j)]); if (s) { G.site = s.id; s.airSupply = true; } }
+        else G.since = -1e9; // (nowhere it may go after all: given up)
+      } else if (!G.sent || (S.time - G.sent > 150 && !S.bots.some((u) => !u.dead && u.owner === p && u.mission && u.type === 'dropship'))) {
+        const ds = ready();
+        if (ds && !orderSquad(p, ds, G.i, G.j, null, 'worker', AI_SPACE.grabWorkers)) G.sent = S.time;
+      }
+      return;
+    }
+    if (live) return;
+    if (b && !b.dead && b.owner === p && !b.built) demolish(b); // (given up: the site called off)
+    P.spGrab = null; P.spGrabLast = S.time;
+    return;
+  }
+  if (S.time - (P.spGrabLast ?? -999) < AI_SPACE.grabGap || aiSiteCount(p) >= lvl.maxSites || !aiAffordable(p, 'outpost')) return;
+  if (warOn() && aiArmyOf(p) < lvl.threshold * AI_SPACE.grabArmy) return; // (its defence first)
+  let nW = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') nW++;
+  if (nW < AI_ENOUGH + AI_SPACE.grabWorkers) return;
+  const T = aiGrabSpot(p, L);
+  if (!T) return;
+  if (T.foot) {
+    if (!placeSite(p, 'outpost', T.i, T.j).ok) return;
+    const b = getE(S.bAt[tIdx(T.i, T.j)]);
+    if (b) P.spGrab = { mod: T.m.id, i: T.i, j: T.j, foot: 1, site: b.id, since: S.time, sent: 0 };
+    return;
+  }
+  // Out on a rock: a Dropship to land the Workers (ordered if there is none: aiSpace) and a Shuttle to fly the goods.
+  if (S.difficulty === 'easy' || botBanned(p, 'dropship') || botBanned(p, 'shuttle')) return;
+  P.spWantDrop = 1;
+  const ds = ready();
+  if (!ds || !S.bots.some((u) => !u.dead && u.owner === p && u.type === 'shuttle')) return;
+  if (orderSquad(p, ds, T.i, T.j, null, 'worker', AI_SPACE.grabWorkers)) return;
+  P.spGrab = { mod: T.m.id, i: T.i, j: T.j, foot: 0, site: 0, since: S.time, sent: S.time };
+}
+
 /** How many Point-Defence Turrets rival p wants now. */
 function aiPDs(p) {
   if (!S.space || !warOn() || worldBan('pdturret')) return 0;
@@ -6000,8 +6097,8 @@ function aiSpace(p, me, kinds, lvl) {
   if (!L || L.dead) return;
   const pads = me.filter((b) => b.built && BDEFS[b.type].pad);
   if (!pads.length) return;
-  // The craft: a Dropship for a gap (aiAir flies it), a Shuttle, Gunships.
-  if (aiAirFoes(p).length && aiCraftCount(p, me, 'dropship') < 1) aiOrderCraft(p, me, 'dropship');
+  // The craft: a Dropship for a gap (aiAir flies it) or a derelict on a rock no one walks to (aiSpaceGrab), a Shuttle, Gunships.
+  if ((aiAirFoes(p).length || P.spWantDrop) && aiCraftCount(p, me, 'dropship') < 1) aiOrderCraft(p, me, 'dropship');
   if (S.time >= AI_SPACE.shuttle && aiCraftCount(p, me, 'shuttle') < 1) aiOrderCraft(p, me, 'shuttle');
   if (S.grave) aiGrave(p, me, L); // (The Graveyard: salvage, Drop Outposts onto the hulks, the Arbiter)
   const gunWant = warOn() && S.time >= AI_SPACE.gun ? AI_SPACE.guns[S.difficulty] ?? 1 : 0;
@@ -6026,6 +6123,8 @@ function aiSpace(p, me, kinds, lvl) {
       if (best && !orderTow(p, sh, best.id)) P.spTowT = S.time;
     }
   }
+  // Derelicts: an Outpost out to one no one holds.
+  if (S.time >= AI_SPACE.grab && S.time - (P.spGrabT ?? -999) >= AI_SPACE.grabEvery) aiSpaceGrab(p, me, lvl, L);
   // Gunships: off at the richest enemy building no Point-Defence covers, or home on guard.
   if (S.time - (P.spGunT ?? -999) >= AI_SPACE.gunEvery) {
     P.spGunT = S.time;

@@ -4515,7 +4515,8 @@ function homeZone(p) {
 
 /**
  * The bodies of land player p can build on: its Command Base's, and every one where it holds a built store or
- * garrison (a Drop Outpost dropped on another island, a Port founded by sea, an Outpost taken in a landing...).
+ * garrison (a Drop Outpost dropped on another island, a Port founded by sea, an Outpost taken in a landing...), and out
+ * in space every one where its Workers stand (landed by Dropship: workersLanded).
  * Cached for the tick.
  */
 let _buildZones = { S: null, key: '', zone: null, sets: [] };
@@ -4527,8 +4528,19 @@ function buildZones(p) {
   if (set) return set;
   set = new Set([homeZone(p)]);
   for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && (BDEFS[b.type].store || BDEFS[b.type].mil)) set.add(S.zone[tIdx(b.x, b.y)]);
+  if (spaceMap()) for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker' && !u.inside && !u.ferryWait) set.add(S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]); // (out in space: where its Workers stand, landed by Dropship, see workersLanded)
   _buildZones.sets[p] = set;
   return set;
+}
+
+/**
+ * Out in space (spaceMap): does `owner` have Workers standing in area `zone` (landed there by Dropship)? They can build
+ * there (buildZones), an Outpost first, a foothold on a deck or rock no bridge reaches, as a Drop Outpost is on a planet.
+ */
+function workersLanded(owner, zone) {
+  if (!spaceMap() || zone < 0) return false;
+  for (const u of S.bots) if (!u.dead && u.owner === owner && u.type === 'worker' && !u.inside && !u.ferryWait && S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] === zone) return true;
+  return false;
 }
 
 /** The neutral Trade Post on tile t, or null. */
@@ -5161,6 +5173,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   const zones = buildZones(owner);
   if (!zones.has(S.zone[t]) && !(def.ramp && rampSides(t).some((u) => zones.has(S.zone[u]) && !S.bAt[u]))) {
     return { ok: false, reason: def.ramp ? 'Your bots can\'t reach either side of this cliff yet.'
+      : spaceMap() ? 'Your bots cannot reach this spot. Span the gap with a Viaduct, or land Workers here by Dropship: they can build there (an Outpost first).'
       : 'Your bots cannot reach this spot. Find a slope, or build a Ramp from the side they can reach (on another island, hold an Outpost, Drop Outpost or Port there first).' };
   }
   if (def.ramp) {

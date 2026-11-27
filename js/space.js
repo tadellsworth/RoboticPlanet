@@ -15,8 +15,38 @@
  *     no one holds them, lit in the holder's colour once held), bobbing a little.
  *   - In code: the Gunship's purple laser (a white-violet core and an indigo-violet glow, a short bolt, a flare where it
  *     hits: kept apart from the Murmur's violet and Point-Defence's orchid) and Point-Defence's tracers (orchid-white
- *     dashes). With no art installed everything is drawn plainly in code.
+ *     dashes). With no art installed (or not loaded yet: ensureSpaceArt) everything is drawn plainly in code.
  */
+
+/*
+ * The space art (the craft, the Launch Pad, Point-Defence, the drifting rocks, the derelict modules and the Graveyard's
+ * salvage, shards and Arbiter relay, and their re-lit
+ * sets for the time of day: SPACE_TOD_KEYS) loads only on a space map (ensureSpaceArt, from applyBiome), as the
+ * landmarks' and the Murmur's do. In a single-file copy it's a bundle beside the page (space-art.js: the day art and
+ * each time's set). Until it's in, everything here is drawn plainly in code.
+ */
+const SPACE_ART = /^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d|junk|arb)(@\d)?$/;
+const _spaceArt = { state: '' };
+function spaceArtKey(key) { return SPACE_ART.test(key); }
+function ensureSpaceArt() {
+  if (_spaceArt.state || typeof ART_MANIFEST !== 'object') return;
+  _spaceArt.state = 'loading';
+  const keys = Object.keys(ART_MANIFEST).filter(spaceArtKey);
+  const entryOf = (k) => (typeof ART_MANIFEST[k] === 'string' ? { src: ART_MANIFEST[k] } : ART_MANIFEST[k]);
+  const done = () => { _spaceArt.state = 'in'; if (typeof todSpaceIn === 'function') todSpaceIn(); };
+  if (typeof window !== 'undefined' && window.SPACE_BUNDLE) {
+    const go = () => { const d = window.SPACE_DATA && window.SPACE_DATA.day; if (d) for (const k of keys) if (d[k]) loadArtKey(k, { ...entryOf(k), src: d[k] }); done(); };
+    if (window.SPACE_DATA) { go(); return; }
+    const sc = document.createElement('script');
+    sc.src = 'space-art.js';
+    sc.onload = go;
+    sc.onerror = () => { _spaceArt.state = 'failed'; }; // (no bundle: drawn in code)
+    document.head.appendChild(sc);
+    return;
+  }
+  for (const k of keys) loadArtKey(k, entryOf(k));
+  done();
+}
 
 /** The art's frames in tiles across (the top views' W in renderer units / 10), and the look's colours. */
 const SPACE_LOOK = {

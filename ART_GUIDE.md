@@ -2148,6 +2148,11 @@ https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz showed two or three concepts o
 language (faceted gunmetal, thin seams, team glow strips, a sensor visor, no canopy glass: nobody rides in them), in the
 game on The Ring and Orbital platforms by day and in eclipse. The owner's picks:
 
+(All of this batch's art, and its morning, evening and night sets, loads only on a space map: `ensureSpaceArt` in
+`js/space.js`, the keys `SPACE_ART` matches and `SPACE_TOD_KEYS` in `art/tod/tod-keys.js`; in the single file the bundle
+`dist/space-art.js` beside the page. A new space sprite's key must match `SPACE_ART`, in `js/space.js` and
+`tools/build-single.js` alike, or it loads on every map.)
+
 - **Launch Pad: concept A, Cradle Ring**: a round blast deck on a plinth, a lattice service tower with a swing arm, two
   fuel spheres, a hut. Accent **pad lilac `#d9c8ff`** on the deck's signal lamps.
 - **Shuttle: concept A, Frame Tug**: an open cargo frame with six containers in plain view, a sensor cab, four corner

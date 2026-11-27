@@ -1,8 +1,8 @@
 // Headless checks for space expansion, phase 1 (SPACE, GUNSHIP, PDT, DRIFT, DERELICT; the rules in js/sim.js): no aircraft
 // on The Ring and Orbital platforms (and no spacecraft anywhere else), a Launch Pad built and its yard's craft, a Shuttle
 // supplying an Outpost on a deck no bridge reaches, a Dropship landing a squad past a raised drawbridge, a Gunship's
-// lasers and Point-Defence's tracers, the drifting asteroids (lanes clear of the decks, twins in step, the same on every
-// device, mined in passing, towed home, a craft that clips one hurt), each derelict module's hold, a save made mid-flight,
+// lasers and Point-Defence's tracers, the drifting asteroids (curved orbits clear of the decks, twins in step, the same on
+// every device and worked out from the time alone, mined in passing, towed home, a craft that clips one hurt), each derelict module's hold, a save made mid-flight,
 // and two runs of the same game alike.
 // Run: node tools/space-test.js
 const fs = require('node:fs');
@@ -128,7 +128,7 @@ const HELP = `
   check('A craft in the air is out of reach of guns on the ground', r.aloftSafe, r);
 }
 
-// ---- 6. Drifting asteroids: their lanes, the same on every device, mined in passing, towed home, a craft hurt
+// ---- 6. Drifting asteroids: their orbits, the same on every device, mined in passing, towed home, a craft hurt
 {
   const lanes = (shape, seed) => {
     const c = mk();
@@ -148,6 +148,39 @@ const HELP = `
       return { n: S.space.rocks.length, kinds: S.space.rocks.map((r) => r.k).join(), bad, tw, minD, mods: S.space.mods.length, pos: S.space.rocks.map((r) => { S.time = 123.4; const p = rockPos(r); return [p.x.toFixed(6), p.y.toFixed(6)]; }) };
     `);
   };
+  // The orbits: curved (whole loops, or arcs where only a stretch fits), worked out from the time alone (the same point
+  // at the same time, whatever came before), every point two tiles' steps from any ground, mirrored by the half turn;
+  // across seeds and both maps.
+  const orbits = (shape, seed) => run(mk(), `
+    newGame({ seed: ${seed}, mode: 'versus', shape: ${shape === 'ring' ? 'SH_RING' : 'SH_ORB'} }); quiet();
+    const near = (x, y) => { let m = 99; const i0 = Math.floor(x), j0 = Math.floor(y); for (let j = j0 - 3; j <= j0 + 3; j++) for (let i = i0 - 3; i <= i0 + 3; i++) if (!inMap(i, j) || !voidTile(tIdx(i, j)) || orbTile(tIdx(i, j))) m = Math.min(m, Math.max(Math.abs(i - i0), Math.abs(j - j0))); return m; };
+    let close = 0, edge = 0, tw = 0, again = 0, curved = 0, loops = 0, straight = 0, kinds = new Set();
+    for (const L of S.space.lanes) { if (L.x1 !== undefined) straight++; if (L.loop) loops++; kinds.add(L.k); }
+    const P = (r, t) => { S.time = t; return rockPos(r); };
+    for (const r of S.space.rocks) {
+      const tw2 = S.space.rocks.find((o) => o.id === r.tw), L = S.space.lanes[r.lane];
+      let turn = 0, prev = null, prevA = null;
+      for (let t = 0; t < 900; t += 1.5) {
+        const p = P(r, t), q = P(tw2, t);
+        if (near(p.x, p.y) < DRIFT.clear) close++;
+        if (p.x < DRIFT.edge || p.y < DRIFT.edge || p.x > S.W - DRIFT.edge || p.y > S.H - DRIFT.edge) edge++;
+        if (Math.abs(q.x - (S.W - p.x)) > 1e-6 || Math.abs(q.y - (S.H - p.y)) > 1e-6) tw++;
+        if (prev && dist(p.x, p.y, prev.x, prev.y) > 1e-3) { const a = Math.atan2(p.y - prev.y, p.x - prev.x); if (prevA !== null) { let d = a - prevA; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; if (Math.abs(d) < 2.5) turn += Math.abs(d); } prevA = a; }
+        prev = p;
+      }
+      if (turn > 0.5) curved++;
+      // from the time alone: the point at t = 700 is the same asked straight away, after other times, or after a step back
+      const a = P(r, 700); P(r, 13); P(r, 999); const b = P(r, 700);
+      if (a.x !== b.x || a.y !== b.y) again++;
+    }
+    return { n: S.space.rocks.length, close, edge, tw, again, curved, loops, straight, kinds: [...kinds].sort().join() };
+  `);
+  for (const sh of ['ring', 'orbital']) {
+    const res = [1, 2, 3, 4, 5, 6, 7, 8].map((sd) => orbits(sh, sd));
+    const bad = res.filter((o) => o.close || o.edge || o.tw || o.again || o.straight || o.curved < o.n || o.kinds !== 'crystal,ore,plain');
+    check(`${sh}: the asteroids go round curved orbits (no straight lanes; ${res.reduce((n, o) => n + o.loops, 0)} of ${res.reduce((n, o) => n + o.n, 0)} whole loops over 8 seeds), every kind on every map`, !bad.length && res.some((o) => o.loops > 0), bad.length ? bad : res);
+    check(`${sh}: each orbit stays two tiles from any ground and off the map's edge, mirrored by the half turn, and a rock's place follows from the time alone`, res.every((o) => !o.close && !o.edge && !o.tw && !o.again), res);
+  }
   for (const sh of ['ring', 'orbital']) {
     const a = lanes(sh, 21), b = lanes(sh, 21);
     check(`${sh}: drifting asteroids in twin pairs (plain, Ore, Crystal), always over the void with a clear tile round them`, a.n >= 6 && /ore/.test(a.kinds) && /crystal/.test(a.kinds) && /plain/.test(a.kinds) && a.bad === 0 && a.tw === 0 && a.minD > 0, a);
@@ -158,8 +191,8 @@ const HELP = `
     newGame({ seed: 21, mode: 'versus', shape: SH_RING }); quiet();
     const L = getE(S.players[0].lander);
     // a staffed Mine on ground beside an Ore rock's lane
-    const rk = S.space.rocks.find((q) => q.k === 'ore' && dist2(S.space.lanes[q.lane].x0, S.space.lanes[q.lane].y0, L.x, L.y) < dist2(S.space.lanes[q.lane].x0, S.space.lanes[q.lane].y0, S.W - L.x, S.H - L.y)), Ln = S.space.lanes[rk.lane];
-    let best = null; for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) { if (!free(tIdx(i, j))) continue; const d = segDist(Ln, i + 0.5, j + 0.5); if (d <= DRIFT.reach - 0.8 && (!best || d < best[2])) best = [i, j, d]; }
+    const rk = S.space.rocks.find((q) => q.k === 'ore' && dist2(S.space.lanes[q.lane].cx, S.space.lanes[q.lane].cy, L.x, L.y) < dist2(S.space.lanes[q.lane].cx, S.space.lanes[q.lane].cy, S.W - L.x, S.H - L.y)), Ln = S.space.lanes[rk.lane];
+    let best = null; for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) { if (!free(tIdx(i, j))) continue; const d = laneDist(Ln, i + 0.5, j + 0.5); if (d <= DRIFT.reach - 0.8 && (!best || d < best[2])) best = [i, j, d]; }
     const M = addBuilding(0, 'mine', best[0], best[1], true), w = addBot(0, 'worker', M.x, M.y); enterBuilding(w, M); M.staff = w.id; w.task = { type: 'staff', bld: M.id, phase: 'work', node: -1, timer: 999 };
     const a0 = rk.amt, mined = until(() => (M.stock.ore || 0) > 0 && rk.amt < a0, 400);
     const dry = (updateDepleted(M, BDEFS.mine), M.depleted);
@@ -238,6 +271,77 @@ const HELP = `
   const ha = run(a, go), hb = run(b, go), hc = run(c, go);
   check('A save made with craft in flight loads and checks, still flying', ra.ph.every((p) => p === 'go') && rc.ph === 'go' && rc.ok, { ra: ra.ph, rc });
   check('Deterministic: the same game run twice is the same, and so is the one saved and loaded mid-flight', ha.h === hb.h && ha.h === hc.h, { ha: ha.h, hb: hb.h, hc: hc.h, a: ha.craft, c: hc.craft });
+}
+
+// ---- 9. A rival goes after a derelict on a rock its Workers can't walk to: its Dropship lands two Workers there (no
+// warbots), an Outpost site goes up beside them, its Shuttle flies the goods, and the module is taken. Landed Workers let
+// you build where your bots couldn't reach before, on a space map only.
+{
+  const c = mk();
+  const r = run(c, `
+    newGame({ seed: 21, mode: 'versus', shape: SH_RING }); quiet();
+    const L = getE(S.players[0].lander), P = pad(0, L.x, L.y), ds = craft(0, 'dropship', P), sh = craft(0, 'shuttle', P);
+    bump(P.stock, 'fiber', 10); bump(P.stock, 'cement', 20);
+    for (let k = 0; k < 8; k++) addBot(0, 'worker', L.x, L.y);
+    for (let k = 0; k < 6; k++) addBot(0, 'warbot', L.x, L.y);
+    bump(L.stock, 'cement', 40); bump(L.stock, 'alloy', 20);
+    S.time = 600;
+    // an Outpost of its on the home rock's rim, within reach of a module on another rock (its land short of the module)
+    const hz = homeZone(0);
+    let at = null, bd = 1e9;
+    for (const m of S.space.mods) {
+      if (S.zone[m.st] === hz) continue;
+      const si = m.st % S.W, sj = (m.st / S.W) | 0, s2 = spot(si, sj, 7, 9, (i, j) => S.zone[tIdx(i, j)] === hz && S.owner[tIdx(i, j)] < 1 && S.space.mods.every((q) => dist(i, j, q.st % S.W, (q.st / S.W) | 0) > BDEFS.outpost.terr + 1.5));
+      if (s2 && dist(s2[0], s2[1], si, sj) < bd) { bd = dist(s2[0], s2[1], si, sj); at = s2; }
+    }
+    addBuilding(0, 'outpost', at[0], at[1], true); computeTerritory();
+    const T = aiGrabSpot(0, L), before = T ? canPlace(0, 'outpost', T.i, T.j, true).ok : null;
+    const army0 = S.bots.filter((u) => !u.dead && u.owner === 0 && isArmy(u) && !u.task).length;
+    let rode = 0, warbots = 0, took = null;
+    for (let k = 0; k < 30 * 300 && !took; k++) {
+      if (k % 450 === 0) aiSpaceGrab(0, S.buildings.filter((b) => !b.dead && b.owner === 0), DIFFICULTY.normal, L);
+      if (ds.aboard && ds.aboard.length) { rode = Math.max(rode, ds.aboard.length); warbots = Math.max(warbots, ds.aboard.map(getE).filter((u) => u && isArmy(u)).length); }
+      simStep(SIM_STEP);
+      const m = S.space.mods.find((q) => modHolder(q) === 0);
+      if (m) took = [m.k, S.zone[m.st] !== hz, Math.round(S.time - 600)];
+    }
+    const z = T && S.zone[tIdx(T.i, T.j)];
+    // planet maps: Workers standing somewhere give no foothold (only a space map's)
+    newGame({ seed: 4, mode: 'versus', shape: SHAPE_PRESETS.findIndex((s) => s.islands && s.naval && !s.tidal && !s.isles4) }); quiet();
+    const L2 = getE(S.players[0].lander), hz2 = homeZone(0);
+    let far = -1; for (let t = 0; t < S.W * S.H; t++) if (S.terrain[t] === T_GROUND && S.zone[t] !== hz2 && S.zone[t] >= 0) { far = t; break; }
+    const w = addBot(0, 'worker', far % S.W, (far / S.W) | 0); w.x = far % S.W + 0.5; w.y = ((far / S.W) | 0) + 0.5;
+    return { T: T && { k: T.m.k, foot: T.foot }, before, rode, warbots, took, landedZone: z !== hz, planet: buildZones(0).has(S.zone[far]) };
+  `);
+  check('A rival picks a derelict on a rock its Workers can\'t walk to (no Outpost may go there yet)', r.T && !r.T.foot && r.before === false, r);
+  check('Its Dropship lands two Workers there (no warbots), the Outpost goes up and the module is taken', r.rode === 2 && r.warbots === 0 && r.took && r.took[1] && r.landedZone, r);
+  check('Landed Workers give a foothold out in space only (not on a planet)', r.planet === false, r);
+}
+
+// ---- 10. The space art loads only on the space maps (ensureSpaceArt), its re-lit sets for the time of day with it, and
+// the one-file build puts it in a bundle of its own (space-art.js)
+{
+  const files2 = ['art/art-manifest.js', 'art/tod/tod-keys.js', ...files.map((f) => 'js/' + f + '.js'), 'js/render.js', 'js/daynight.js', 'js/landmarks.js', 'js/space.js'];
+  const art = (shape) => {
+    const c = { console, Math, JSON, Map, Set, Array, Object, Number, String, Infinity, Uint8Array, Int8Array, Int16Array, Int32Array, Uint32Array, Float32Array, Float64Array, Uint16Array, sfx: () => {} };
+    vm.createContext(c);
+    vm.runInContext(files2.map((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n;\n'), c);
+    return run(c, `
+      const got = [], srcs = [];
+      loadArtKey = (k) => got.push(k); loadImg = (src) => srcs.push(src);
+      newGame({ seed: 5, mode: 'versus', shape: ${shape} });
+      loadArt(null); applyBiome(); todLoadSet('night');
+      const want = Object.keys(ART_MANIFEST).filter(spaceArtKey);
+      const todWant = SPACE_TOD_KEYS.map((k) => todSrc('night', k)).filter(Boolean);
+      return { space: spaceMap(), want: want.length, got: got.filter(spaceArtKey).length, todWant: todWant.length, tod: srcs.filter((s) => todWant.includes(s)).length,
+        other: got.filter((k) => !spaceArtKey(k)).length, todOther: srcs.filter((s) => !todWant.includes(s)).length, regex: String(SPACE_ART) };
+    `);
+  };
+  const planet = art(0), ring = art('SHAPE_PRESETS.findIndex((s) => s.asteroids)'), orb = art('SHAPE_PRESETS.findIndex((s) => s.orbital)');
+  check('A planet map loads none of the space art, nor its re-lit sets for the time of day (the rest as ever)', !planet.space && planet.want >= 40 && planet.got === 0 && planet.tod === 0 && planet.other > 500 && planet.todOther > 200, planet);
+  check('The Ring and Orbital platforms load all of it, the re-lit sets too', [ring, orb].every((o) => o.space && o.got === o.want && o.todWant >= 40 && o.tod === o.todWant), { ring, orb });
+  const build = fs.readFileSync(path.join(__dirname, 'build-single.js'), 'utf8');
+  check('The one-file build sorts the same keys into a bundle of their own (space-art.js, SPACE_BUNDLE)', build.includes(planet.regex.slice(1, -1).replace(/\\/g, '\\')) && /space-art\.js/.test(build) && /SPACE_BUNDLE = true/.test(build), planet.regex);
 }
 
 if (fails) { console.log(`${fails} failed`); process.exit(1); }

@@ -28235,14 +28235,64 @@ function padStatus(b) {
 function rockById(id) { return S.space ? S.space.rocks.find((r) => r.id === id) || null : null; }
 
 /**
- * Where asteroid r is now: on its lane, swinging from end to end and back (easing at each end), from the time it came in;
- * or with the Shuttle towing it, trailing behind.
+ * Where asteroid r is now: on its orbit (a loop, round and round, or an arc, swung along and back, easing at each end),
+ * worked out from the time it came in alone; or with the Shuttle towing it, trailing behind.
  */
 function rockPos(r) {
   if (r.tow) return { x: r.x, y: r.y };
-  const L = S.space.lanes[r.lane], len = L.len || 1, w = (Math.PI * DRIFT.speed) / len;
-  const a = (S.time - r.t0) * w + r.ph, k = 0.5 - 0.5 * dcos(a);
-  return { x: L.x0 + (L.x1 - L.x0) * k, y: L.y0 + (L.y1 - L.y0) * k };
+  return lanePoint(S.space.lanes[r.lane], S.time - r.t0, r.ph);
+}
+
+/**
+ * The point on orbit L `t` seconds into a rock's drift, at phase `ph`. An orbit is a stretch of an ellipse ({ cx, cy, a,
+ * b, rot } in world units, turned `rot` radians): a whole loop (L.loop) the rock goes round and round, at about
+ * DRIFT.speed tiles a second, or an arc from angle a0 to a1 it swings along and back. (An older save's straight lane,
+ * x0 y0 to x1 y1, swings as it always did.)
+ */
+function lanePoint(L, t, ph) {
+  const len = L.len || 1;
+  if (L.x1 !== undefined) { // (a straight lane, from a save made before the orbits)
+    const k = 0.5 - 0.5 * dcos(t * (Math.PI * DRIFT.speed) / len + ph);
+    return { x: L.x0 + (L.x1 - L.x0) * k, y: L.y0 + (L.y1 - L.y0) * k };
+  }
+  const th = L.loop ? L.a0 + t * (2 * Math.PI * DRIFT.speed) / len + ph : L.a0 + (L.a1 - L.a0) * (0.5 - 0.5 * dcos(t * (Math.PI * DRIFT.speed) / len + ph));
+  return ellPoint(L, th);
+}
+/** The point at angle th on orbit L's ellipse. */
+function ellPoint(L, th) {
+  const ex = L.a * dcos(th), ey = L.b * dsin(th), c = dcos(L.rot), s = dsin(L.rot);
+  return { x: L.cx + ex * c - ey * s, y: L.cy + ex * s + ey * c };
+}
+/** n + 1 points along orbit L's ellipse from angle th to th + span, stepped by turning (only sums and products after the first: the same on every device). */
+function ellPts(L, th, span, n) {
+  const rc = dcos(L.rot), rs = dsin(L.rot), cd = dcos(span / n), sd = dsin(span / n), out = [];
+  let c = dcos(th), s = dsin(th);
+  for (let k = 0; k <= n; k++) {
+    const ex = L.a * c, ey = L.b * s;
+    out.push({ x: L.cx + ex * rc - ey * rs, y: L.cy + ex * rs + ey * rc });
+    const c2 = c * cd - s * sd; s = s * cd + c * sd; c = c2;
+  }
+  return out;
+}
+/** How long orbit L is: a loop's whole way round (Ramanujan's), an arc's length (summed in steps). */
+function laneLen(L) {
+  if (L.loop) { const h = sq(L.a - L.b) / sq(L.a + L.b); return Math.PI * (L.a + L.b) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h))); }
+  const P = ellPts(L, L.a0, L.a1 - L.a0, 64);
+  let n = 0;
+  for (let k = 1; k < P.length; k++) n += dist(P[k - 1].x, P[k - 1].y, P[k].x, P[k].y);
+  return n;
+}
+/** Points along orbit L about every half tile (worked out once a lane: they're the same on every device). */
+const LANE_PTS = new WeakMap();
+function lanePts(L) {
+  let pts = LANE_PTS.get(L);
+  if (pts) return pts;
+  pts = [];
+  if (L.x1 !== undefined) { const n = Math.max(1, Math.ceil(L.len * 2)); for (let k = 0; k <= n; k++) pts.push({ x: L.x0 + ((L.x1 - L.x0) * k) / n, y: L.y0 + ((L.y1 - L.y0) * k) / n }); }
+  else pts = ellPts(L, L.a0, L.loop ? 2 * Math.PI : L.a1 - L.a0, Math.max(8, Math.ceil(L.len * 2)));
+  pts.box = { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) };
+  LANE_PTS.set(L, pts);
+  return pts;
 }
 
 /** Asteroid r slips its tow (the Shuttle lost): it drifts away and a new one comes in on its lane in time. */
@@ -28299,16 +28349,19 @@ function salvageIn(r, b, u) {
   r.tow = 0; r.gone = S.time; r.amt = 0;
 }
 
-/** Does a lane carrying Ore or Crystal (as Mine or Crystal Tap b gathers) pass within DRIFT.reach of b? (A gatherer by the void is never "dry" while one does.) */
+/** Does an orbit carrying Ore or Crystal (as Mine or Crystal Tap b gathers) pass within DRIFT.reach of b? (A gatherer by the void is never "dry" while one does.) */
 function driftReach(b) {
   if (!S.space) return false;
   const g = RES[BDEFS[b.type].gather] && RES[BDEFS[b.type].gather].good, cx = b.x + 0.5, cy = b.y + 0.5;
-  return S.space.rocks.some((r) => r.k === g && segDist(S.space.lanes[r.lane], cx, cy) <= DRIFT.reach);
+  return S.space.rocks.some((r) => r.k === g && laneDist(S.space.lanes[r.lane], cx, cy, DRIFT.reach + 1) <= DRIFT.reach);
 }
-/** Distance from (x, y) to lane L. */
-function segDist(L, x, y) {
-  const dx = L.x1 - L.x0, dy = L.y1 - L.y0, l2 = dx * dx + dy * dy || 1, k = clamp(((x - L.x0) * dx + (y - L.y0) * dy) / l2, 0, 1);
-  return dist(x, y, L.x0 + dx * k, L.y0 + dy * k);
+/** About how far (x, y) is from orbit L (to the nearest of its points, half a tile apart); past `cap` tiles, at least that far. */
+function laneDist(L, x, y, cap = Infinity) {
+  const pts = lanePts(L), B = pts.box, gx = Math.max(B.x0 - x, 0, x - B.x1), gy = Math.max(B.y0 - y, 0, y - B.y1);
+  if (gx * gx + gy * gy >= cap * cap) return Math.sqrt(gx * gx + gy * gy);
+  let m = Infinity;
+  for (const p of pts) m = Math.min(m, dist2(p.x, p.y, x, y));
+  return Math.sqrt(m);
 }
 
 /** Once a second: Mines and Crystal Taps mine the asteroids drifting past them; mined-out and towed-away rocks come back in. */
@@ -28560,7 +28613,7 @@ function shuttleOutpostDown(u) {
 /* -- setting it up (newGame) */
 
 /**
- * The drifting asteroids' lanes and the derelict modules, laid out once when a space map is made (from its seed; see
+ * The drifting asteroids' orbits (S.space.lanes) and the derelict modules, laid out once when a space map is made (from its seed; see
  * DRIFT, DERELICT). Everything in pairs, each the other's twin by the map's half turn, laid out on colony 0's side and
  * turned onto colony 1's. S.space = { lanes, rocks, mods }.
  */
@@ -28569,12 +28622,9 @@ function spaceSetup(seed) {
   const L0 = getE(S.players[0] && S.players[0].lander), L1 = getE(S.players[1] && S.players[1].lander);
   S.space = { lanes: [], rocks: [], mods: [] };
   if (!L0) return;
-  // Clearance: Chebyshev steps from the nearest ground (a deck, a rock, a drawbridge's strip) or the map's edge.
+  // Clearance: Chebyshev steps from the nearest ground (a deck, a rock, a drawbridge's strip).
   const D = new Int16Array(N).fill(-1), q = [];
-  for (let t = 0; t < N; t++) {
-    const i = t % W, j = (t / W) | 0;
-    if (!voidTile(t) || orbTile(t) || i === 0 || j === 0 || i === W - 1 || j === H - 1) { D[t] = 0; q.push(t); }
-  }
+  for (let t = 0; t < N; t++) if (!voidTile(t) || orbTile(t)) { D[t] = 0; q.push(t); }
   for (let h = 0; h < q.length; h++) {
     const t = q[h], i = t % W, j = (t / W) | 0;
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -28584,50 +28634,77 @@ function spaceSetup(seed) {
       if (D[u] < 0) { D[u] = D[t] + 1; q.push(u); }
     }
   }
-  const clear = Math.ceil(DRIFT.clear), at = (x, y) => (inMap(Math.floor(x), Math.floor(y)) ? D[tIdx(Math.floor(x), Math.floor(y))] : 0);
+  // Is (x, y) clear: DRIFT.edge tiles from the map's edge, and the tiles round it (a fifth of a tile each way: the points
+  // tried along an orbit are never a third of a tile apart, so this takes in every point between) at least DRIFT.clear
+  // tiles' steps from every ground tile?
+  const E = DRIFT.edge, m5 = 0.2, cl = (x, y) => D[tIdx(clamp(Math.floor(x), 0, W - 1), clamp(Math.floor(y), 0, H - 1))] >= DRIFT.clear;
+  const clearAt = (x, y) => x >= E && y >= E && x <= W - E && y <= H - E && cl(x - m5, y - m5) && cl(x + m5, y - m5) && cl(x - m5, y + m5) && cl(x + m5, y + m5);
   const mx = (x) => W - x, my = (y) => H - y; // (the half turn, in world units)
   const b0 = { x: L0.x + 0.5, y: L0.y + 0.5 }, b1 = L1 ? { x: L1.x + 0.5, y: L1.y + 0.5 } : { x: W - b0.x, y: H - b0.y }; // (one colony, a mission's: its twin's place stands in)
   const kinds = DRIFT.kinds[S.grave ? 'graveyard' : S.orb ? 'orbital' : 'asteroids'];
-  const lanes = [];
+  const lanes = [], r4 = (v) => Math.round(v * 4) / 4, r2 = (v) => Math.round(v * 100) / 100;
+  const apart = (P, Q, least) => { // (the least distance between two orbits' points, or 12 for any more than that)
+    const A = P.box, B = Q.box, gx = Math.max(A.x0 - B.x1, B.x0 - A.x1, 0), gy = Math.max(A.y0 - B.y1, B.y0 - A.y1, 0);
+    if (gx * gx + gy * gy >= 144) return 12;
+    let m = Infinity;
+    for (const p of P) for (const o of Q) { m = Math.min(m, dist2(p.x, p.y, o.x, o.y)); if (m < least * least) return 0; }
+    return Math.sqrt(m);
+  };
   for (const k of kinds) {
     let best = null, bs = -Infinity;
-    for (let n = 0; n < (S.grave ? 3000 : 1500); n++) {
-      const px = 1 + rng() * (W - 2), py = 1 + rng() * (H - 2);
-      if (at(px, py) < clear) continue;
-      // (through a point on colony 0's side of the map, as far each way as the void runs clear, up to the longest)
-      if (dist2(px, py, b0.x, b0.y) >= dist2(px, py, b1.x, b1.y)) continue;
-      const a = rng() * Math.PI * 2, ca = dcos(a), sa = dsin(a);
-      let f = 0, bk = 0;
-      while (f + bk < DRIFT.len[1] && at(px + ca * (f + 0.5), py + sa * (f + 0.5)) >= clear) f += 0.5;
-      while (f + bk < DRIFT.len[1] && at(px - ca * (bk + 0.5), py - sa * (bk + 0.5)) >= clear) bk += 0.5;
-      const len = f + bk;
-      if (len < DRIFT.len[0] - (S.grave ? 2 : 0)) continue; // (The Graveyard: its void is crowded with hulks, so a lane may be a little shorter and closer to the next)
-      const x0 = px - ca * bk, y0 = py - sa * bk, x1 = px + ca * f, y1 = py + sa * f, cxm = (x0 + x1) / 2, cym = (y0 + y1) / 2;
-      const L = { x0: Math.round(x0 * 4) / 4, y0: Math.round(y0 * 4) / 4, x1: Math.round(x1 * 4) / 4, y1: Math.round(y1 * 4) / 4, len: 0, k };
-      L.len = Math.round(dist(L.x0, L.y0, L.x1, L.y1) * 100) / 100;
-      let ok = true; // (the lane as rounded: clear all along it, a sample every quarter tile)
-      for (let q = 0, nq = Math.ceil(L.len * 4); q <= nq && ok; q++) if (at(L.x0 + ((L.x1 - L.x0) * q) / nq, L.y0 + ((L.y1 - L.y0) * q) / nq) < clear) ok = false;
-      if (!ok) continue;
-      const twin = { x0: mx(L.x0), y0: my(L.y0), x1: mx(L.x1), y1: my(L.y1) };
-      // Apart from its own twin and the other lanes (each rock its own room), the twin on clear void too.
-      if ([[twin.x0, twin.y0], [twin.x1, twin.y1], [(twin.x0 + twin.x1) / 2, (twin.y0 + twin.y1) / 2]].some(([x, y]) => at(x, y) < clear)) continue;
-      const sep = Math.min(segSeg(L, twin), ...lanes.map((o) => segSeg(L, o)));
-      if (sep < (S.grave ? 3 : 4)) continue;
+    for (let pass = 0; pass < 2 && !best; pass++) for (let n = 0; n < (S.grave ? 2500 : 2000); n++) { // (none found: once more, a little closer to the others and shorter)
+      // An ellipse round a point on colony 0's side of the map, or now and then round the map's very middle (an orbit
+      // both colonies share, their rocks half a turn apart), of any size and turn that fits.
+      const mid = rng() < 0.06;
+      const cx = mid ? W / 2 : r4(1 + rng() * (W - 2)), cy = mid ? H / 2 : r4(1 + rng() * (H - 2));
+      if (!mid && dist2(cx, cy, b0.x, b0.y) >= dist2(cx, cy, b1.x, b1.y)) continue;
+      const ea = r2(2 + rng() * (DRIFT.loop[1] / 5)), eb = r2(Math.max(S.grave ? DRIFT.thin / 2 : DRIFT.thin, ea * (0.08 + rng() * 0.92))), rot = Math.round(rng() * 3141) / 1000;
+      const L = { cx, cy, a: ea, b: eb, rot, a0: 0, a1: 2 * Math.PI, loop: 1, len: 0, k };
+      // Round it: a whole loop if all of it is clear, else the longest clear stretch of it as an arc (a quick look at a
+      // few points of it first).
+      const per = laneLen(L), M = Math.max(16, Math.ceil(2 * Math.PI * ea * 3)), ok = [], rc = dcos(rot), rs = dsin(rot); // (a third of a tile apart at most)
+      // (the points m/n of the way round, stepped by turning: only sums and products, the same on every device)
+      const round = (n, each) => { const cd = dcos((2 * Math.PI) / n), sd = dsin((2 * Math.PI) / n); let c = 1, s = 0; for (let m = 0; m < n; m++) { const ex = ea * c, ey = eb * s; each(m, clearAt(cx + ex * rc - ey * rs, cy + ex * rs + ey * rc)); const c2 = c * cd - s * sd; s = s * cd + c * sd; c = c2; } };
+      let few = 0;
+      round(12, (m, v) => { if (v) few++; });
+      if (few < (mid ? 12 : 4)) continue;
+      let all = true;
+      round(M, (m, v) => { ok.push(v); if (!v) all = false; });
+      if (all) {
+        if (per < DRIFT.loop[0] || per > DRIFT.loop[1]) continue;
+        L.a0 = Math.round(rng() * 6283) / 1000; L.a1 = L.a0 + 2 * Math.PI;
+      } else {
+        if (mid) continue; // (the shared orbit only as a whole loop)
+        let run = 0, bestRun = 0, end = -1;
+        for (let m = 0; m < 2 * M; m++) { if (ok[m % M]) { run++; if (run > bestRun && run < M) { bestRun = run; end = m; } } else run = 0; }
+        let s0 = end - bestRun + 2, s1 = end - 1; // (a step in from each end)
+        if (s1 - s0 < 4) continue;
+        const most = Math.floor((DRIFT.len[1] / per) * M); // (no longer than the longest arc, its middle kept)
+        if (s1 - s0 > most) { const c = (s0 + s1) / 2; s0 = Math.ceil(c - most / 2); s1 = s0 + most; }
+        L.loop = 0; L.a0 = Math.round(((2 * Math.PI * s0) / M) * 1000) / 1000; L.a1 = Math.round(((2 * Math.PI * s1) / M) * 1000) / 1000;
+      }
+      L.len = r2(laneLen(L));
+      if (!L.loop && L.len < DRIFT.len[0] - (S.grave ? 2 : 0) - pass * 2) continue; // (The Graveyard: its void is crowded with hulks, so an arc may be a little shorter and closer to the next)
+      const pts = lanePts(L), twin = { cx: mx(cx), cy: my(cy), a: ea, b: eb, rot, a0: L.a0 + Math.PI, a1: L.a1 + Math.PI, loop: L.loop, len: L.len, k }, tp = lanePts(twin);
+      if (!tp.every((p) => clearAt(p.x, p.y))) continue; // (the twin's clear too, as the map is the same turned round)
+      // Apart from its own twin (unless it is the shared one) and the other orbits: each rock its own room.
+      const least = (S.grave ? 3 : 4) - pass, sep = Math.min(mid ? Infinity : apart(pts, tp, least), ...lanes.map((o) => apart(pts, lanePts(o), least)));
+      if (sep < least) continue;
       // Close enough to the colony's ground to be of use (Ore and Crystal ones: in a Mine's reach of some ground),
-      // not too close to its Command Base, a little randomness.
-      const home = dist(cxm, cym, b0.x, b0.y);
-      let near = Infinity;
-      for (let q = 0; q <= len; q += 1) { const x = x0 + ca * q, y = y0 + sa * q, i = Math.floor(x), j = Math.floor(y); if (i > 0 && j > 0 && i < W - 1 && j < H - 1) near = Math.min(near, at(x, y)); }
+      // not too close to its Command Base; whole loops and rounder ones first; a little randomness.
+      let near = Infinity, sx = 0, sy = 0;
+      for (const p of pts) { near = Math.min(near, D[tIdx(Math.floor(p.x), Math.floor(p.y))]); sx += p.x; sy += p.y; }
       if ((k === 'ore' || k === 'crystal') && near > DRIFT.reach - 2) continue; // (an Ore or Crystal rock passes in a Mine's reach of some ground)
-      const s = len * (k === 'junk' ? 0.6 : 0.35) - Math.abs(home - (k === 'plain' || k === 'junk' ? 26 : 20)) * 0.6 + Math.min(sep, 12) * 0.3 + rng() * 3; // (The Graveyard: debris lanes long, salvage where a Shuttle reaches it soon)
-      if (s > bs) { bs = s; best = L; }
+      const home = dist(sx / pts.length, sy / pts.length, b0.x, b0.y);
+      const shapely = S.grave ? 0 : (L.loop ? 10 : 0) + Math.min(eb, 4) * 0.8 + Math.min(eb / ea, 1) * 3; // (The Graveyard's crowded void: no room to spare for round loops, seven pairs must fit)
+      const s = shapely + Math.min(L.len, 40) * (k === 'junk' ? 0.4 : 0.25) - Math.abs(home - (k === 'plain' || k === 'junk' ? 26 : 20)) * 0.6 + Math.min(sep, 12) * 0.3 + rng() * 3;
+      if (s > bs) { bs = s; best = { L, twin }; } // (The Graveyard: debris orbits long, salvage where a Shuttle reaches it soon)
     }
     if (!best) continue;
-    const tw = { x0: mx(best.x0), y0: my(best.y0), x1: mx(best.x1), y1: my(best.y1), len: best.len, k };
-    lanes.push(best, tw);
+    lanes.push(best.L, best.twin);
   }
   S.space.lanes = lanes;
-  // A rock on each lane, twins in step (each pair starts at a different point of its swing).
+  // A rock on each orbit, twins in step (each pair starts at a different point of its way round).
   for (let n = 0; n < lanes.length; n += 2) {
     const ph = Math.round(rng() * 6283) / 1000;
     for (const m of [0, 1]) S.space.rocks.push({ id: n + m + 1, k: lanes[n].k, lane: n + m, tw: n + (1 - m) + 1, t0: 0, ph, amt: DRIFT.amt[lanes[n].k] || 0, tow: 0, gone: 0, x: 0, y: 0 });
@@ -28652,7 +28729,7 @@ function spaceSetup(seed) {
     for (const [a, c] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) { const t = tIdx(a, c); if (!voidTile(t) || orbTile(t)) return false; }
     let shore = false;
     for (let c = j - 2; c <= j + 3 && !shore; c++) for (let a = i - 2; a <= i + 3; a++) if (inMap(a, c) && ground(tIdx(a, c))) { shore = true; break; }
-    return shore && lanes.every((L) => segDist(L, i + 1, j + 1) >= DRIFT.r.ore + 2);
+    return shore && lanes.every((L) => laneDist(L, i + 1, j + 1, DRIFT.r.ore + 2) >= DRIFT.r.ore + 2);
   };
   const keepOff = [...(S.posts || []), ...(S.uplinks || [])];
   for (const k of DERELICT.kinds) {
@@ -28676,18 +28753,13 @@ function spaceSetup(seed) {
   }
   S.space.mods = mods;
 }
-/** The least distance between segments a and b (lanes), sampled. */
-function segSeg(a, b) {
-  let m = Infinity;
-  for (let k = 0; k <= 8; k++) { const f = k / 8; m = Math.min(m, segDist(b, a.x0 + (a.x1 - a.x0) * f, a.y0 + (a.y1 - a.y0) * f), segDist(a, b.x0 + (b.x1 - b.x0) * f, b.y0 + (b.y1 - b.y0) * f)); }
-  return m;
-}
-
 /** A save's S.space (checkSave): lanes, rocks and modules of plain numbers on the map. */
 function spaceCheckSave(o, bad) {
   const P = o.space, obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v), num = Number.isFinite, int = Number.isInteger;
   if (!obj(P) || !Array.isArray(P.lanes) || !Array.isArray(P.rocks) || !Array.isArray(P.mods) || P.lanes.length > 32 || P.rocks.length > 64 || P.mods.length > 16) bad();
-  if (!P.lanes.every((L) => obj(L) && ['x0', 'y0', 'x1', 'y1', 'len'].every((k) => num(L[k])) && L.x0 >= 0 && L.x1 >= 0 && L.y0 >= 0 && L.y1 >= 0 && L.x0 <= o.W && L.x1 <= o.W && L.y0 <= o.H && L.y1 <= o.H && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(L.k))) bad();
+  const line = (L) => ['x0', 'y0', 'x1', 'y1', 'len'].every((k) => num(L[k])) && L.x0 >= 0 && L.x1 >= 0 && L.y0 >= 0 && L.y1 >= 0 && L.x0 <= o.W && L.x1 <= o.W && L.y0 <= o.H && L.y1 <= o.H; // (a save from before the orbits)
+  const orbit = (L) => ['cx', 'cy', 'a', 'b', 'rot', 'a0', 'a1', 'len'].every((k) => num(L[k])) && (L.loop === 0 || L.loop === 1) && L.cx >= 0 && L.cy >= 0 && L.cx <= o.W && L.cy <= o.H && L.a > 0 && L.b > 0 && L.a <= o.W + o.H && L.b <= o.W + o.H && Math.abs(L.a0) < 100 && Math.abs(L.a1) < 100 && L.len > 0;
+  if (!P.lanes.every((L) => obj(L) && (line(L) || orbit(L)) && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(L.k))) bad();
   if (!P.rocks.every((r) => obj(r) && int(r.id) && int(r.lane) && r.lane >= 0 && r.lane < P.lanes.length && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(r.k) && ['t0', 'ph', 'amt', 'x', 'y', 'gone'].every((k) => num(r[k])) && int(r.tow) && int(r.tw))) bad();
   if (!P.mods.every((m) => obj(m) && int(m.id) && DERELICT.kinds.includes(m.k) && int(m.x) && int(m.y) && m.x >= 0 && m.y >= 0 && m.x < o.W - 1 && m.y < o.H - 1 && int(m.owner) && m.owner >= -1 && m.owner < o.players.length && int(m.jam) && (m.done === 0 || m.done === 1) && int(m.st) && m.st >= 0 && m.st < o.W * o.H)) bad();
 }
