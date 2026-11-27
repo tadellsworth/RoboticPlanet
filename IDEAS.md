@@ -160,6 +160,20 @@ Also done this way: **the Grader and the Earthworks** (BUILT Nov 26 2026: concep
 rendered with `renderer/`, their ground and the plans' overlays drawn in code to the canvas. Canvas:
 https://claude.ai/artifact/HDT4AcWrYxcKd7Wvn1NTjU
 
+**The Ring's space backdrop** (BUILT Nov 27 2026 while the owner slept, Claude's pick of three: "Shadow pass"; ART_GUIDE
+Batch 39). Canvas: https://claude.ai/artifact/TtNr58yaFT34Bdfby21YnX. The concepts were A Shadow pass (the backdrop follows
+the day: the rocks pass through Ithaca I's shadow, so night is an eclipse with the planet a black disc ringed with light
+and its colonies' lights), B Crescent (one still view: a big crescent low in the corner, the Ring thrown wide) and C
+Ringplane (the Ring edge-on as a bright blade across the sky, more drifting rocks). Open questions for the owner:
+- Is A right, or B or C (each is a `look` in `tools/ringsky/ringsky.py`: run it with `crescent` or `ringplane` and the
+  game takes the new pictures with no code change)? Or A's day picture with B's size and corner?
+- The planet no longer turns (the old one did, once in nine minutes, too slowly to see): a turn would mean a strip of
+  pictures or per-pixel shading again. Worth it?
+- The night side shows the colonies' lights but not the war on them (the menu planet's flashes and fires): add a few,
+  as a small overlay on the night picture?
+- On the phone the planet sits low on the right, behind the bottom dock at times: higher, or smaller?
+- Ringfall streaks still cross the sky in code; at night, should they show as bright sparks against the dark planet?
+
 ## The Walking Factory (built Nov 23 2026: open questions for the owner)
 
 The owner's pitch (approved): "a huge old Accord mobile factory, a dormant machine, crawling slowly around a loop through

@@ -1,32 +1,80 @@
 'use strict';
 /*
- * Terrafall — The Ring's look (SHAPE_PRESETS asteroids, ringMap in js/world.js): the space behind the asteroids, drawn in code.
+ * Terrafall — The Ring's look (SHAPE_PRESETS asteroids, ringMap in js/world.js): the space behind the asteroids.
  * Looks only: nothing here reads or changes anything the game decides, so it may use Math.random and the real clock.
  *
- *   - ringSpace: what shows where there is no ground (the map is drawn over it, its void tiles left clear): a deep sky with a few
- *     faint nebulae, three layers of stars that drift slowly and slide a little as the view pans (the further the layer, the
- *     less), Corvane's glow at one corner, Ithaca I large and turning with its Ring round it, Argos turning small beside it,
- *     and now and then a streak of ringfall. The asteroids themselves stay put.
- *   - ringClipLand: the day's light and the dusk are graded over the ground only (space is not lit by the day and night cycle).
- *   - Cheap: the stars are three small tiles drawn a few times each, the planet and the moon are textures made once and turned
- *     by sampling them a couple of times a second into a small sprite. Graphics Saver draws one star layer and no motion;
- *     reduced motion holds everything still.
+ *   - ringSpace: what shows where there is no ground (the map is drawn over it, its void tiles left clear): high orbit
+ *     round Ithaca I, among the Ring's rocks (ART_GUIDE.md: Batch 39, "Shadow pass"). Painted pictures (art/ring/, made
+ *     by tools/ringsky/ringsky.py):
+ *       the far layer: the deep sky (the galaxy's band, faint nebulae, a grain of far stars) with two tiles of brighter
+ *       stars drawn crisp in code; Corvane, its glare and spikes; Ithaca I with the Ring round it, and Argos. The rocks go
+ *       round through the planet's shadow once a day, so the backdrop follows the day: by day Corvane stands clear and
+ *       the planet is lit gibbous; at dusk the star sinks to its limb and the planet thins to a crescent; at night
+ *       Corvane is behind it, a black disc ringed with lit air and the colonies' lights, the Ring glowing with the light
+ *       it lets through; at dawn the star comes out on the other limb. Each time of day has its picture of the planet,
+ *       crossfaded as the day turns. It slides a little as the view pans (2 %, within its margin);
+ *       over it, each frame: Corvane's flare and the lens (a streak and a few ghosts) while it's out, a few of the
+ *       Ring's rocks drifting by (nearer: they slide more, and darken at night), and now and then a streak of ringfall.
+ *     The asteroids themselves stay put.
+ *   - ringClipLand: the day's light and the dusk are graded over the ground only (space is lit by the backdrop's own day).
+ *   - Cheap: the far layer is one canvas made again only when the view's size or the backdrop's day changes (rspFar: in
+ *     1/24 steps of a crossfade, about every second while the day turns), each picture scaled once to the size it shows
+ *     at (rspFit); a frame draws it once, then a few sprites. The pictures load only on The Ring (ensureRingArt; in the
+ *     one-file build a bundle beside the page, ring-art.js); till they're in, a plain deep sky. Graphics Saver: no
+ *     drifting rocks, ringfall or lens ghosts; reduced motion: everything holds still.
  */
 
-const RSP = { of: null, tiles: null, spr: {}, planet: null, moon: null, tex: null, falls: [], next: 0, last: 0, t: 0, landFor: null };
+const RSP = { of: null, tiles: null, spr: {}, fit: new Map(), falls: [], next: 0, last: 0, t: 0, landFor: null, rocks: null, far: null };
+const _ra = { state: '', img: new Map() };
 
-/** 3D value noise (0..1) for the planet's seamless texture. */
-function rspNoise(x, y, z, seed) {
-  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), fx = x - xi, fy = y - yi, fz = z - zi;
-  const s = (v) => v * v * (3 - 2 * v);
-  const h = (a, b, c) => hash2(a + c * 977, b + c * 31, seed);
-  const lerpN = (a, b, t) => a + (b - a) * t;
-  const u = s(fx), v = s(fy), w = s(fz);
-  const l0 = lerpN(lerpN(h(xi, yi, zi), h(xi + 1, yi, zi), u), lerpN(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), u), v);
-  const l1 = lerpN(lerpN(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), u), lerpN(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), u), v);
-  return lerpN(l0, l1, w);
+/** Load The Ring's pictures (art/ring/ring-art.js: window.RING_ART, the list and layout; the pictures beside it). */
+function ensureRingArt() {
+  if (_ra.state || typeof document === 'undefined') return;
+  _ra.state = 'loading';
+  const go = () => {
+    const A = window.RING_ART;
+    if (!A) { _ra.state = 'failed'; return; }
+    _ra.state = 'in';
+    for (const name in A) if (A[name] && A[name].w) ringImg(name);
+  };
+  if (window.RING_ART) { go(); return; }
+  const s = document.createElement('script');
+  s.src = window.RING_BUNDLE ? 'ring-art.js' : 'art/ring/ring-art.js';
+  s.onload = go;
+  s.onerror = () => { _ra.state = 'failed'; }; // (no pictures: the plain sky)
+  document.head.appendChild(s);
 }
-function rspFbm(x, y, z, seed, oct) { let s = 0, a = 0.5, f = 1, n = 0; for (let o = 0; o < oct; o++) { s += a * rspNoise(x * f, y * f, z * f, seed + o * 17); n += a; a *= 0.5; f *= 2; } return s / n; }
+
+/** Picture `name` (art/ring/<name>.webp), loading it the first time; null till it's in. */
+function ringImg(name) {
+  let e = _ra.img.get(name);
+  if (!e) {
+    e = { img: null };
+    _ra.img.set(name, e);
+    const A = window.RING_ART, d = A && A.data;
+    if (A && A[name]) loadImg(d && d[name] ? d[name] : `art/ring/${name}.webp`, (img) => { e.img = img; });
+  }
+  return e.img;
+}
+
+/** Picture `name` scaled once to w × h device px (smoothly, in halving steps), for drawing unscaled each frame. */
+function rspFit(name, w, h) {
+  const img = ringImg(name);
+  if (!img) return null;
+  w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+  const key = name + ':' + w + 'x' + h, hit = RSP.fit.get(name);
+  if (hit && hit.key === key) return hit.c;
+  let src = img, sw = img.width, sh = img.height;
+  while (sw / 2 >= w * 1.05 && sh / 2 >= h * 1.05) { // (halving down first keeps a big picture sharp but not ragged)
+    const c = document.createElement('canvas'); c.width = Math.round(sw / 2); c.height = Math.round(sh / 2);
+    const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, c.width, c.height);
+    src = c; sw = c.width; sh = c.height;
+  }
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, w, h);
+  RSP.fit.set(name, { key, c });
+  return c;
+}
 
 /** A soft disc sprite in colour rgb (alpha 1 at the middle falling to 0 at the edge), made once. */
 function rspSprite(name, rgb, core) {
@@ -61,108 +109,6 @@ function rspStarTile(seed, size, n, bigShare, dim, d) {
   return c;
 }
 
-/** Ithaca I's face (384 × 192, longitude by latitude): seas, rust and green land, pale polar caps, a few clouds. */
-function rspPlanetTexture() {
-  const w = 384, h = 192, c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d'), img = g.createImageData(w, h), seed = 7311;
-  for (let j = 0; j < h; j++) {
-    const lat = (j / h - 0.5) * Math.PI, cl = Math.cos(lat), y = Math.sin(lat);
-    for (let i = 0; i < w; i++) {
-      const lon = (i / w) * Math.PI * 2, x = cl * Math.cos(lon), z = cl * Math.sin(lon);
-      const e = rspFbm(x * 2.3 + 5, y * 2.3 + 5, z * 2.3 + 5, seed, 4), m = rspFbm(x * 3.1 + 40, y * 3.1 + 40, z * 3.1 + 40, seed + 9, 3);
-      let r, gg, b;
-      if (e < 0.5) { const k = clamp((0.5 - e) * 5, 0, 1); r = 30 - 14 * k; gg = 86 - 34 * k; b = 140 - 40 * k; }
-      else { const k = clamp((e - 0.5) * 4, 0, 1), dry = clamp((m - 0.42) * 4, 0, 1); r = 92 + 80 * dry + 30 * k; gg = 118 - 14 * dry + 14 * k; b = 60 + 4 * k; if (dry < 0.5) { r *= 0.8; gg *= 1.08; } }
-      const cap = clamp((Math.abs(lat) - 1.12) * 9, 0, 1);
-      r += (236 - r) * cap; gg += (240 - gg) * cap; b += (246 - b) * cap;
-      const cloud = clamp((rspFbm(x * 3.6 + 90, y * 3.6 + 90, z * 3.6 + 90, seed + 31, 3) - 0.56) * 4.5, 0, 0.8);
-      r += (250 - r) * cloud; gg += (250 - gg) * cloud; b += (252 - b) * cloud;
-      const o = (j * w + i) * 4;
-      img.data[o] = r; img.data[o + 1] = gg; img.data[o + 2] = b; img.data[o + 3] = 255;
-    }
-  }
-  g.putImageData(img, 0, 0);
-  return c;
-}
-
-/** Argos's face (192 × 96): grey regolith pocked with craters. */
-function rspMoonTexture() {
-  const w = 192, h = 96, c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d'), img = g.createImageData(w, h), seed = 4421;
-  const craters = [];
-  for (let k = 0; k < 34; k++) craters.push({ u: hash2(k, 1, seed) * w, v: 6 + hash2(k, 2, seed) * (h - 12), r: 1.6 + hash2(k, 3, seed) * hash2(k, 4, seed) * 7 });
-  for (let j = 0; j < h; j++) {
-    const lat = (j / h - 0.5) * Math.PI, cl = Math.cos(lat), y = Math.sin(lat);
-    for (let i = 0; i < w; i++) {
-      const lon = (i / w) * Math.PI * 2, x = cl * Math.cos(lon), z = cl * Math.sin(lon);
-      let v = 150 + 50 * (rspFbm(x * 3 + 11, y * 3 + 11, z * 3 + 11, seed, 4) - 0.5) * 2;
-      for (const k of craters) {
-        let du = Math.abs(i - k.u); if (du > w / 2) du = w - du;
-        const d = Math.sqrt(du * du * cl * cl + (j - k.v) * (j - k.v)) / k.r;
-        if (d < 1) v -= 30 * (1 - d); else if (d < 1.25) v += 24 * (1.25 - d) * 4;
-      }
-      const o = (j * w + i) * 4;
-      img.data[o] = v; img.data[o + 1] = v - 2; img.data[o + 2] = v + 4; img.data[o + 3] = 255;
-    }
-  }
-  g.putImageData(img, 0, 0);
-  return c;
-}
-
-/**
- * A turning ball: its sprite (D × D px), made from texture `tex` turned `rot` radians, lit from the upper left. The per-pixel
- * lookups (which texel, how bright) are worked out once for a size; a turn only moves the column.
- */
-function rspBall(ball, tex, D, rot, ambient) {
-  if (!ball.D || ball.D !== D) {
-    ball.D = D; ball.cv = document.createElement('canvas'); ball.cv.width = ball.cv.height = D;
-    ball.g = ball.cv.getContext('2d'); ball.img = ball.g.createImageData(D, D);
-    ball.px = new Float32Array(D * D).fill(-1); ball.row = new Int16Array(D * D); ball.shade = new Float32Array(D * D);
-    const L = [-0.5, -0.45, 0.74], ln = Math.sqrt(L[0] * L[0] + L[1] * L[1] + L[2] * L[2]);
-    for (let j = 0; j < D; j++) for (let i = 0; i < D; i++) {
-      const x = ((i + 0.5) / D) * 2 - 1, y = ((j + 0.5) / D) * 2 - 1, rr = x * x + y * y, o = j * D + i;
-      if (rr >= 1) continue;
-      const z = Math.sqrt(1 - rr);
-      ball.px[o] = (Math.atan2(x, z) / (Math.PI * 2)) * tex.width; // (longitude from the middle, in texels)
-      ball.row[o] = Math.floor(clamp(0.5 + Math.asin(clamp(y, -1, 1)) / Math.PI, 0, 0.999) * tex.height);
-      const lam = Math.max(0, (x * L[0] + y * L[1] + z * L[2]) / ln);
-      ball.shade[o] = ambient + (1 - ambient) * Math.pow(lam, 0.85);
-    }
-  }
-  if (!ball.texData || ball.texOf !== tex) { ball.texOf = tex; ball.texData = tex.getContext('2d').getImageData(0, 0, tex.width, tex.height).data; }
-  const T = ball.texData, tw = tex.width, d = ball.img.data, shift = (rot / (Math.PI * 2)) * tw;
-  for (let o = 0; o < D * D; o++) {
-    const p = ball.px[o];
-    if (p < -0.5) { d[o * 4 + 3] = 0; continue; }
-    let u = Math.floor(p + shift) % tw; if (u < 0) u += tw;
-    const t = (ball.row[o] * tw + u) * 4, s = ball.shade[o];
-    d[o * 4] = T[t] * s; d[o * 4 + 1] = T[t + 1] * s; d[o * 4 + 2] = T[t + 2] * s;
-    const x = ((o % D) + 0.5) / D * 2 - 1, y = (((o / D) | 0) + 0.5) / D * 2 - 1, edge = Math.sqrt(x * x + y * y);
-    d[o * 4 + 3] = edge > 0.985 ? Math.max(0, (1 - edge) / 0.015) * 255 : 255; // (a soft edge)
-  }
-  ball.g.putImageData(ball.img, 0, 0);
-  return ball.cv;
-}
-
-/** The Ring round Ithaca I (tilted bands), `half` 'back' (behind the planet) or 'front'. */
-function rspRing(g, px, py, r, half, tilt) {
-  g.save();
-  g.translate(px, py); g.rotate(tilt);
-  const bands = [[1.92, 0.09, 0.16], [1.81, 0.04, 0.46], [1.69, 0.07, 0.3], [1.56, 0.03, 0.18], [1.46, 0.05, 0.24]];
-  const gr = g.createLinearGradient(-r * 2, -r * 0.6, r * 2, r * 0.6);
-  gr.addColorStop(0, 'rgba(120,110,120,0.55)'); gr.addColorStop(1, 'rgba(244,230,206,0.95)');
-  g.strokeStyle = gr;
-  for (const [rk, wk, a] of bands) {
-    g.globalAlpha = Math.min(1, a * 1.8); g.lineWidth = Math.max(1, r * wk);
-    g.beginPath();
-    if (half === 'back') g.ellipse(0, 0, r * rk, r * rk * 0.22, 0, Math.PI, Math.PI * 2); else g.ellipse(0, 0, r * rk, r * rk * 0.22, 0, 0, Math.PI);
-    g.stroke();
-  }
-  g.restore();
-}
-
 /** Ringfall in the sky: now and then a streak across the view, a spark where it burns out. */
 function rspFalls(g, dt, calm) {
   const t = RSP.t;
@@ -186,68 +132,143 @@ function rspFalls(g, dt, calm) {
   RSP.falls = RSP.falls.filter((f) => f.age < f.life);
 }
 
+/** How much of each time of day it is now (they add up to 1): the backdrop's own day, which follows the game's. */
+function rspDay() {
+  const w = { day: 0, morning: 0, evening: 0, night: 0 }, st = typeof todNow === 'function' ? todNow() : null;
+  if (!st) { w.day = 1; return w; }
+  w[st.a] += 1 - st.f; w[st.b] += st.f;
+  return w;
+}
+
+/** The drifting rocks' picture, and the same darkened for the planet's shadow (made once). */
+function rspRockSheets(A) {
+  if (RSP.rocks && RSP.rocks.of === A) return RSP.rocks;
+  const img = ringImg('rocks');
+  if (!img) return null;
+  const dark = document.createElement('canvas'); dark.width = img.width; dark.height = img.height;
+  const g = dark.getContext('2d');
+  g.drawImage(img, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(4,6,14,0.82)'; g.fillRect(0, 0, dark.width, dark.height);
+  return (RSP.rocks = { of: A, img, dark });
+}
+
+/** Where the bodies sit for a view W × H (css px, no pan): the planet (px, py, pr and its scale k), Argos, Corvane. */
+function rspLayout(A, day, W, H) {
+  const L = A.layout, lay = H > W * 1.1 ? L.tall : L.wide, mn = Math.min(W, H), P = A['planet-day'];
+  const pr = clamp(lay.planet[2] * mn, 90, 560), px = lay.planet[0] * W, py = lay.planet[1] * H;
+  let ux = 0, uy = 0;
+  for (const n in day) { const s = L.sun[n] || L.sun.day; ux += s[0] * day[n]; uy += s[1] * day[n]; }
+  return {
+    px, py, pr, k: pr / P.r, mx: lay.argos[0] * W, my: lay.argos[1] * H, mr: clamp(lay.argos[2] * mn, 14, 90),
+    sx: px + ux * pr, sy: py + uy * pr, clear: clamp((Math.hypot(ux, uy) - 0.9) / 0.5, 0, 1), // (clear: how far Corvane is out from behind the planet)
+  };
+}
+
+/**
+ * The far layer, made again only when the view's size, the pictures in or the backdrop's day change (its crossfades in
+ * 1/24 steps): the deep sky, the stars, Corvane, Ithaca I with its Ring and Argos, on one canvas a margin `m` bigger
+ * than the view all round, so the whole of it can slide a little as the view pans. Each frame then draws it once.
+ */
+function rspFar(A, day, W, H, d) {
+  const m = Math.round(Math.max(W, H) * 0.04), q = (v) => Math.round(v * 24);
+  let got = 0;
+  for (const e of _ra.img.values()) if (e.img) got++;
+  const key = [W, H, d, got, q(day.day), q(day.morning), q(day.evening), q(day.night)].join(',');
+  if (RSP.far && RSP.far.key === key) return RSP.far;
+  const c = (RSP.far && RSP.far.c) || document.createElement('canvas'), cw = W + 2 * m, ch = H + 2 * m;
+  if (c.width !== Math.round(cw * d) || c.height !== Math.round(ch * d)) { c.width = Math.round(cw * d); c.height = Math.round(ch * d); }
+  const g = c.getContext('2d');
+  g.setTransform(d, 0, 0, d, 0, 0);
+  // the deep sky
+  const sky = A.sky;
+  if (ringImg('sky')) {
+    const k = Math.max(cw / sky.w, ch / sky.h), sw = sky.w * k, sh = sky.h * k;
+    g.drawImage(rspFit('sky', sw * d, sh * d), (cw - sw) / 2, (ch - sh) / 2, sw, sh);
+  } else { g.fillStyle = '#070b17'; g.fillRect(0, 0, cw, ch); }
+  // two layers of brighter stars drawn crisp at the screen's own pixels
+  if (!RSP.tiles || RSP.tiles.d !== d) { RSP.tiles = [rspStarTile(23, 360, 56, 0.05, 0.9, d), rspStarTile(37, 448, 26, 0.16, 1, d)]; RSP.tiles.d = d; }
+  for (const [k, o] of [[0, 0], [1, 131]]) {
+    const tile = RSP.tiles[k], size = tile.width / d;
+    for (let y = -o; y < ch; y += size) for (let x = -o * 0.7; x < cw; x += size) g.drawImage(tile, x, y, size, size);
+  }
+  g.translate(m, m);
+  const Lo = rspLayout(A, day, W, H), P = A['planet-day'];
+  // Corvane first (the planet hides it when it's behind): its wide glare and its picture
+  g.globalCompositeOperation = 'lighter';
+  { const r = Lo.pr * 2.4; g.globalAlpha = 0.3; g.drawImage(rspSprite('corona', '255,150,80'), Lo.sx - r, Lo.sy - r, r * 2, r * 2); }
+  const cv = ringImg('corvane');
+  if (cv) { const r = Lo.pr * A.layout.sunSize; g.globalAlpha = 1; g.drawImage(cv, Lo.sx - r, Lo.sy - r, r * 2, r * 2); }
+  g.globalCompositeOperation = 'source-over';
+  // Ithaca I: the picture for the time of day, crossfaded into the next
+  const order = Object.keys(day).filter((n) => day[n] > 0.02 && A['planet-' + n]).sort((a, b) => day[b] - day[a]);
+  const pw = P.w * Lo.k, ph = P.h * Lo.k;
+  order.forEach((n, i) => {
+    const pc = rspFit('planet-' + n, pw * d, ph * d);
+    if (!pc) return;
+    g.globalAlpha = i === 0 ? 1 : day[n] / (day[n] + day[order[0]]);
+    g.drawImage(pc, Lo.px - P.cx * Lo.k, Lo.py - P.cy * Lo.k, pw, ph);
+  });
+  // Argos, lit, or backlit as the rocks go into the planet's shadow
+  const M = A['argos-day'], mk = Lo.mr / M.r, mw = M.w * mk, mh = M.h * mk, dark = day.night + 0.5 * (day.evening + day.morning);
+  const ma = rspFit('argos-day', mw * d, mh * d), mb = A['argos-night'] && rspFit('argos-night', mw * d, mh * d);
+  g.globalAlpha = 1;
+  if (ma) g.drawImage(ma, Lo.mx - M.cx * mk, Lo.my - M.cy * mk, mw, mh);
+  if (mb && dark > 0.01) { g.globalAlpha = dark; g.drawImage(mb, Lo.mx - M.cx * mk, Lo.my - M.cy * mk, mw, mh); }
+  g.globalAlpha = 1;
+  return (RSP.far = { key, c, m, Lo });
+}
+
 /**
  * The space behind the asteroids, for the frame: ox, oy the map's corner on screen (css px) and z the zoom. Called instead of
  * drawOffMap on The Ring (R.void), over the dark fill the frame starts with.
  */
 function ringSpace(ctx, ox, oy, z) {
-  if (RSP.of !== S) { RSP.of = S; RSP.tiles = null; RSP.planet = { rot: 0 }; RSP.moon = { rot: 0 }; RSP.falls = []; RSP.next = 1.5; RSP.last = 0; RSP.t = 0; RSP.tex = null; }
+  if (RSP.of !== S) { RSP.of = S; RSP.falls = []; RSP.next = 1.5; RSP.last = 0; RSP.t = 0; ensureRingArt(); }
   const now = performance.now() / 1000, dt = RSP.last ? Math.min(0.1, now - RSP.last) : 0;
   RSP.last = now;
   const still = !!(LESS_MOTION && LESS_MOTION.matches), saver = typeof gfxStep === 'function' && gfxStep() === 'saver', calm = still || saver;
   if (!calm) RSP.t += dt;
-  const T = still ? 0 : RSP.t, d = Math.min(R.dpr || 1, 2), W = R.w, H = R.h;
+  const T = still ? 0 : RSP.t, d = Math.min(R.dpr || 1, 2), W = R.w, H = R.h, A = _ra.state === 'in' ? window.RING_ART : null;
   const camx = (R.cam.x - S.W / 2) * z, camy = (R.cam.y - S.H / 2) * z; // (how far the view has moved from the middle of the map, px)
-  // The sky.
-  const bg = ctx.createLinearGradient(0, 0, W * 0.4, H);
-  bg.addColorStop(0, '#0b1124'); bg.addColorStop(0.5, '#070b17'); bg.addColorStop(1, '#04060d');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  // A few faint nebulae, far off.
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const neb = [[0.2, 0.3, 0.9, '110,70,170', 0.07], [0.78, 0.62, 1.05, '50,100,170', 0.075], [0.5, 0.92, 0.8, '60,140,150', 0.045]];
-  for (const [fx, fy, s, rgb, a] of neb) {
-    const sp = rspSprite('neb' + rgb, rgb), r = Math.max(W, H) * s * 0.55;
-    ctx.globalAlpha = a; ctx.drawImage(sp, fx * W - camx * 0.012 - r, fy * H - camy * 0.012 - r, r * 2, r * 2);
+  if (!A) { // (till the pictures are in: a plain deep sky)
+    const bg = ctx.createLinearGradient(0, 0, W * 0.4, H);
+    bg.addColorStop(0, '#0b1124'); bg.addColorStop(0.5, '#070b17'); bg.addColorStop(1, '#04060d');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    rspFalls(ctx, dt, calm);
+    return;
   }
-  ctx.restore();
-  // Three layers of stars (the far ones drift least and slide least with the view).
-  if (!RSP.tiles) RSP.tiles = [rspStarTile(11, 384, 150, 0.0, 0.8, d), rspStarTile(23, 320, 70, 0.04, 0.95, d), rspStarTile(37, 448, 34, 0.14, 1, d)];
-  const layers = [[0.014, 2, 0.9], [0.03, 5, 1], [0.055, 9, 1]];
-  for (let k = 0; k < (saver ? 1 : 3); k++) {
-    const tile = RSP.tiles[k], size = tile.width / d, par = layers[k][0], vx = layers[k][1], vy = layers[k][2] * 0.6;
-    const offx = (((-camx * par - T * vx) % size) + size) % size, offy = (((-camy * par - T * vy) % size) + size) % size;
-    for (let y = offy - size; y < H; y += size) for (let x = offx - size; x < W; x += size) ctx.drawImage(tile, x, y, size, size);
-  }
-  // Corvane's glow in a corner, a warm lens streak across it.
-  {
-    const sx = W * 0.07 - camx * 0.02, sy = H * -0.03 - camy * 0.02, rs = Math.min(W, H) * 0.045;
+  const day = rspDay(), F = rspFar(A, day, W, H, d), Lo = F.Lo;
+  // the far layer, slid a little against the pan (the asteroids move with the view, it hardly at all)
+  const fx = clamp(-camx * 0.02, -F.m, F.m), fy = clamp(-camy * 0.02, -F.m, F.m);
+  ctx.drawImage(F.c, fx - F.m, fy - F.m, W + 2 * F.m, H + 2 * F.m);
+  const sx = Lo.sx + fx, sy = Lo.sy + fy;
+  // Corvane flares now and then (LORE.md), and when it's out the lens catches it: a long thin streak and a few faint ghosts toward the middle
+  if (Lo.clear > 0.01) {
+    const flare = still ? 0 : Math.max(0, Math.sin((T / 37) * Math.PI * 2)) ** 12, rs = Lo.pr * 0.1, cr = rspSprite('core', '255,214,160', true);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const co = rspSprite('corona', '255,150,80'), cr = rspSprite('core', '255,214,160', true), flare = still ? 0 : Math.max(0, Math.sin((T / 37) * Math.PI * 2)) ** 12;
-    ctx.globalAlpha = 0.34 + 0.18 * flare; let q = rs * (10 + 2 * flare); ctx.drawImage(co, sx - q, sy - q, q * 2, q * 2);
-    ctx.globalAlpha = 0.85; q = rs * 3.4; ctx.drawImage(co, sx - q, sy - q, q * 2, q * 2);
-    ctx.globalAlpha = 1; q = rs * 1.5; ctx.drawImage(cr, sx - q, sy - q, q * 2, q * 2);
-    ctx.globalAlpha = 0.18; ctx.drawImage(cr, sx - rs * 15, sy - rs * 0.16, rs * 30, rs * 0.32);
+    if (flare > 0.01) { const r = Lo.pr * 1.6; ctx.globalAlpha = 0.35 * flare * Lo.clear; ctx.drawImage(rspSprite('corona', '255,150,80'), sx - r, sy - r, r * 2, r * 2); }
+    ctx.globalAlpha = (0.2 + 0.12 * flare) * Lo.clear; ctx.drawImage(cr, sx - rs * 22, sy - rs * 0.2, rs * 44, rs * 0.4);
+    if (!saver) {
+      for (const [f, s, a, rgb] of [[0.3, 0.9, 0.05, '255,170,110'], [0.55, 0.35, 0.08, '150,200,255'], [0.8, 0.6, 0.04, '190,255,210'], [1.3, 1.5, 0.035, '255,150,80']]) {
+        const gx = sx + (W / 2 - sx) * f, gy = sy + (H / 2 - sy) * f, gr = rs * s * 3;
+        ctx.globalAlpha = a * Lo.clear * (1 + flare); ctx.drawImage(rspSprite('ghost' + rgb, rgb), gx - gr, gy - gr, gr * 2, gr * 2);
+      }
+    }
     ctx.restore();
   }
-  // Ithaca I, large and turning slowly, its Ring round it; Argos, small and turning faster.
-  const pr = clamp(Math.min(W, H) * 0.24, 80, 170), px = W * 0.8 - camx * 0.05, py = H * 0.2 - camy * 0.05, tilt = -0.32;
-  if (px > -pr * 2.2 && px < W + pr * 2.2 && py > -pr * 2.2 && py < H + pr * 2.2) {
-    rspRing(ctx, px, py, pr, 'back', tilt);
-    const D = Math.round(pr * 2 * d), P = RSP.planet;
-    if (!RSP.tex) RSP.tex = { planet: rspPlanetTexture(), moon: rspMoonTexture() };
-    P.rot = still ? 1.4 : (T / 520) * Math.PI * 2 + 1.4; // (one turn in about nine minutes)
-    if (!P.cv || P.D !== D || !P.at || Math.abs(now - P.at) > (saver ? 2 : 0.45)) { P.at = now; P.sprite = rspBall(P, RSP.tex.planet, D, P.rot, 0.1); }
-    ctx.drawImage(P.sprite, px - pr, py - pr, pr * 2, pr * 2);
-    // (its air: a thin blue rim on the lit side, and the dark side's edge)
-    const at = ctx.createRadialGradient(px, py, pr * 0.9, px, py, pr * 1.09);
-    at.addColorStop(0, 'rgba(120,170,255,0)'); at.addColorStop(0.55, 'rgba(120,170,255,0.2)'); at.addColorStop(1, 'rgba(120,170,255,0)');
-    ctx.fillStyle = at; ctx.beginPath(); ctx.arc(px, py, pr * 1.09, 0, Math.PI * 2); ctx.fill();
-    rspRing(ctx, px, py, pr, 'front', tilt);
-    const mr = pr * 0.24, ma = (T / 80) * Math.PI * 2 + 2.2, mx = W * 0.2 - camx * 0.08, my = H * 0.78 - camy * 0.08, M = RSP.moon, MD = Math.round(mr * 2 * d);
-    M.rot = still ? 0.5 : (T / 60) * Math.PI * 2;
-    if (!M.cv || M.D !== MD || !M.at || Math.abs(now - M.at) > (saver ? 2 : 0.45)) { M.at = now; M.sprite = rspBall(M, RSP.tex.moon, MD, M.rot, 0.07); }
-    void ma;
-    ctx.drawImage(M.sprite, mx - mr, my - mr, mr * 2, mr * 2);
+  // a few of the Ring's rocks drifting by, nearer than the rest, in the planet's shadow at night
+  const n = saver ? 0 : (A.layout.rocks || 7), rk = n && rspRockSheets(A);
+  if (rk) {
+    const cell = A.rocks.cell, m = 80, mn = Math.min(W, H), dark = day.night + 0.5 * (day.evening + day.morning);
+    for (let i = 0; i < n; i++) {
+      const h = (j) => hash2(i, j, 5151), par = 0.08 + 0.22 * h(1), sz = (10 + 34 * h(2) ** 2) * (0.6 + par * 2) * (mn / 900 + 0.4);
+      const vx = (h(3) - 0.5) * 7, vy = (h(4) - 0.35) * 4, fw = W + 2 * m, fh = H + 2 * m;
+      const x = ((((h(5) * fw - camx * par + T * vx) % fw) + fw) % fw) - m, y = ((((h(6) * fh - camy * par + T * vy) % fh) + fh) % fh) - m;
+      const rot = h(7) * 6.28 + T * (h(8) - 0.5) * 0.12, ci = i % (A.rocks.n || 8);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+      ctx.drawImage(rk.img, ci * cell, 0, cell, cell, -sz / 2, -sz / 2, sz, sz);
+      if (dark > 0.01) { ctx.globalAlpha = dark; ctx.drawImage(rk.dark, ci * cell, 0, cell, cell, -sz / 2, -sz / 2, sz, sz); }
+      ctx.restore();
+    }
   }
   rspFalls(ctx, dt, calm);
 }
