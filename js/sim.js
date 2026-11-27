@@ -15078,8 +15078,13 @@ function placeCaveNests() {
  * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
  * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
  * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
- * to dock, the colonies' own land (reachable on foot) first. In Teams they come in half-turn pairs.
- * Long Haul 2v2 keeps its shared central post and pairs the others.
+ * to dock. Where every colony stands on one walkable area (a map meant to be walked), only on that area: no post
+ * in a pocket behind crags or lakes that only a bridge or a tunnel reaches (anywhere, the colonies' own land first,
+ * only if the area has no room for one at all). In Teams they come in half-turn pairs. Long Haul 2v2 keeps its
+ * shared central post and pairs the others.
+ * One more post than colonies (two in Colony): where the map has no room for them all at the usual distances (most
+ * Small maps), the next passes (TRADE_POST.relax) let them stand a little nearer the bases and each other, on
+ * smaller ground, as fair as before.
  */
 function placePosts(seed) {
   S.posts = [];
@@ -15089,90 +15094,164 @@ function placePosts(seed) {
   const grandCanyon = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0].grandCanyon;
   const want = Ls.length === 1 ? TRADE_POST.colony : Ls.length + 1;
   const homes = new Set(Ls.map((L) => S.zone[tIdx(L.x, L.y)]));
+  // (Every colony walks to every other, over fords and, on Tidal flats, the flats at low tide: walkFrom. Its ground is `walked`.)
+  const walked = walkFrom(Ls[0], true);
+  let walkOnly = Ls.length > 1 && Ls.every((L) => walked[tIdx(L.x, L.y)]);
   const wild = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.rail && S.rail[u]);
-  const cands = [];
-  for (let j = 2; j < S.H - 2; j++) for (let i = 2; i < S.W - 2; i++) {
-    const t = tIdx(i, j);
-    if (!free(t) || S.fert[t] || S.owner[t] >= 0 || (grandCanyon && !homes.has(S.zone[t]))) continue;
-    if (S.town && !townPostOk(i, j)) continue; // (Passenger Town: only on a square or a parking lot, the town market)
-    if (S.walker && walkerYard(i, j)) continue; // (nor on the Walking Factory's yard)
-    let room = 0;
-    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
-    if (room < 14 || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
-    const d = Ls.map((L) => dist(i, j, L.x, L.y)).sort((a, b) => a - b);
-    if (d[0] < TRADE_POST.minFromBase) continue;
-    cands.push({ i, j, d, home: homes.has(S.zone[t]) ? 1 : 0, h: hash2(i, j, (seed ^ 0x7a3d) >>> 0) });
-  }
   const longHaulPairs = haul4Map(S.settings) && Ls.length === 4, teamPairs = !!S.teams && Ls.length === 4 && !longHaulPairs;
-  const at = new Map(cands.map((c) => [tIdx(c.i, c.j), c]));
+  let cands = [], at = new Map(), apart = TRADE_POST.apart;
   const twinOf = (c) => at.get(tIdx(S.W - 1 - c.i, S.H - 1 - c.j));
+  // The sites at one level of the rules (lv: how far from every base, how far apart, how much open ground round it).
+  // (A post's ground never takes the oil seep nearest a colony, within HOME_OIL.r: it would move off it, maybe out of reach.)
+  const homeOil = new Uint8Array(S.W * S.H), R = TRADE_POST.calm;
+  for (const L of Ls) {
+    let o = -1, od = HOME_OIL.r * HOME_OIL.r + 0.01;
+    for (let j = Math.max(0, L.y - HOME_OIL.r); j <= Math.min(S.H - 1, L.y + HOME_OIL.r); j++) for (let i = Math.max(0, L.x - HOME_OIL.r); i <= Math.min(S.W - 1, L.x + HOME_OIL.r); i++) {
+      const d = dist2(i, j, L.x, L.y);
+      if (S.res[tIdx(i, j)] === R_OIL && d < od) { od = d; o = tIdx(i, j); }
+    }
+    if (o < 0) continue;
+    const oi = o % S.W, oj = (o / S.W) | 0;
+    for (let j = oj - 2; j <= oj + 2; j++) for (let i = oi - 2; i <= oi + 2; i++) if (inMap(i, j) && S.res[tIdx(i, j)] === R_OIL) homeOil[tIdx(i, j)] = 1;
+  }
+  const onOil = (i, j) => { for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) if (inMap(i + di, j + dj) && homeOil[tIdx(i + di, j + dj)]) return true; return false; };
+  const gather = (lv) => {
+    cands = [];
+    for (let j = 2; j < S.H - 2; j++) for (let i = 2; i < S.W - 2; i++) {
+      const t = tIdx(i, j);
+      if (!free(t) || S.fert[t] || S.owner[t] >= 0 || (grandCanyon && !homes.has(S.zone[t]))) continue;
+      if (onOil(i, j)) continue;
+      if (walkOnly && !walked[t]) continue;
+      if (S.town && !townPostOk(i, j)) continue; // (Passenger Town: only on a square or a parking lot, the town market)
+      if (S.walker && walkerYard(i, j)) continue; // (nor on the Walking Factory's yard)
+      let room = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
+      if (room < lv.room || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
+      const d = Ls.map((L) => dist(i, j, L.x, L.y)).sort((a, b) => a - b);
+      if (d[0] < lv.minFromBase) continue;
+      cands.push({ i, j, d, home: homes.has(S.zone[t]) ? 1 : 0, h: hash2(i, j, (seed ^ 0x7a3d) >>> 0) });
+    }
+    at = new Map(cands.map((c) => [tIdx(c.i, c.j), c]));
+    apart = lv.apart;
+  };
   // As fair as the map allows: within TRADE_POST.fair tiles if it can be, a little less fair if that's the
-  // only way to have two posts at all. The first is about as near every colony; where nowhere is (the middle of
+  // only way to have them. The first is about as near every colony; where nowhere is (the middle of
   // Twin Valleys is a mountain), each post is about as near the two colonies nearest it, like the others.
+  // (`two`: at the usual distances, the leaning stops once there are two posts; the passes after it go on to the full count.)
   let allFair = !teamPairs;
-  for (let k = 0, lim = TRADE_POST.fair; k < want; k++) {
-    const paired = teamPairs || (longHaulPairs && S.posts.length > 0);
-    if (paired && want - S.posts.length < 2) break;
+  const pick = (two) => {
+    for (let k = S.posts.length, lim = TRADE_POST.fair; k < want; k++) {
+      const paired = teamPairs || (longHaulPairs && S.posts.length > 0);
+      if (paired && want - S.posts.length < 2) break;
+      let best = null, bs = -Infinity;
+      for (const c of cands) {
+        let near = Infinity;
+        for (const p of S.posts) near = Math.min(near, dist(p.x, p.y, c.i, c.j));
+        if (near < apart) continue;
+        const tw = paired ? twinOf(c) : null;
+        if (paired && (!tw || dist(c.i, c.j, tw.i, tw.j) < apart || S.posts.some((p) => dist(p.x, p.y, tw.i, tw.j) < apart))) continue;
+        let s;
+        if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
+        else {
+          const unfair = k === 0 && allFair ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
+          if (!teamPairs && !grandCanyon && unfair > lim) continue; // A mirrored pair serves both teams, and canyon rims have few pads.
+          s = -unfair * 2 - c.d[0] * 0.15; // fair, and not too far out
+        }
+        if (S.posts.length) s += Math.min(near, 40) * 0.25;
+        s += c.home * 6 + c.h * 0.5;
+        if (s > bs) { bs = s; best = c; }
+      }
+      if (!best) {
+        if (teamPairs) break;
+        if (!S.posts.length && allFair && lim >= TRADE_POST.fair * 4 && Ls.length > 2) { allFair = false; lim = TRADE_POST.fair; k--; continue; }
+        // (Long Haul 2v2: a pair is fair between the teams however it leans, so up to twice as far, to have all of them.)
+        if ((two && S.posts.length >= 2 && !(longHaulPairs && lim < TRADE_POST.fair * 2)) || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
+        lim += TRADE_POST.fair; k--; continue; // try again, a little less strict
+      }
+      S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
+      if (paired) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
+    }
+  };
+  const levels = [{ minFromBase: TRADE_POST.minFromBase, apart: TRADE_POST.apart, room: 14 }, ...TRADE_POST.relax];
+  const run = () => {
+    for (let n = 0; n < levels.length && S.posts.length < want; n++) {
+      gather(levels[n]);
+      if (n === 0) pick(true);
+      else pick(false);
+    }
+  };
+  // Still a colony's worth or more short (a narrow planet, Long haul on Small; Small maps for three; small home islands, Four
+  // Isles on Small): a set with the map's own symmetry, one for each colony at the same spot on its side (uplinkOrbit: the
+  // half turn, the three-way turn, the quarter turns), fair as a set whatever each one's lean; at the last level's rules,
+  // else nearer home (TRADE_POST.near: on its own island, where that is all there is).
+  const orbitSet = () => {
     let best = null, bs = -Infinity;
     for (const c of cands) {
-      let near = Infinity;
-      for (const p of S.posts) near = Math.min(near, dist(p.x, p.y, c.i, c.j));
-      if (near < TRADE_POST.apart) continue;
-      const tw = paired ? twinOf(c) : null;
-      if (paired && (!tw || dist(c.i, c.j, tw.i, tw.j) < TRADE_POST.apart || S.posts.some((p) => dist(p.x, p.y, tw.i, tw.j) < TRADE_POST.apart))) continue;
-      let s;
-      if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
-      else {
-        const unfair = k === 0 && allFair ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
-        if (!teamPairs && !grandCanyon && unfair > lim) continue; // A mirrored pair serves both teams, and canyon rims have few pads.
-        s = -unfair * 2 - c.d[0] * 0.15; // fair, and not too far out
+      const O = uplinkOrbit(tIdx(c.i, c.j));
+      if (!O || O.length < 2 || want - S.posts.length < O.length || new Set(O).size !== O.length) continue;
+      const cs = O.map((u) => at.get(u));
+      if (cs.some((x) => !x)) continue;
+      let ok = true;
+      for (let a = 0; a < cs.length && ok; a++) {
+        if (S.posts.some((p) => dist(p.x, p.y, cs[a].i, cs[a].j) < apart)) ok = false;
+        for (let b = a + 1; b < cs.length && ok; b++) if (dist(cs[a].i, cs[a].j, cs[b].i, cs[b].j) < apart) ok = false;
       }
-      if (S.posts.length) s += Math.min(near, 40) * 0.25;
-      s += c.home * 6 + c.h * 0.5;
-      if (s > bs) { bs = s; best = c; }
+      if (!ok) continue;
+      const s = -c.d[0] * 0.15 + c.home * 6 + c.h * 0.5 + (S.posts.length ? Math.min(40, ...S.posts.map((p) => dist(p.x, p.y, c.i, c.j))) * 0.25 : 0);
+      if (s > bs) { bs = s; best = cs; }
     }
-    if (!best) {
-      if (teamPairs) break;
-      if (!S.posts.length && allFair && lim >= TRADE_POST.fair * 4 && Ls.length > 2) { allFair = false; lim = TRADE_POST.fair; k--; continue; }
-      // (Long Haul 2v2: a pair is fair between the teams however it leans, so up to twice as far, to have all of them.)
-      if ((S.posts.length >= 2 && !(longHaulPairs && lim < TRADE_POST.fair * 2)) || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
-      lim += TRADE_POST.fair; k--; continue; // try again, a little less strict
-    }
-    S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
-    if (paired) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
-  }
-  if (!S.posts.length && S.settings.size >= IMMENSE_SIZE &&
-      SHAPE_PRESETS[S.settings.shape].islands && Ls.length === 2) {
-    // If the open sea has no shared site, trade can start on the two home islands at mirrored posts.
-    let best = null, score = -Infinity;
-    for (const c of cands) {
-      const twin = twinOf(c);
-      if (!c.home || !twin?.home || dist(c.i, c.j, twin.i, twin.j) < TRADE_POST.apart) continue;
-      const s = -c.d[0] + c.h * 0.5;
-      if (s > score) { best = c; score = s; }
-    }
-    if (best) for (const c of [best, twinOf(best)]) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
-  }
-  // A small central island or pass may only have room for one post. Use one both teams can
-  // reach for the same effort, to within one tile of walking.
-  if (teamPairs && !S.posts.length && cands.length) {
-    const starts = Ls.map((L) => ({ team: teamOf(L.owner), cost: travelCost(tIdx(L.x, L.y)) }));
-    let best = null, effort = Infinity, closePair = null, pairEffort = Infinity;
-    for (const c of cands) {
-      const t = tIdx(c.i, c.j), teamCost = [Infinity, Infinity];
-      for (const start of starts) teamCost[start.team] = Math.min(teamCost[start.team], start.cost[t]);
-      const distance = Math.max(...teamCost) - c.h * 0.5;
-      if (Math.abs(teamCost[0] - teamCost[1]) <= 1 && distance < effort) { best = c; effort = distance; }
-      // A narrow valley might have room for a closer pair with no shared calm tiles.
-      const twin = twinOf(c), nearest = Math.min(...teamCost);
-      if (twin && dist(c.i, c.j, twin.i, twin.j) > 2 * TRADE_POST.calm && nearest < pairEffort) {
-        closePair = [c, twin]; pairEffort = nearest;
+    if (best) for (const c of best) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
+    return !!best;
+  };
+  const last = levels[levels.length - 1];
+  const fallbacks = () => {
+    if (Ls.length > 1 && want - S.posts.length >= Ls.length && !orbitSet()) { gather(TRADE_POST.near); orbitSet(); }
+    if (!S.posts.length && S.settings.size >= IMMENSE_SIZE &&
+        SHAPE_PRESETS[S.settings.shape].islands && Ls.length === 2) {
+      // If the open sea has no shared site, trade can start on the two home islands at mirrored posts.
+      let best = null, score = -Infinity;
+      for (const c of cands) {
+        const twin = twinOf(c);
+        if (!c.home || !twin?.home || dist(c.i, c.j, twin.i, twin.j) < TRADE_POST.apart) continue;
+        const s = -c.d[0] + c.h * 0.5;
+        if (s > score) { best = c; score = s; }
       }
+      if (best) for (const c of [best, twinOf(best)]) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
     }
-    const sites = best ? [best] : closePair || [];
-    for (const c of sites) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
-  }
+    // A small central island or pass may only have room for one post. Use one both teams can
+    // reach for the same effort, to within one tile of walking.
+    if (teamPairs && !S.posts.length && cands.length) {
+      const starts = Ls.map((L) => ({ team: teamOf(L.owner), cost: travelCost(tIdx(L.x, L.y)) }));
+      let best = null, effort = Infinity, closePair = null, pairEffort = Infinity;
+      for (const c of cands) {
+        const t = tIdx(c.i, c.j), teamCost = [Infinity, Infinity];
+        for (const start of starts) teamCost[start.team] = Math.min(teamCost[start.team], start.cost[t]);
+        const distance = Math.max(...teamCost) - c.h * 0.5;
+        if (Math.abs(teamCost[0] - teamCost[1]) <= 1 && distance < effort) { best = c; effort = distance; }
+        // A narrow valley might have room for a closer pair with no shared calm tiles.
+        const twin = twinOf(c), nearest = Math.min(...teamCost);
+        if (twin && dist(c.i, c.j, twin.i, twin.j) > 2 * TRADE_POST.calm && nearest < pairEffort) {
+          closePair = [c, twin]; pairEffort = nearest;
+        }
+      }
+      const sites = best ? [best] : closePair || [];
+      for (const c of sites) S.posts.push({ id: S.posts.length + 1, x: c.i, y: c.j });
+    }
+    // (Three or more colonies and fewer posts than colonies, with no room for a set on top: the set, then the posts that
+    // were placed, as many as still fit apart from it.)
+    if (Ls.length > 2 && !teamPairs && S.posts.length < Ls.length) {
+      const old = S.posts;
+      S.posts = [];
+      gather(last);
+      if (!orbitSet()) { gather(TRADE_POST.near); orbitSet(); }
+      for (const p of old) if (S.posts.length && S.posts.length < want && S.posts.every((q) => dist(p.x, p.y, q.x, q.y) >= apart)) S.posts.push({ id: S.posts.length + 1, x: p.x, y: p.y });
+      if (S.posts.length <= old.length) S.posts = old;
+    }
+  };
+  run();
+  fallbacks();
+  if (walkOnly && !S.posts.length) { walkOnly = false; run(); fallbacks(); } // (no room on the walked ground at all)
 }
 
 /* ------------------------------------------------------------------ Uplinks (a Victory) */
@@ -15228,19 +15307,25 @@ function uplinkOrbit(t) {
  * Command Bases. Two colonies: one in the middle if there's ground there, and a pair out on the flanks (two
  * pairs if the middle is a rift or the sea); three: one between each pair of colonies; four (Crossroads and the
  * other four-quarter maps): the middle and one between each pair of neighbouring quarters (Twin Valleys, whose
- * middle is a mountain: two pairs).
+ * middle is a mountain: two pairs). Where every colony stands on one walkable area they stand on it too (`anyGround`:
+ * the second try, when it has no room for any); where the orbits don't all fit at the usual distance from the bases
+ * (small home islands), a second try lets them stand nearer (`close`: UPLINK_CLOSE).
  */
-function placeUplinks(seed) {
+function placeUplinks(seed, anyGround, close) {
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
   const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (quadShape(SH, nColonies()) && nColonies() >= 3) || haul4Map(S.settings);
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
-  const canyonZone = SH.grandCanyon && Ls.length ? S.zone[tIdx(Ls[0].x, Ls[0].y)] : -1;
-  const reachableSite = (t) => !SH.grandCanyon || S.zone[t] === canyonZone;
+  // (Where every colony stands on one walkable area, a map meant to be walked, the Uplinks stand on it too: none in a pocket
+  // only a bridge or a tunnel reaches, unless the area has no room for any. The Grand Canyon: on its floor, the first colony's.)
+  const walked = n > 1 && !anyGround && !SH.grandCanyon ? walkFrom(Ls[0], true) : null, walkOnly = !!walked && Ls.every((L) => walked[tIdx(L.x, L.y)]);
+  const siteZone = SH.grandCanyon && Ls.length ? S.zone[tIdx(Ls[0].x, Ls[0].y)] : -1;
+  const reachableSite = (t) => (siteZone < 0 || S.zone[t] === siteZone) && (!walkOnly || walked[t]);
   const span = dhypot(W, H), immenseIsles = SH.isles4 && S.settings.size === IMMENSE_SIZE;
   // The sea grows faster than the usable land on each home island. Keep a shore relay in range.
-  const minBase = immenseIsles ? 10 : Math.max(10, span * 0.12);
+  // (`close`: a second try for the orbits the first could not place, nearer home: a small home island's shore, Four Isles on Small.)
+  const minBase = close ? UPLINK_CLOSE : immenseIsles ? 10 : Math.max(10, span * 0.12);
   const ok = new Uint8Array(W * H), roomAt = new Uint8Array(W * H);
   for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
     const t = tIdx(i, j);
@@ -15293,6 +15378,7 @@ function placeUplinks(seed) {
   // 2) The rest, an orbit at a time: the fairest band the map has (between the two nearest colonies), and in it
   //    as far out from the middle and each other as can be, not too far from home.
   const want = n === 2 ? (mid !== null ? 1 : 2) : SH.twin ? 2 : 1; // (Twin Valleys' twins are pairs: two of them)
+  let got = 0;
   for (let k = 0; k < want; k++) {
     let best = null;
     // (Roomy spots well out from home first, 16 of the 25 tiles round it open; then a small islet's 9; then,
@@ -15317,8 +15403,10 @@ function placeUplinks(seed) {
         if (s > bs) { bs = s; best = o; }
       }
     }
-    if (best) add(best);
+    if (best) { add(best); got++; }
   }
+  if (!ups.length && walkOnly) return placeUplinks(seed, true, close); // (no room on the walked ground at all)
+  if (got < want && !close && minBase > UPLINK_CLOSE) return placeUplinks(seed, anyGround, true); // (short of the orbits: try nearer home)
   // Each Uplink's own tile is cleared of anything growing or lying there (with its twins, so the map stays fair).
   S.uplinks = ups.map((u, k) => ({ id: k + 1, x: u.x, y: u.y, owner: -1, jam: 0 }));
   // (The middle one has twins that aren't Uplinks: they're cleared too, so every colony's side stays the same tile for tile.)
@@ -18897,10 +18985,11 @@ function calmSpillOk(t, from, sameZone) {
 /**
  * Where a deposit on a Trade Post's ground at tile `from` goes instead: the nearest open tile just off it (calmSpillOk,
  * and `fit` if given: see clearCalmGround), on the same land if there is one near, else anywhere near, else anywhere at all (a tie goes to the
- * tile further out from the posts' ground); -1 if there's nowhere. The same answer on every device.
+ * tile further out from the posts' ground); -1 if there's nowhere. With `toward` (a tile), the open tile nearest that
+ * one instead (the rest of a field gathers round where its first deposit went). The same answer on every device.
  */
-function calmSpill(from, fit) {
-  const fi = from % S.W, fj = (from / S.W) | 0;
+function calmSpill(from, fit, toward) {
+  const at = toward >= 0 ? toward : from, fi = at % S.W, fj = (at / S.W) | 0;
   // (Out to 20 tiles, and then the whole map: a post can take up a whole islet.)
   for (const same of [true, false]) {
     const radii = [];
@@ -18956,12 +19045,15 @@ function clearCalmGround(sym) {
       src.push([n, Math.max(Math.abs(di), Math.abs(dj)), di * di + dj * dj, t]);
     }
   });
-  // Post by post, the edge of its ground first.
+  // Post by post, the edge of its ground first. The first deposit of each kind off a post's ground lands on the nearest
+  // open tile; the rest of that kind gather round it (`toward`), so a field moved off the ground lies as a field beside
+  // it, not strung out in a line to wherever the ground opens up (a deck's rim on Orbital platforms).
   src.sort((a, b) => a[0] - b[0] || b[1] - a[1] || b[2] - a[2] || a[3] - b[3]);
   let moved = 0;
-  for (const [, , , s] of src) {
+  const anchor = new Map();
+  for (const [n, , , s] of src) {
     if (!S.res[s]) continue; // (moved already, with a twin)
-    const O = orbit(s), r = S.res[s], a = S.amt[s];
+    const O = orbit(s), r = S.res[s], a = S.amt[s], key = n + ':' + r, to = anchor.has(key) ? anchor.get(key) : -1;
     // The twins that hold the same deposit move with it (on a planet made from the seed: all of them).
     const ks = O.map((u, k) => k).filter((k) => O.indexOf(O[k]) === k && S.res[O[k]] === r && S.amt[O[k]] === a);
     // Its new tile's twins: open ground off every post's ground, on the same land as theirs if it can be, and as many
@@ -18972,9 +19064,10 @@ function clearCalmGround(sym) {
       for (let k = 0; k < O.length; k++) for (let m = 0; m < k; m++) if ((O[k] === O[m]) !== (D[k] === D[m])) return false;
       return ks.every((k) => k === 0 || calmSpillOk(D[k], O[k], same));
     };
-    let d = ks.length > 1 ? calmSpill(s, fit) : -1, D = d >= 0 ? orbit(d) : null;
-    if (d < 0) { d = calmSpill(s); D = [d]; ks.length = 1; } // (nowhere for them all: this one alone)
+    let d = ks.length > 1 ? calmSpill(s, fit, to) : -1, D = d >= 0 ? orbit(d) : null;
+    if (d < 0) { d = calmSpill(s, null, to); D = [d]; ks.length = 1; } // (nowhere for them all: this one alone)
     if (d < 0) continue;
+    if (to < 0) anchor.set(key, d);
     for (const k of ks) { moveDeposit(O[k], D[k]); moved++; }
   }
   return moved;

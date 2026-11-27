@@ -877,8 +877,10 @@ const MAP_GROUPS = [
 ];
 const SHAPE_PRESETS = [
   { name: 'Standard', group: 'open', blurb: 'Open ground with hills, cliffs and resource fields between the bases. Holds up to four: with four, a colony in each corner.', w: 1, h: 1, ffa: true, players: 4, std4: true,
+    tip: 'Standard: open ground, hills and cliffs. Your starter fields lie round the landing site; richer Ore and Crystal and an oil seep lie just past your border, and the fields midway are the ones your rival wants too. Push an Outpost out early, and keep an eye on the ramps up the cliffs.',
     quadTip: 'Standard for four: a colony in each corner of open ground, hills, cliffs and resource fields between. Your neighbours are beside you to the north and east; the colony across the middle is the far one.' },
-  { name: 'Long haul', group: 'open', blurb: 'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail). Its Ore and Crystal fields hold half as much again.', w: 0.75, h: 1.7, haulRich: 1.5 },
+  { name: 'Long haul', group: 'open', blurb: 'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail). Its Ore and Crystal fields hold half as much again.', w: 0.75, h: 1.7, haulRich: 1.5,
+    tip: 'Long haul: a long, narrow planet, your rival at the far end. The fields hold half as much again, so they last, but the good ones lie far up the map: pave the way (Paths (Pave)) and bring them home by Freight Truck, Road Train or rail (Paths (Rail)). A long line is a long way to guard: turrets where it narrows, warbots on call.' },
   { name: 'Chokepoint', group: 'divided', blurb: 'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
   { name: 'Islands', group: 'water', blurb: 'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
   { name: 'Crater', group: 'heights', blurb: 'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
@@ -1176,6 +1178,13 @@ const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or 
  */
 const HOME_FIELD = 4;
 /**
+ * Fuel at home: every colony has an oil seep it can walk to within `r` tiles of its Command Base, on every map that lays
+ * its home ground from the generic fields (homeFieldFloor in world.js; not the Hollow, Half underground, The Ring or
+ * Orbital platforms, which lay their own). Where the map's own features cover the oil fields (a massif, a town, a yard,
+ * maze walls: most Small maps), a seep of `tiles` is laid `near` to `far` tiles out, on ground the colony walks to.
+ */
+const HOME_OIL = { r: 14, near: 6, far: 11.5, tiles: 3 };
+/**
  * The Ring (SHAPE_PRESETS asteroids: ringMap in world.js, the space backdrop in js/ring.js). Two colonies, each on a home
  * asteroid, a rich rock in the middle, a chain of stepping stones between, and resource rocks beside them, in empty space:
  * the space between is `T_CHASM` that nothing can cross or build on (no Sky bridge: `voidTile`), so a crossing is a
@@ -1280,6 +1289,8 @@ const VICTORY_ORDER = ['capture', 'domination', 'uplinks'];
  * `online` (seconds in): before that they can be claimed, but every colony has time to build an army to fight for them.
  */
 const UPLINK = { hold: 300, jam: 2.5, online: 480 };
+/** Uplinks: how near a Command Base one may stand when the map has no room for them all further out (placeUplinks' second try: small home islands). */
+const UPLINK_CLOSE = 7;
 /**
  * A rival that has clearly lost gives up (see checkSurrender): after `after` seconds of play, once its colony is
  * down to `left` of what it was at its height and the colony beating it is `odds` times as strong (buildings,
@@ -2423,8 +2434,12 @@ const TRADE_MADE = ['alloy', 'chip', 'ammo', 'fuel'];
  * Terminal anywhere else, never on a rival's ground, and a rival's land round a post keeps you out. The post's
  * ground, `calm` tiles round its pad, is a no-fire zone: nothing shoots at anything on it, nor from it (see calmAt),
  * so the fights over trade happen out on the routes, never at the dock.
+ * `relax`: where the map has no room for them all so (most Small maps), the next passes, each a little nearer the bases
+ * and each other, on smaller open ground (`room` of the 25 tiles round the pad; 14 at first). Still a colony's worth
+ * short, a set with the map's symmetry, one for each colony at the same spot on its side, at the last of those or `near`.
  */
-const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock: 2, fair: 3, calm: 3 };
+const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock: 2, fair: 3, calm: 3,
+  relax: [{ minFromBase: 14, apart: 10, room: 12 }, { minFromBase: 12, apart: 9, room: 11 }], near: { minFromBase: 8, apart: 8, room: 11 } };
 /** The goods tradeShortest weighs for the rival AI (what its land runs out of, and what it's made into). */
 const TRADE_SHORT = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'];
 

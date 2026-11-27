@@ -121,3 +121,12 @@ the guide and README name every one.
 - `hashState` at generation and after two minutes of a computer-only game (Medium, seed 21; two colonies, and four
   where the map takes four; three where it needs three) matches the previous commit on every map type except
   Passenger Town (two and four colonies) and The Dam with four colonies, the two fixes above.
+
+## Follow-ups done (Nov 27 2026)
+
+Recommendations 1, 3, 4 and 6 and the Orbital platforms field line (IDEAS) are done; 2 was done earlier; 5 (the Dam's
+ramp feet) is left as the map's layout choice. Swept with `tools/map-audit.js` on every map type, player count and size,
+seeds 1 to 8, 11, 21, 37, 99, 123 (4,095 maps): no oil seep in walking reach within 14 tiles 829 → 0; a Trade Post or
+Uplink only a bridge or tunnel reaches on a walked map 86 → 0; no Trade Post 323 → 0; fewer posts than colonies 505 → 0;
+fewer than 3 Uplinks 29 → 0. The tool now fails each of these. Details in IDEAS ("Map audit follow-ups") and README
+("Fuel at home", "Trade Posts and Uplinks on walked ground").

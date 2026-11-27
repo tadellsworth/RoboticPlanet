@@ -10,7 +10,9 @@
 //   node tools/map-audit.js --json out.json    the full results as JSON too
 //   (--strict is accepted and changes nothing: every map is held to the starter-field floor now)
 // Exits non-zero when a check fails (an exception, a start off the ground, a colony that cannot reach another by the
-// map's crossing, a home with too few Ore or Crystal tiles in walking reach (HOME_FLOOR), a stalled rival or a crash).
+// map's crossing, a home with too few Ore or Crystal tiles in walking reach (HOME_FLOOR), no oil seep in walking reach within
+// OIL_R, a Trade Post or Uplink only a bridge or tunnel reaches on a map meant to be walked, too few Trade Posts or Uplinks,
+// a stalled rival or a crash). --skip noOil,sitePocket,siteShort leaves those three out of the failures.
 'use strict';
 const { readFileSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
@@ -18,12 +20,22 @@ const path = require('node:path');
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const aiMin = +opt('--ai', 0), only = opt('--only', ''), jsonOut = opt('--json', ''), seeds = opt('--seeds', '11,21,37').split(',').map(Number);
 const sizes = opt('--sizes', '0,2').split(',').map(Number);
+// --skip noOil,sitePocket,siteShort leaves those checks out of the failures (they are still measured and summed up).
+const skip = new Set(opt('--skip', '').split(',').filter(Boolean));
 // The starter fields: every colony's home has at least this many Ore and Crystal tiles (deposit tiles, not their amounts) in
 // walking reach within HOME_R tiles of its Command Base: the starter field and the richer one just beyond the border (Standard's
 // lies 13.5 tiles out). A map can ask for more: Orbital platforms guarantees its fields' size (ORBITAL.field), so a wiped field
 // shows up there at once. Colonies whose map puts none at home are skipped (Half underground's surface colonies: their Ore and
 // Crystal come through the cave mouths).
 const HOME_R = 16, HOME_FLOOR = { ore: 4, crystal: 4 }; // (HOME_FIELD: the starter field alone holds that many)
+// Fuel at home: every colony has an oil seep in walking reach within OIL_R tiles of its Command Base (oilFloor, js/world.js),
+// on every map but those that keep oil away from home on purpose (OIL_EXEMPT: Sky islands' seeps lie on the mesas between;
+// Half underground, the Hollow, The Ring and Orbital platforms lay their own).
+const OIL_R = 14, OIL_EXEMPT = ['Sky islands', 'Half underground', 'The Hollow', 'The Ring', 'Orbital platforms'];
+// Trade Posts and Uplinks on maps meant to be walked (all but SITE_CROSS, built round a crossing) stand on ground every
+// colony walks to (Tidal flats: at low tide); and every map that has them has at least a Trade Post a colony (two in
+// Teams) and three Uplinks (as many as colonies, for three or four).
+const SITE_CROSS = ['Islands', 'Four Isles', 'Sky islands', 'The Ring'];
 const FLOOR_OF = { 'Orbital platforms': { ore: 8, crystal: 8 }, 'The Ring': { ore: 6, crystal: 6 }, 'The Hollow': { ore: 3, crystal: 3 } }; // (the Hollow's own home fields hold 3: hollowMap)
 // (Every map holds the floor now: each colony's starter Ore and Crystal fields have at least HOME_FIELD tiles, defs.js. Before
 // that, a sweep of seeds 1 to 8, 11, 21, 37, 99, 123 on Small to Immense found twelve map types whose small random stamps a seed
@@ -181,6 +193,24 @@ const api = new Function('sfx', 'PROGRESS', source + `
       const t = tIdx(site.x, site.y);
       if (S.terrain[t] !== T_GROUND) out.problems.push('site off the ground at ' + site.x + ',' + site.y);
     }
+    // Fuel at home (OIL_R) and the sites' reach and count (see SITE_CROSS).
+    out.oilNear = out.reach.map((r) => r.near.oil);
+    if (!opts.oilExempt.includes(sh.name)) out.reach.forEach((r, k) => { if (r.near.oil === null || r.near.oil > opts.oilR) out.noOil = (out.noOil || []).concat('colony ' + (k + 1) + ' nearest oil in walking reach ' + (r.near.oil === null ? 'none' : r.near.oil) + ' (want within ' + opts.oilR + ')'); });
+    out.sitePocket = [];
+    const okHow = (h) => h === 'walk' || (S.tidal && h === 'tide');
+    if (!opts.siteCross.includes(sh.name) && out.links.every((l) => okHow(l.how))) { // (where the colonies walk to one another)
+      out.postReach.forEach((v, k) => { if (!v.every(okHow)) out.sitePocket.push('Trade Post ' + (k + 1) + ' at ' + S.posts[k].x + ',' + S.posts[k].y + ' reached by ' + v.join('/')); });
+      out.uplinkReach.forEach((v, k) => { if (!v.every(okHow)) out.sitePocket.push('Uplink ' + (k + 1) + ' at ' + S.uplinks[k].x + ',' + S.uplinks[k].y + ' reached by ' + v.join('/')); });
+    }
+    out.siteShort = [];
+    if (!S.hollow && !S.caves) {
+      // (Trade Posts: one more than colonies, four in Teams (two pairs), is the full count (postsFull); fewer than one a
+      // colony, or two in Teams, fails. Small maps and narrow ones (Long haul, Ring valley) can have room for no more.)
+      const fullPosts = S.teams ? 4 : live.length + 1, floorPosts = S.teams ? 2 : live.length;
+      out.postsFull = out.posts >= fullPosts;
+      if (out.posts < floorPosts) out.siteShort.push(out.posts + ' Trade Posts (want at least ' + floorPosts + ')');
+      if (S.victory === 'uplinks') { const wantUp = live.length === 2 ? 3 : live.length; if (out.uplinks < wantUp) out.siteShort.push(out.uplinks + ' Uplinks (want at least ' + wantUp + ')'); }
+    }
     if (S.orb) {
       out.orb = { decks: S.orb.plats.length, bridges: S.orb.br.length, boxes: S.orb.bx.length };
       for (const b of S.orb.bx) if (!walkable(tIdx(b.x, b.y)) && !S.bAt[tIdx(b.x, b.y)]) out.problems.push('control box off the deck at ' + b.x + ',' + b.y);
@@ -242,13 +272,14 @@ for (const [preset, shape] of pick) {
       if (api.mapSizeForPlayers(size, players) !== size) continue;
       for (const teams of players === 4 ? [false, true] : [false]) {
         for (const seed of seeds) {
-          const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks', murmur: 'active', biome: 'desert', homeR: HOME_R, floor: FLOOR_OF[preset.name] || HOME_FLOOR };
+          const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks', murmur: 'active', biome: 'desert', homeR: HOME_R, oilR: OIL_R, oilExempt: OIL_EXEMPT, siteCross: SITE_CROSS, floor: FLOOR_OF[preset.name] || HOME_FLOOR };
           const label = [preset.name, api.SIZE_PRESETS[size].name, players + 'p', teams ? 'teams' : 'ffa', 'seed ' + seed].join(' / ');
           let r;
           try { r = api.audit(opts); } catch (e) { r = { problems: ['exception: ' + e.stack.split('\n').slice(0, 3).join(' | ')] }; }
           r.label = label; r.size = size; r.seed = seed; r.teams = teams; r.np = players;
           row.cases.push(r);
           if (r.thin && r.thin.length) r.problems.push(...r.thin);
+          for (const k of ['noOil', 'sitePocket', 'siteShort']) if (r[k] && r[k].length && !skip.has(k)) r.problems.push(...r[k]);
           if (r.problems.length) { failures++; console.log('PROBLEM ' + label + ': ' + r.problems.join('; ')); }
         }
       }
@@ -260,9 +291,12 @@ for (const [preset, shape] of pick) {
   const fair = {}; ok.forEach((c) => { for (const g in c.fair) fair[g] = Math.min(fair[g] ?? 1, c.fair[g]); });
   const near = {}; ok.forEach((c) => c.reach.forEach((r) => { for (const g in r.near) near[g] = Math.max(near[g] ?? 0, r.near[g] === null ? 999 : r.near[g]); }));
   const sites = ok.map((c) => c.posts + '/' + c.uplinks).filter((v, i, a) => a.indexOf(v) === i).join(' ');
+  const oilFar = ok.filter((c) => c.noOil && c.noOil.length).length, pocket = ok.filter((c) => c.sitePocket.length).length, short = ok.filter((c) => c.siteShort.length).length;
+  const postsPart = ok.filter((c) => c.postsFull === false).length;
   row.summary = { cases: row.cases.length, genMax: Math.max(...ms), genAvg: Math.round(ms.reduce((a, b) => a + b, 0) / (ms.length || 1)), links, fair, nearWorst: near, sites };
   console.log(preset.name.padEnd(22) + ' ' + row.cases.length + ' cases, gen avg ' + row.summary.genAvg + ' ms max ' + row.summary.genMax + ' ms; links ' + JSON.stringify(links) +
-    '; worst fairness ' + JSON.stringify(fair) + '; worst nearest ' + JSON.stringify(near) + '; posts/uplinks ' + sites);
+    '; worst fairness ' + JSON.stringify(fair) + '; worst nearest ' + JSON.stringify(near) + '; posts/uplinks ' + sites +
+    '; no oil within ' + OIL_R + ' ' + oilFar + ', sites in pockets ' + pocket + ', sites short ' + short + ', posts short of one more than colonies ' + postsPart);
   if (aiMin > 0) {
     const counts = [2]; if (api.minPlayers(shape) > 2) counts[0] = api.minPlayers(shape); if (api.maxPlayers(shape) === 4 && api.playersFit(shape, 4) && !counts.includes(4)) counts.push(4);
     for (const players of counts) {

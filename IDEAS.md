@@ -3124,7 +3124,9 @@ ones with rays. It is shaded per pixel at the size it shows, at the canvas's own
 terminator, crater walls catching the light, a thin rim on the limb toward Corvane, faint planetshine on the night side),
 cached and shaded again only when it has turned a step (tidally locked, it turns once an orbit). Same place and size.
 
-## Open: map audit follow-ups (Nov 27 2026)
+## Map audit follow-ups (Nov 27 2026)
+
+Left open: the starter Crystal under the Dam's ramp feet on Small (a layout choice; not changed). Everything else below is done.
 
 From `docs/map-audit-nov27.md` (owner's call on each): a Fuel source in walking reach on Small maps (most map types have
 no oil seep either colony can walk to on Small); a floor on the starter Ore and Crystal fields (a seed can leave one
@@ -3149,8 +3151,31 @@ Walking Factory: 71 thin homes over seeds 1 to 8, 11, 21, 37, 99, 123 on Small t
 flag is accepted and changes nothing). Passenger Town's town did cut a colony's second fields (the Ore and Crystal beyond
 the border lie out in front of the base, under the streets: on Small for two, seed 7, the Ore within 16 tiles went from 10 to 2);
 what the town or the Walking Factory's yard cuts within 16 tiles of a base is now laid again just outside it, as many tiles
-and as rich (`homeFieldFloor`). Open, the owner's
-call: 4 is a little under Standard's full stamp (5); raise `HOME_FIELD` to 5 if starts still feel lean (it would enrich
-most seeds by a tile or two). The Hollow keeps its own 3 a field. Also seen: on Orbital
+and as rich (`homeFieldFloor`). **Decided (the owner, Nov 27 2026): `HOME_FIELD` stays at 4** (the question was 4 or
+Standard's full stamp, 5). The Hollow keeps its own 3 a field. Also seen: on Orbital
 platforms a Trade Post off a deck's middle moves the fields on its ground (`clearCalmGround`) into a straight line of
-tiles, out to the deck's rim.
+tiles, out to the deck's rim (done, below).
+
+Done (Nov 27 2026), the rest of the list. Measured with `tools/map-audit.js` on every map type, player count and size
+(Small to Planetary), seeds 1 to 8, 11, 21, 37, 99, 123 (4,095 maps), before and after:
+- **Fuel at home** (`HOME_OIL`, `homeFieldFloor`): every colony has an oil seep it walks to within 14 tiles of its Command
+  Base; short of one, a 3-tile seep is laid 6 to 11.5 tiles out on ground it walks to, with the map's symmetry. Small
+  colonies with one: 1,292 of the 1,924 on map types that lay their home from the generic fields → all 1,924; maps with a
+  colony short, all sizes: 829 → 0 (Crossroads 158, Dam 108, Passenger Town 106, Long Haul 2v2 86, the Walking Factory 71,
+  Canyon maze 68, Ring valley 56...). Not on the Hollow, Half underground, The Ring and Orbital platforms (their own) nor
+  Sky islands (it always had one). A Trade Post's ground keeps off each colony's nearest seep. In 15-minute computer games on
+  Small (seed 21) the rivals pumped it from minute 3 to 7 on Ring valley, Canyon maze and Passenger Town (none before).
+- **Sites on walked ground** (`placePosts`, `placeUplinks`, `walkFrom`): where every colony walks to every other (fords and
+  low tide count), Trade Posts and Uplinks stand on that ground; anywhere only if it has no room. Maps with a site only a
+  bridge or tunnel reaches: 86 → 0 (River delta 32, Oases 23, Three Mesas 19, Passenger Town Small four-colony corners...).
+- **The Small-map Trade Post gap**: `TRADE_POST.relax` (two nearer passes), then a set with the map's symmetry, one a colony
+  (`TRADE_POST.near` on small home islands: Four Isles on Small gets one on each island's far shore). Maps with no post:
+  323 → 0 (Small: 296 → 0); fewer than one a colony (two in Teams): 505 → 0; short of the full count (one more than
+  colonies): 1,229 → 278 (Ring valley, Passenger Town, the Walking Factory, Islands mostly: no room for the last one).
+  Trade Posts on the Small maps, all told: 1,100 → 2,523. Uplinks: a second try nearer home (`UPLINK_CLOSE`, 7) when the
+  orbits don't fit; maps short of 3 (of as many as colonies): 29 → 0 (Four Isles for three: 1 → 4 or 5).
+- **Orbital platforms' moved fields** (`clearCalmGround`, `calmSpill`): the rest of a field moved off a post's ground
+  gathers round where its first deposit went, so it lies as a field beside the ground, not a line out to the rim.
+- **Start tips for Standard and Long haul** (`tip` in `SHAPE_PRESETS`).
+- `tools/map-audit.js` fails each of these now (oil within 14, sites in pockets, too few posts or Uplinks; `--skip` leaves
+  them out) and counts the maps short of the full post count.

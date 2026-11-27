@@ -3790,7 +3790,8 @@ function newGame(opts) {
  * grows by the free tiles nearest it (open ground on the base's level, off the landing zone, the town and the yard). Laid
  * on player 0's home and copied onto each twin with the map's symmetry (the half turn, the quarter turns, Long Haul 2v2's
  * mirrors); three colonies on a turned map are each made up on their own (the turn is rounded, so tile for tile does not
- * hold), to the same count.
+ * hold), to the same count. Last, Fuel: each colony has an oil seep it walks to within HOME_OIL.r tiles, or one is laid
+ * (see HOME_OIL), with the same symmetry.
  */
 const HOME_FIELD_R = 9, HOME_CUT_R = 16;
 function homeFieldFloor(bases, st, pre, preAmt) {
@@ -3853,7 +3854,57 @@ function homeFieldFloor(bases, st, pre, preAmt) {
         have++;
       }
     }
+    // Fuel at home (HOME_OIL): an oil seep the colony walks to within HOME_OIL.r tiles. Short of one (the map's own
+    // features covered the fields beyond and in the middle: a massif, the town, the yard, maze walls), a seep of
+    // HOME_OIL.tiles is laid HOME_OIL.near to far tiles out, on open ground this colony walks to, each twin on ground its
+    // own colony walks to (the same spot on every side).
+    const reach = walkFrom(b);
+    let oil = false;
+    for (let j = Math.max(0, b.y - HOME_OIL.r); j <= Math.min(H - 1, b.y + HOME_OIL.r) && !oil; j++) for (let i = Math.max(0, b.x - HOME_OIL.r); i <= Math.min(W - 1, b.x + HOME_OIL.r); i++) {
+      const t = j * W + i;
+      if (S.res[t] === R_OIL && reach[t] && dist2(i, j, b.x, b.y) <= HOME_OIL.r * HOME_OIL.r) { oil = true; break; }
+    }
+    if (oil) continue;
+    // (The twins only need open ground: the map's symmetry is exact here, so a twin lies on ground its own colony walks to.)
+    const ok = (t) => orbit(t).every((u) => free(u, S.elev[u]));
+    const c = [];
+    for (let j = Math.max(1, Math.floor(b.y - HOME_OIL.far)); j <= Math.min(H - 2, Math.ceil(b.y + HOME_OIL.far)); j++) for (let i = Math.max(1, Math.floor(b.x - HOME_OIL.far)); i <= Math.min(W - 2, Math.ceil(b.x + HOME_OIL.far)); i++) {
+      const t = j * W + i, d = dist(i, j, b.x, b.y);
+      if (d < HOME_OIL.near || d > HOME_OIL.far || !reach[t] || !ok(t)) continue;
+      let room = 0; // (open ground round it for the rest of the seep)
+      for (const u of [t - 1, t + 1, t - W, t + W]) if (ok(u)) room++;
+      if (room < 2) continue;
+      c.push([Math.abs(d - (HOME_OIL.near + HOME_OIL.far) / 2) - room * 0.5, t]);
+    }
+    c.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+    if (!c.length) continue;
+    const o = c[0][1], oi = o % W, oj = (o / W) | 0, near = [];
+    for (let j = oj - 1; j <= oj + 1; j++) for (let i = oi - 1; i <= oi + 1; i++) near.push([dist2(i, j, oi, oj), j * W + i]);
+    near.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+    let laid = 0;
+    for (const [, t] of near) {
+      if (laid >= HOME_OIL.tiles || !reach[t] || !ok(t)) continue;
+      for (const u of orbit(t)) { S.res[u] = R_OIL; S.amt[u] = amtOf(R_OIL); if (S.grow) S.grow[u] = 1; }
+      laid++;
+    }
   }
+}
+/**
+ * The tiles a robot walks to from (b.x, b.y), as a mask: over ground, roads and fords (homeFieldFloor, before any road;
+ * placePosts and placeUplinks). With `tide`, over the tidal flats too, as at low tide.
+ */
+function walkFrom(b, tide) {
+  const W = S.W, N = W * S.H, m = new Uint8Array(N), s = b.y * W + b.x, q = [s], fl = tide && S.tidal;
+  m[s] = 1;
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    for (const u of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (u < 0 || u >= N || m[u]) continue;
+      if (fl && (fl[a] || fl[u]) ? !(walkable(u) || fl[u]) : !walkable(u) || !canStep(a, u)) continue;
+      m[u] = 1; q.push(u);
+    }
+  }
+  return m;
 }
 
 /** The biome of the current game. */
