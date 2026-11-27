@@ -2085,7 +2085,7 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
-### Batch 40: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
+### Batch 41: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
 
 On Half underground (README, Half underground) the gaps in the wall between the surface and the caves were plain square
 notches: the sand met the cave floor at a hard line and nothing said "a way through". They went through Claude Design (Nov
@@ -2124,6 +2124,44 @@ on past the mouth's line (the wall's middle wanders a row across a wide mouth; t
 **daylight** falling in onto the cave floor by day and **the caves' violet glow** spilling out onto the surface after dark (both
 off on Graphics Saver), and on the **minimap** a pale violet bar across the wall at each mouth. Looks only: `cavesMap`, `S.cave`
 and what can pass are untouched. All of it ends `-hollow`, so it loads only with the Hollow's art (`LAZY_BIOMES`).
+
+### Batch 40: The Ring's space backdrop (installed)
+
+The Ring (`SHAPE_PRESETS` asteroids) is set in high orbit round Ithaca I, among the Ring's rocks. Its backdrop was drawn
+in code (a gradient, sprites and a small turning planet); it is now painted pictures, from a Claude Design canvas of three
+concepts (https://claude.ai/artifact/TtNr58yaFT34Bdfby21YnX), installed while the owner slept as Claude's pick:
+**A, "Shadow pass"**. The rocks go round through Ithaca I's shadow once a day, so the backdrop keeps time with the map's
+day: by day Corvane stands clear in the upper left and the planet is lit gibbous from the top-left (the one key light);
+at dusk the star sinks to its left limb and the planet thins to a crescent; at night Corvane is behind it, a black disc
+ringed with lit air, the colonies' lights on its face, the Ring glowing with the light it lets through and the drifting
+rocks dark; at dawn the star comes out on the right limb. The asteroids keep the game's own day and night grade
+(`ringClipLand`; the Argos terminator's shade at dusk is clipped to them too).
+
+| File (`art/ring/`) | Size | What |
+|---|---|---|
+| `sky.webp` | 2048×1280, opaque | The deep sky: navy to near-black, the galaxy's band from upper right to lower left (mottled, crossed by dust lanes), violet, blue, teal and a faint coral wash of nebula, a grain of faint stars. Scaled to cover the view. About 60 KB |
+| `planet-day.webp`, `planet-evening.webp`, `planet-night.webp`, `planet-morning.webp` | 1804×1100, alpha | Ithaca I (radius 420 px, its middle at `cx`, `cy` in `ring-art.js`) with the Ring round it, for each time of day: the face is the Contingency globe's (`art/globe/ithaca-2048.webp`, the Rust toward you) under its clouds, lit as the menu planet is (soft terminator with a warm band, the seas' glint, blue haze toward the limb), the atlas's colonies' lights (`art/lore/ithaca-map.webp`'s alpha) on the night side, the Ring's shadow on the planet and the planet's on the Ring, the air's halo (backlit: a thin bright ring with a red foot). The Ring: nine bands with ringlets and one gap, grey dust inside and coral-cream outside, slanted −0.32 rad as everywhere else; lit face by day, glowing by the light it lets through at night. 140 to 160 KB each |
+| `argos-day.webp`, `argos-night.webp` | 224×224, alpha | Argos (radius 110), the menu planet's recipe (`mplMoonMap`, at 1024 × 512): pale highlands, darker maria, craters with bright rims, a few rayed; lit, and backlit as a thin crescent with coral planetshine. 8 and 3 KB |
+| `corvane.webp` | 384×384, additive | The star: white core, orange corona, six thin spikes, a faint anamorphic streak and halo ring. Drawn with `lighter`. 15 KB |
+| `rocks.webp` | 1024×128, alpha | Eight drifting Ring rocks (128 px cells): lumpy, grey and coral-grey regolith, lit from Corvane's side. 9 KB |
+| `ring-art.js` | | `window.RING_ART`: each picture's size (and the planet's and Argos's middle and radius) and the layout: where the planet and Argos sit and how big (a share of the view's shorter side; `wide` and `tall` for an upright phone), Corvane's place for each time of day in the planet's radii from its middle (night: behind it), its size, how many rocks |
+
+How they're drawn (`js/ring.js`): the sky, two tiles of crisp code-drawn stars, Corvane, the planet (the time of day's
+picture crossfaded into the next, by `todNow`) and Argos make one far layer (`rspFar`), a canvas 4% bigger than the view
+each side, made again only when the view's size or the backdrop's day changes (1/24 steps of a crossfade); each picture is
+scaled once to the size it shows at (`rspFit`, halving first). A frame draws that layer once, slid 2% of the pan against
+it (clamped to its margin), then while Corvane is out its flare (it flares often, LORE.md) and the lens (a long thin streak
+and four faint ghosts toward the middle of the view), seven rocks drifting and turning slowly (sliding 8 to 30% of the
+pan, darkened as the rocks go into the shadow) and the ringfall streaks. Graphics Saver: no rocks, ghosts or ringfall;
+reduced motion: nothing moves. Loaded only for The Ring (`ensureRingArt`); in the one-file build `dist/ring-art.js`. Till
+they're in (or if they fail), a plain deep sky.
+
+To change it: `python3 tools/ringsky/ringsky.py [look]` (numpy, scipy, Pillow; a minute or two) paints every picture and
+writes `ring-art.js` into `art/ring/`. The look's light directions, the planet's turn, the Ring's tilt and opening, the
+layout and Corvane's places are in its `LOOK` blocks at the end; the Ring's bands in `RING_BANDS`; the sky's band and
+nebulae in `sky_layer`. The other two concepts are looks of their own: `crescent` (one still view, a big crescent low in
+the corner with Corvane just off its limb, the Ring thrown wide) and `ringplane` (the Ring nearly edge-on, a bright blade
+across the sky, more rocks); either drops into the game with no code change.
 
 ### Batch 39: Orbital platforms' backdrop, Ithaca I from the decks (installed; stars, near cloud and deck shadows drawn in code)
 
@@ -2166,8 +2204,8 @@ made again when a bridge moves), offset 0.35 tile right and 0.7 down, as every s
 picture and the stars only (no near cloud, no drift); **reduced motion** holds everything still. The pictures load only for
 an Orbital platforms map (`ensureOrbArt`: `art/orbital/orbital-art.js`; in the one-file build a bundle beside the page,
 `dist/orbital-art.js`, `window.ORBITAL_BUNDLE`); till they're in, the old sky is drawn in code (`orbSkyCode`).
-The Ring map's space (js/ring.js) is a different place in the same sky: out among the asteroids with Ithaca I small and
-whole; here the planet is close below and fills half the view.
+The Ring map's space (js/ring.js) is a different place in the same sky: out among the asteroids with Ithaca I whole
+beside them (Batch 40); here the planet is close below and fills half the view.
 
 ### Batch 38: Terraforming stage 4, the earthworks, the Sluice and the Sap Head (installed; floods, grooves and saps drawn in code)
 

@@ -511,14 +511,24 @@ offsets from the Command Base) and richer ones lie further out, each home astero
 Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
 the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
 crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in Cargo Planes (`aiAir`, see *The rival's aircraft* under the AI); the map is laid out so every gap on the way is
-short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only): the space
-behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`): a deep sky with faint nebulae, three layers of stars that
-drift slowly and slide a little as the view pans (the farther, the less), Corvane's glow in a corner, Ithaca I large and turning (about nine
-minutes a turn) with its Ring round it, Argos turning small beside it (both made once, procedurally, from noise, and turned by sampling
-a couple of times a second: no image files), and a streak of ringfall now and then. The asteroids stay put. The land is clipped (`ringClipLand`) when the
-day and night light is graded over it, so the space keeps its own light. A void tile is left clear in the map's bake (`drawVoidTile`)
-but for the canyon-wall art of Argos under an asteroid's southern rim, two tiles of it fading into the dark; the other sides have the
-canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves; reduced motion holds everything still; no planet tilt,
+short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only; ART_GUIDE.md, Batch 40): the space
+behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`) is high orbit round Ithaca I, painted as pictures
+(`art/ring/`, made by `tools/ringsky/ringsky.py`): the deep sky (the galaxy's band, faint nebulae, a grain of far stars) with two
+tiles of brighter stars over it, Corvane with its glare and spikes, Ithaca I with the Ring round it (its face the Contingency
+globe's, its colonies' lights the atlas's), Argos, a few of the Ring's rocks drifting by and a streak of ringfall now and then.
+The backdrop follows the day (**Shadow pass**: the rocks go through the planet's shadow once a cycle): by day Corvane stands clear and
+the planet is lit gibbous; at dusk the star sinks to its limb and the planet thins to a crescent; at night Corvane is behind it, a
+black disc ringed with lit air and the colonies' lights, the Ring glowing with the light it lets through and the drifting rocks
+dark; at dawn the star comes out on the other limb. Each time of day has its picture of the planet (`planet-<time>`), crossfaded as
+the day turns (`rspDay`, from `todNow`). Cheap: the sky, stars, Corvane, planet and Argos are one far layer made again only when
+the view's size or the backdrop's day changes (in 1/24 steps of a crossfade: `rspFar`), each picture scaled once to the size it
+shows at (`rspFit`); a frame draws that layer once, slid a little against the pan (2 %, clamped to its margin), then the lens
+streak and ghosts, up to seven rock sprites and the ringfall. The pictures (about 0.7 MB) load only for The Ring (`ensureRingArt`;
+`dist/ring-art.js` in the one-file build); till they're in, a plain deep sky. The asteroids stay put. The land is clipped
+(`ringClipLand`) when the day and night light is graded over it, so the space keeps its own light. A void tile is left clear in
+the map's bake (`drawVoidTile`) but for the canyon-wall art of Argos under an asteroid's southern rim, two tiles of it fading into
+the dark; the other sides have the canyon's crumbled lip art. Graphics Saver: no drifting rocks, lens ghosts or ringfall; reduced
+motion holds everything still (the rocks, the flare, the ringfall); no planet tilt,
 frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
 list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
 
@@ -4301,7 +4311,7 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 40): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 41): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
 of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
 a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
 then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),
@@ -4775,7 +4785,7 @@ tools/menu-test.js        the main menu: every destination opens (two taps at mo
 tools/build-single.js     bundles the code into dist/terrafall.html, and every picture into bundles beside it (so the page,
                           about 4 MB of code, stays far under its host's 16 MB a file): art-{buildings,bots,effects,other}.js
                           (loaded as the page starts: loadArt), biome-<b>.js (every biome's art but the Desert's, when
-                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), orbital-art.js (Orbital platforms' backdrop, on that map), tod-<time>.js (each time of
+                          played: LAZY_BIOMES), murmur.js (the Murmur's, in a game with them), town.js (Passenger Town's buildings, on that map), orbital-art.js (Orbital platforms' backdrop, on that map), ring-art.js (The Ring's backdrop, on that map), tod-<time>.js (each time of
                           day's re-lit set) and lore.js (the Lore guide's pictures). Copied without its folder, the page
                           still runs, drawn in code.
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)

@@ -477,7 +477,11 @@ function duskSky(ctx, ox, oy, z) {
     ctx.globalCompositeOperation = 'multiply';
     ctx.globalAlpha = 0.45 * D.env / (D.dawn ? 0.62 : 1);
     ctx.fillStyle = duskRgb(P.shade);
-    if (D.lineAt) { duskNightPath(ctx, D, 0); ctx.fill(); }
+    if (D.lineAt) {
+      if (R.void && typeof ringClipLand === 'function') { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: on the asteroids only; the space has its own light, js/ring.js)
+      duskNightPath(ctx, D, 0); ctx.fill();
+      if (R.void && typeof ringClipLand === 'function') ctx.restore();
+    }
   }
   if (D.saver || D.B.terminator) { ctx.restore(); return; }
   // The glare: the low sun just off the screen's edge.
