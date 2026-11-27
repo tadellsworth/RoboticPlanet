@@ -9885,6 +9885,7 @@ function sabotageRoads(u, r, dt) {
 
 /** Destroy a road tile (no refund): raids and missiles. Lights and overpasses on it go too. */
 function wreckRoad(t, victim, why) {
+  if (orbTile(t)) return; // (a drawbridge's road is part of the bridge: Orbital platforms)
   const i = t % S.W, j = (t / S.W) | 0, cross = crossTile(t);
   setRoad(i, j, false);
   // (In a nuclear blast the land and the zones are worked out once, when it's done: LAND_HOLD, see nukeImpact.)
@@ -11947,6 +11948,7 @@ function costText(cost) {
 function removeRoad(owner, i, j, held) {
   const t = tIdx(i, j);
   if (S.plan[t] === owner + 1) { cancelPlan(t); return; }
+  if (orbTile(t)) return; // (a drawbridge's road is part of the bridge: it can't be taken up)
   if (!S.road[t] || !roadOwnedBy(owner, t)) return; // only your own roads (a rival's are wrecked by raids or Missiles)
   const cross = crossTile(t);
   setRoad(i, j, false);
@@ -14389,7 +14391,7 @@ function orbFlip(k, up) {
     const t = j * W + i;
     S.terrain[t] = up ? T_CHASM : T_GROUND;
     S.dirtyTiles.push(t);
-    setRoad(i, j, !up, -1); // (a lowered bridge carries a road, whoever's land it is on; a raised one none, so nothing can drive over it)
+    setRoad(i, j, !up, -1); // (the strip's road is permanent: S.road mirrors it only while the strip is ground, since a road on a void tile would read as drivable all over; it comes back with the same cache bumps)
   }
   S.orb.ver++;
   terrainChanged();
