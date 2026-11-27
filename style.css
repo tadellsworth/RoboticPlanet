@@ -606,6 +606,8 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 #p-checkpoint { flex: 2.3 1 0; font-size: 14px; }
 #p-checkpoint-hint { margin: 6px 2px 0; font-size: 12px; line-height: 1.35; }
 #p-checkpoint-hint:empty { display: none; }
+/* (an upright phone: the list on a line of its own, Restore under it, so "12:00 in game · 12 min ago" is read whole) */
+@media (max-width: 499px) { #p-checkpoint-row { flex-wrap: wrap; } #p-checkpoint { flex-basis: 100%; } }
 #m-checkpoint-row { margin-bottom: 10px; }
 #m-checkpoint-game { margin: 0 0 4px; }
 #m-checkpoint, #p-checkpoint, #o-checkpoint, #p-difficulty { min-width: 0; padding: 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; }
@@ -3119,8 +3121,11 @@ body.deck .mp-players li { border-radius: 2px; }
   body.deck #topbar { padding-left: calc(var(--safe-l) + 10px); padding-right: calc(var(--safe-r) + 10px); padding-top: calc(var(--safe-t) + 10px); }
   body.deck .res-chip, body.deck .goods.two-rows .res-chip { min-height: 32px; font-size: 14px; }
   body.deck .toprow .chip { min-height: 44px; }
-  body.deck #pop { flex: 1; gap: 9px; }
+  /* (390 px wide: the three counts and their labels fit; spread out, never centred, so a squeeze never cuts the first one) */
+  body.deck #pop { flex: 1; gap: 6px; padding: 2px 6px; justify-content: space-between; }
   body.deck #pop .pn-free { display: none; }
+  body.deck #pop .pn-l, body.deck .ck-l { letter-spacing: 0.06em; }
+  body.deck #clock { padding: 2px 8px; }
   body.deck #sheet { bottom: calc(var(--safe-b) + 64px); border-width: 1px 0; border-radius: 0; z-index: 9;
     max-height: calc(46vh - 30px); max-height: calc(46dvh - 30px); }
   body.deck #sheet.full { max-height: calc(100vh - var(--hud-top, 130px) - 64px - var(--safe-b)); max-height: calc(100dvh - var(--hud-top, 130px) - 64px - var(--safe-b)); }

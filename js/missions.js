@@ -317,7 +317,7 @@ function ocEngine(S, E, L, st) {
   b.aeSrc = 'gen';
   return b;
 }
-const aeStageGoal = (n, text, hint) => ({ kind: 'atmosStage', n, text, at: 'atmos', count: (P) => P.stats.atmosStage || 0, hint, ui: '#btn-speed' });
+const aeStageGoal = (n, text, hint, ui = '#btn-speed') => ({ kind: 'atmosStage', n, text, at: 'atmos', count: (P) => P.stats.atmosStage || 0, hint, ui });
 
 const MISSIONS = [
   // Chapter 1, First Steps. One idea at a time: your first building and road, Stone and Cement, batteries, and the first Alloy.
@@ -1451,6 +1451,10 @@ const MISSIONS = [
         count: (P) => P.stats.tffill || 0,
         hint: '<b>Terraform</b> → <b>Fill shallows</b> (<kbd>H</kbd>): drag out from the shore, then <b>Terraform</b>.',
         ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='fill'], #tf-seg [data-tf='fill'], #banner-ok" },
+      { kind: 'dug', n: 2, text: 'Dig {n} tiles of channel',
+        count: (P) => P.stats.tfdig || 0,
+        hint: '<b>Terraform</b> → <b>Dig channel</b> (<kbd>C</kbd>): drag in from the water\'s edge, then <b>Terraform</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='dig'], #tf-seg [data-tf='dig'], #banner-ok" },
     ],
   },
 
@@ -1624,7 +1628,8 @@ const MISSIONS = [
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by the hull: warbots carry its crates home.',
         ui: '#btn-attack, #ar-hold' },
       AE_BUILT,
-      aeStageGoal(2, 'Reach stage 2 of the Engine, Rain', 'Two <b>Generators</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by it, fed: 6 minutes of power. Speed up: <b>1×</b>.'),
+      aeStageGoal(2, 'Reach stage 2 of the Engine, Rain', 'Two <b>Generators</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by it, fed: 6 minutes of power. Speed up: <b>1×</b>.',
+        "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator'], #btn-speed"),
       { kind: 'atmosFarms', n: [4, 5, 6], text: 'Sow the seed: {n} Bio Farms in the calm', at: 'atmos', count: (P, S) => aeFarms(S),
         hint: '<b>Build</b> → <b>Gather</b> (<kbd>1</kbd>) → <b>Bio Farm</b> (<kbd>F</kbd>) on the wet ground round the Engine.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='farm']" },
@@ -1654,7 +1659,8 @@ const MISSIONS = [
     },
     goals: [
       AE_BUILT,
-      aeStageGoal(3, 'Reach stage 3 of the Engine, Green', 'Keep both Generators fed: 16 minutes of power. Ring it with <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).'),
+      aeStageGoal(3, 'Reach stage 3 of the Engine, Green', 'Keep both Generators fed: 16 minutes of power. Ring it with <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).',
+        "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret']"),
       { kind: 'bloomBack', n: [4, 6, 8], text: 'Push the Bloom back {n} tiles', at: 'atmos', count: (P) => P.stats.atmosWither || 0,
         hint: 'At Green the Bloom withers back a tile a minute. Keep the power on: tap the Engine to see its stage.',
         ui: '#btn-speed' },
@@ -2131,7 +2137,7 @@ const MISSIONS = [
         ui: '#sh-tgive, #sh-tget, #sh-tgo' },
       { kind: 'escort', n: 1, text: 'Turn on Escort at the Terminal', at: 'terminal',
         count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].terminal && b.escort) ? 1 : 0),
-        hint: 'Tap the Terminal → <b>Escort</b> (<kbd>E</kbd>): two warbots from the nearest garrison ride with each convoy.',
+        hint: 'Tap the Terminal → <b>Escort</b> (<kbd>O</kbd>): two warbots from the nearest garrison ride with each convoy.',
         ui: '#sh-escort' },
       { kind: 'looted', n: [3, 5, 6], text: 'Carry home {n} crates of loot',
         count: (P) => P.stats.looted || 0,
@@ -2207,7 +2213,7 @@ const MISSIONS = [
     intro: [
       'A <b>Nuclear race</b>: an Ore Mine beside green Uranium digs it first.',
       'A <b>Nuclear Reactor</b> enriches 2 Uranium into 1; a Nuclear Silo needs 6 for a missile.',
-      'A nuclear missile flattens everything round where it lands. A direct hit destroys a Command Base.',
+      'A nuclear missile wrecks almost everything round where it lands. A direct hit destroys an enemy Command Base.',
       'Its fallout lingers: a green ring of radiation for minutes, where robots sicken, work slows and nothing is built. A Reactor a rival destroys leaks too.',
       'If one ever comes for you, press <b>Evacuate</b> (<kbd>V</kbd>) on the warning card.',
       'This mission ends with your launch. In free play, Custom Game → Rules switches the race on or off.',
@@ -2353,7 +2359,8 @@ const MISSIONS = [
     },
     goals: [
       AE_BUILT,
-      aeStageGoal(4, 'Reach stage 4 of the Engine, the Garden', 'Keep both Generators fed: 28 minutes of power in all. Guard it at night; the Murmur hate it.'),
+      aeStageGoal(4, 'Reach stage 4 of the Engine, the Garden', 'Keep both Generators fed: 28 minutes of power. At night, <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by it.',
+        '#btn-attack, #ar-hold'),
       { kind: 'greened', n: [25, 32, 40], text: 'Green {n}% of the valley\'s land', at: 'atmos', count: (P, S) => S.mission.greenPct || 0,
         hint: 'Stage 3 and 4 ground counts. Guard its Generators: <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>) by them.',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret']" },

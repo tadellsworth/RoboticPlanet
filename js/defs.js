@@ -2547,9 +2547,9 @@ const NARRATOR = {
   road: 'Road online. Built to Accord passenger standard.',
   night: 'Street lighting active. Traffic: freight only.',
   uplink: 'Uplink secured. Listening on all channels. No response.',
-  captured: 'Command authority transferred. Their robots report for duty.',
+  captured: 'Command authority transferred. Their buildings report for duty.', // (its robots shut down: eliminate)
   // (a rival's Command Base taken by another rival, in a free-for-all: {by} and {old} are callsigns, or people's names)
-  changed: 'Command core changed hands. {old}\'s robots now report to {by}.',
+  changed: 'Command core changed hands. {old}\'s buildings now report to {by}.',
   defeat: 'Command core lost. Transferring authority. Hold position.',
   // (lost on Domination, or on the Uplinks, while the colony still stands: LORE.md, Mechanics to lore; a win ends as
   // LORE.md's player arc has it: "Continuing current directive.")

@@ -2705,11 +2705,11 @@ const SHEET_KEYS = {
   'ar-strike': ['e', 'Strike: pick a target'],
   'sh-tgo': ['g', 'Start or change a trade route'],
   'sh-tstop': ['x', 'Stop trade route'],
-  'sh-escort': ['e', 'Toggle trade escort'],
+  'sh-escort': ['o', 'Toggle trade escort'], // (O, not E: E is Repair, on the same panel when the Terminal is damaged)
   'sh-mlink': ['l', 'Link Mooring Masts'],
   'sh-munlink': ['l', 'Unlink Mooring Masts'],
   'sh-magline': ['l', 'Plan a Maglev line'],
-  'sh-magrebuild': ['l', 'Rebuild a Maglev line'],
+  'sh-magrebuild': ['b', 'Rebuild the missing Terminal'], // (B, not L: L is Add a line, on the same panel)
   'sh-lf-security': ['z', 'Call down Security'],
   'sh-lf-crew': ['x', 'Call down Crew'],
   'sh-lf-alloy': ['c', 'Call down Alloy'],
@@ -2734,16 +2734,25 @@ function markSheetKeys() {
   for (const id in SHEET_KEYS) { const el = $(id); if (el && !el.dataset.key) el.dataset.key = SHEET_KEYS[id][0].toUpperCase(); }
   const d = $('sh-demolish') || $('sh-recycle'); if (d && !d.dataset.key) d.dataset.key = 'Del';
 }
-/** The open panel's button for key k, if it's showing and can be pressed. */
+/**
+ * SHEET_KEYS buttons that live outside the panels (the incoming-nuke card's Evacuate): their key works with no panel
+ * open too, and with one open when that panel has no button of its own on the key (nor the build menu's tab a card on it).
+ */
+const LOOSE_SHEET_KEYS = new Set(['nk-evac']);
+/** The open panel's button for key k, if it's showing and can be pressed (else a loose one's: LOOSE_SHEET_KEYS). */
 function sheetKeyButton(k) {
-  if (!UI.sheetKind || UI.sheetKind === 'build') return null;
-  if (k === 'delete' || k === 'backspace') { const d = $('sh-demolish') || $('sh-recycle'); return d && !d.disabled && d.offsetParent ? d : null; }
+  const open = !!UI.sheetKind && UI.sheetKind !== 'build';
+  if (k === 'delete' || k === 'backspace') { if (!open) return null; const d = $('sh-demolish') || $('sh-recycle'); return d && !d.disabled && d.offsetParent ? d : null; }
+  let loose = null;
   for (const id in SHEET_KEYS) {
     if (SHEET_KEYS[id][0] !== k) continue;
     const el = $(id);
-    if (el && !el.disabled && !el.hidden && el.offsetParent) return el;
+    if (!el || el.disabled || el.hidden || !el.offsetParent) continue;
+    if (LOOSE_SHEET_KEYS.has(id)) { loose = loose || el; continue; }
+    if (open) return el;
   }
-  return null;
+  if (loose && UI.sheetKind === 'build' && Object.values(BUILD_KEYS[UI.buildTab] || {}).includes(k)) return null;
+  return loose;
 }
 /** A building's key and the build-menu tab it's on ({ tab, key }), or null. */
 function buildKeyOf(t) {

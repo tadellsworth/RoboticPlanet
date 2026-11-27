@@ -879,7 +879,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   robots on the tile step off (ships to water: `moveOff`), routes over it are dropped. The tiles changed are kept in
   `S.tfTiles` (1 or 2, see above) and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
   as before. Rivals don't terraform yet. Later stages (IDEAS.md): blasting cliffs, landslides, flooding. The mission
-  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows.
+  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten, Fill shallows and Dig channel.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -3232,8 +3232,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It lands `NUKE.flight` (30) s after it's fired (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
-  `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
-  garrison and 1 armor, unless the missile lands on it (within `NUKE.direct`, 2 tiles, of its centre): then it's
+  `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included, except on a Trade Post's ground (`calmB`) and
+  Arrival City (knocked down, `cityDown`); a Command Base survives with no
+  garrison and 1 armor, unless the missile lands on an enemy's (within `NUKE.direct`, 2 tiles, of its centre, and `foes`): then it's
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   **The strike as it looks** (render only, `drawNukeFlight` in `js/render.js`; the game still just counts the 30 s down,
@@ -3271,7 +3272,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     on the minimap a ringed disc (`drawRadMinimap`). With a robot selected in a zone, or the camera over one, a faint
     Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
-  Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
+  Nov 2026). Late-game, one of each type per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
   `late`: drawn after All, key **6**; L the Lance, Y the Sundering Ray, H the Dome, C Arrival City, O the Orbital Lift, N the Atmosphere Engine, E the Deep Core, U the Great Uplink), all bigger than a tile: `def.foot` (3, 3, 2, 4, 3, 4, 3 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
@@ -4009,7 +4010,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
   **H** base, **I** statistics (Economy: History), **U** robots, **Y** Economy, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
-  recycles it), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
+  recycles it; the incoming-nuke card's **Evacuate**, **V**, works with no panel open too: `LOOSE_SHEET_KEYS`), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider

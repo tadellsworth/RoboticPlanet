@@ -278,7 +278,7 @@ const VOICE_LINES = {
   teams: { who: 'Carrier', text: 'Reserve lander away. Allied lander beside you. Two callsigns, one front.' },
   colony: { who: 'Carrier', text: 'Reserve lander away. No rival in range. Prepare the land for Arrival.' },
   argos: { who: 'Carrier', text: 'Terrafall on Argos. Silent ground. Hold it.' },
-  hollow: { who: 'Carrier', text: 'Lander through the breach. No daylight below. The ground is listening.' },
+  hollow: { who: 'Carrier', text: 'Lander through the breach. Daylight only at the shafts. The ground is listening.' },
   horde: { who: 'Carrier', text: 'Terrafall at the Maw. The ground is awake. Hold the line.' },
   mission: { who: 'Carrier', text: 'Training directive loaded. Command is yours.' },
   contingency: { who: 'Carrier', text: 'Contingency orders open. Reserve lander away. Take the territory.' },

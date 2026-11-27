@@ -7740,7 +7740,7 @@ function eliminate(old, by, how) {
     if (isMe(old)) postMsg(ME, `${playerName(by)} captured your Command Base!`, x, y, 'lost');
     else if (!isMe(by)) postMsg(ME, `${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
   }
-  // The narrator: a rival's command core is ours (its robots answer to us now), or changed hands between two others.
+  // The narrator: a rival's command core is ours (its buildings answer to us now; its robots shut down above), or changed hands between two others.
   // (Losing our own is for the end screen.)
   if (how !== 'nuke') {
     narrate(by, 'captured', x, y, 1);
