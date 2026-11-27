@@ -3497,6 +3497,8 @@ function megaBlocked(owner, type) {
   if (BDEFS[type].atmos && !atmosOpen()) return `The Atmosphere Engine opens ${Math.round(ATMOS.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(ATMOS.at - S.time))}.`;
   if (BDEFS[type].deepcore && !deepOpen()) return `The Deep Core opens ${Math.round(DEEP.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(DEEP.at - S.time))}.`;
   if (BDEFS[type].city && !cityOpen()) return `Arrival City opens ${Math.round(CITY.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(CITY.at - S.time))}.`;
+  if (BDEFS[type].rsv && !rsvOpen()) return `The Reservoir opens ${Math.round(RSV.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(RSV.at - S.time))}.`;
+  if (BDEFS[type].lvl && !lvlOpen()) return `The Leveller opens ${Math.round(LVL.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(LVL.at - S.time))}.`;
   if (BDEFS[type].sunder && !sunderOpen()) return `The Sundering Ray opens ${Math.round(SUNDER.at / 60)} minutes into a game: in ${fmtSecs(Math.ceil(SUNDER.at - S.time))}.`;
   if (S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type)) return `One ${BDEFS[type].name} per colony: you have one${S.buildings.some((b) => !b.dead && b.owner === owner && b.type === type && b.built) ? '' : ' going up'} already.`;
   return '';
@@ -3513,6 +3515,10 @@ function deepOpen() { return !!S && (!!S.mission || S.time >= DEEP.at); }
 
 /** Can the Atmosphere Engine be built yet (ATMOS.at s into a free-play game; at once in a mission that teaches it)? */
 function atmosOpen() { return !!S && (!!S.mission || S.time >= ATMOS.at); }
+
+/** Can the Reservoir or the Leveller be built yet (RSV.at, LVL.at s into a free-play game; at once in a mission)? */
+function rsvOpen() { return !!S && (!!S.mission || S.time >= RSV.at); }
+function lvlOpen() { return !!S && (!!S.mission || S.time >= LVL.at); }
 
 /** Can Arrival City be built yet (CITY.at s into a free-play game; at once in a mission that teaches it)? */
 function cityOpen() { return !!S && (!!S.mission || S.time >= CITY.at); }
@@ -3617,6 +3623,7 @@ function newGame(opts) {
   settings.size = mapSizeForPlayers(settings.size, settings.players);
   settings.nuke = !!opts.nuke;
   settings.mega = opts.mega !== false; // Megastructures (on unless the setup turned them off: megaOn)
+  if (opts.greenWin && opts.mode === 'colony' && !opts.mission) settings.greenWin = true; // (Terraforming stage 5: the Colony goal Made ready, GREEN.goal; set only when on, so older games and saves read as before)
   // The Great Uplink win (off unless the setup turned it on: gupWinOn), alongside any Victory. Not in Colony or the Hollow.
   if (opts.upWin && mode === 'versus' && !SHAPE_PRESETS[settings.shape].hollow && !SHAPE_PRESETS[settings.shape].caves) settings.upWin = true;
   settings.biome = biomeAllowed(opts.biome, settings.shape) && !(horde && !murmurGround(opts.biome)) ? opts.biome : 'desert'; // (Horde: never the silent moon)
@@ -3902,6 +3909,10 @@ function worldBan(type, t) {
   if (BDEFS[type] && BDEFS[type].seedmast && biome() === 'lunar') return 'No Seed Mast on Argos: no Ring Crystal ever fell here to seed from.';
   if (BDEFS[type] && BDEFS[type].city && biome() === 'lunar') return 'No Arrival City on Argos: the moon was never meant to be lived on.';
   if (BDEFS[type] && BDEFS[type].atmos && biome() === 'lunar') return 'No Atmosphere Engine on Argos: there is no air here to work with.';
+  // (Terraforming stage 5: no air for the Dew Towers to wring water from on the moon, and neither big project under the cavern roof.)
+  if (BDEFS[type] && BDEFS[type].rsv && biome() === 'lunar') return 'No Reservoir on Argos: there is no air here to condense water from.';
+  if (BDEFS[type] && BDEFS[type].lvl && biome() === 'lunar') return 'No Leveller on Argos: the moon was never on the settlement plan.';
+  if (BDEFS[type] && (BDEFS[type].rsv || BDEFS[type].lvl) && hollowOn()) return `No ${BDEFS[type].name} in the Hollow: the settlement plan never reached the caverns.`;
   if (S && S.caves) { // (Half underground: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
     if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts on this map: the Pathfinder never mapped the caves, so there is nowhere to dock a Trade Terminal.';
     return t === undefined ? '' : caveBan(type, t);
@@ -4850,7 +4861,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (def.colony && !labOn()) return { ok: false, reason: 'Only in Colony free play.' };
   // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
   if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
-  if (def.port && !navalMap()) return { ok: false, reason: hollowOn() ? 'No ships in the Hollow: its black lakes are far too small for a Port.' : 'Ports are for naval maps (Islands and Lakes).' };
+  if (def.port && !navalOk()) return { ok: false, reason: hollowOn() ? 'No ships in the Hollow: its black lakes are far too small for a Port.' : 'Ports are for naval maps (Islands and Lakes), and the lake a Reservoir has filled.' };
   if (def.port && !portDocks(i, j).length) return { ok: false, reason: 'A Port goes on the shore, right beside open water wide enough for ships.' };
   if (S.wildlife) for (const e of S.buildings) {
     if (!e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a Murmur nest: clear it with warbots first.' };
@@ -4970,7 +4981,10 @@ function footPlace(owner, type, i, j, skipBlockCheck, dir) {
     }
     if (!open) return { ok: false, reason: `That would wall in the ${BDEFS[nb.type].name} next to it.` };
   }
-  if (!skipBlockCheck && footBlocks(set, i, j, F)) return { ok: false, reason: 'That would block the only way through here.' };
+  // (A Reservoir's basin is left out: it will be water.)
+  const basin = BDEFS[type].rsv ? rsvBasin(owner, i, j) : null;
+  if (basin && basin.why) return { ok: false, reason: basin.why };
+  if (!skipBlockCheck && footBlocks(set, i, j, F, basin ? new Set(basin.ts) : null)) return { ok: false, reason: 'That would block the only way through here.' };
   // The Orbital Lift: its fall line (dir, turned with R) must fit on the map and cross no one else's land (liftLineWhy).
   if (BDEFS[type].lift) { const why = liftLineWhy(owner, i, j, liftDirOf(dir)); if (why) return { ok: false, reason: why }; }
   return { ok: true, reason: '' };
@@ -5028,12 +5042,12 @@ function liftWreckMap() {
 function liftWreckAt(t) { const m = liftWreckMap(); return !!(m && m[t]); }
 
 /** Would building on the tiles in `set` (a square of F from (i, j)) cut the open ground round it in two, near by? */
-function footBlocks(set, i, j, F) {
+function footBlocks(set, i, j, F, skip) {
   const ring = [];
   for (let c = j - 1; c <= j + F; c++) for (let a = i - 1; a <= i + F; a++) {
     if (!inMap(a, c)) continue;
     const t = tIdx(a, c);
-    if (!set.has(t) && walkable(t) && (!S.bAt[t] || passTile(t))) ring.push(t);
+    if (!set.has(t) && !(skip && skip.has(t)) && walkable(t) && (!S.bAt[t] || passTile(t))) ring.push(t);
   }
   if (ring.length <= 1) return false;
   const seen = new Set([ring[0]]), q = [ring[0]], lim = 6;
@@ -5196,6 +5210,9 @@ function roadTileMul(t) {
 function roadClears(t) { return !!S.res[t] && S.res[t] !== R_OIL; }
 
 /** Is this a naval map (Islands, Lakes): Ports and ships, and long bridges cost more? */
+/** Can Ports and ships be used here: a naval map, or a map with a Reservoir's lake on it (S.rsvLake; rivals keep to navalMap)? */
+function navalOk() { return navalMap() || !!(S && S.rsvLake); }
+
 function navalMap() {
   if (!NAVAL_ON) return false;
   const sh = S && S.settings && SHAPE_PRESETS[S.settings.shape || 0];
@@ -5276,7 +5293,7 @@ function seaLinked(a, b) { const cb = portComps(b); return portComps(a).some((c)
 let _ferryTick = -1, _ferryFor = null, _ferryMap = null;
 const _noFerries = new Map(); // (a planet with no sea has no Ports and no ferry lines: nothing to work out)
 function ferryLines() {
-  if (!navalMap()) return _noFerries;
+  if (!navalOk()) return _noFerries;
   if (_ferryFor === S && _ferryTick === S.tick && _ferryMap) return _ferryMap;
   const m = new Map(), served = new Set();
   // (A Ferry out on a landing, or sailing under your orders, isn't running its line meanwhile.)
@@ -6604,7 +6621,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS', 'ewK', 'ewO', 'ewH', 'fld', 'caveIn']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
+const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS', 'ewK', 'ewO', 'ewH', 'fld', 'caveIn', 'rsvBank']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -6868,6 +6885,16 @@ function checkSave(o) {
     if (b.aeStorm != null && !(Array.isArray(b.aeStorm) && b.aeStorm.length === 2 && b.aeStorm.every(Number.isInteger) && b.aeStorm[0] >= 0 && b.aeStorm[1] >= 0 && b.aeStorm[0] < o.W && b.aeStorm[1] < o.H && BDEFS[b.type].atmos && (b.aeStage || 0) >= 2)) bad();
     for (const k of ['aeStormT', 'aeBolt']) if (b[k] != null && !Number.isFinite(b[k])) bad();
     if (b.aeBolt != null && !(b.aeBolt >= 0 && b.aeBolt <= STORM.boltEvery)) bad();
+    // (Terraforming stage 5: a Reservoir's basin, its fill and power; a Leveller's hill, its cut and power)
+    if (b.rv != null && !(BDEFS[b.type].rsv && obj(b.rv) && Number.isInteger(b.rv.lv) && b.rv.lv >= 0 && b.rv.lv <= TERRA.top && [0, 1, 2, 3].includes(b.rv.st) &&
+      Array.isArray(b.rv.ts) && b.rv.ts.length >= 1 && b.rv.ts.length <= RSV.max && b.rv.ts.every(tileOk))) bad();
+    for (const k of ['rsvT', 'rsvFuel', 'rsvS', 'lvAcc', 'lvFuel']) if (b[k] != null && !Number.isFinite(b[k])) bad();
+    for (const k of ['rsvGens', 'lvGens']) if (b[k] != null && !(Array.isArray(b[k]) && b[k].length <= RSV.gens && b[k].every(Number.isSafeInteger))) bad();
+    if (b.lvAim != null && !(BDEFS[b.type].lvl && tileOk(b.lvAim))) bad();
+    if (b.lvTs != null && !(BDEFS[b.type].lvl && Array.isArray(b.lvTs) && b.lvTs.length <= 4 * (LVL.reach * 2 + 3) ** 2 && b.lvTs.every(tileOk))) bad();
+    if (b.lvN != null && !(Number.isInteger(b.lvN) && b.lvN >= 0 && b.lvN <= LVL.batch)) bad();
+    if (b.lvDone != null && b.lvDone !== 0 && b.lvDone !== 1) bad();
+    if (b.rvNo != null && typeof b.rvNo !== 'string') bad();
     if (b.aeBoltN != null && !(Number.isInteger(b.aeBoltN) && b.aeBoltN >= 0)) bad();
     if (b.lfDir != null && !(Number.isInteger(b.lfDir) && b.lfDir >= 0 && b.lfDir < 8)) bad();
     if (b.lfMove != null && ![0, 1, 2].includes(b.lfMove)) bad();
@@ -6960,6 +6987,9 @@ function checkSave(o) {
     ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
     Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
   // Terraforming stage 3's seams (S.seams, see t3SeamsMake): numbered in order, on the map, Ore or Crystal, a few tiles each.
+  // Terraforming stage 5: a lake made (S.rsvLake), and the greening meter (S.gm: counts, kinds, its last hour's share).
+  if (o.rsvLake != null && o.rsvLake !== 1) bad();
+  if (o.gm != null && !(obj(o.gm) && Number.isInteger(o.gm.of) && o.gm.of >= 0 && o.gm.of <= o.W * o.H && ['n', 'k', 'h'].every((k) => Array.isArray(o.gm[k]) && o.gm[k].length <= 64 && o.gm[k].every(Number.isFinite)))) bad();
   if (o.seams != null && !(Array.isArray(o.seams) && o.seams.length <= o.W * o.H && o.seams.every((e, k) => obj(e) && e.id === k + 1 &&
     Number.isInteger(e.x) && Number.isInteger(e.y) && e.x >= 0 && e.y >= 0 && e.x < o.W && e.y < o.H && (e.g === 'ore' || e.g === 'crystal') &&
     Array.isArray(e.t) && e.t.length >= 1 && e.t.length <= 16 && e.t.every(tileOk) && Number.isInteger(e.m) && e.m > 0 && e.m <= 1000 &&

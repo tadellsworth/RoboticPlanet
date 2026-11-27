@@ -4115,3 +4115,27 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 .tf-seg button { font-size: 12px; padding: 4px 8px; }
 .tf-seg button kbd { margin-right: 4px; }
 .tf-how, .tf-sum { margin-top: 2px; }
+
+/* Terraforming stage 5 (js/terraform5.js): the greening ring in the land chip, the minimap's GREEN tag, the Greening
+   panel, the Reservoir's stage lamps, the green VICTORY flare. Leaf green (#7be05a) is the interface's only: never a building's. */
+.gm-chip { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; cursor: pointer; color: #b9f0a2; }
+.gm-ring { flex: none; vertical-align: middle; }
+.mm-green { position: absolute; right: 3px; bottom: 3px; padding: 2px 5px; font: 700 9.5px/1.2 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.08em;
+  color: #b9f0a2; background: rgba(8, 14, 10, 0.78); border: 1px solid rgba(123, 224, 90, 0.45); border-radius: 3px; cursor: pointer; }
+.mm-green.on { color: #0b0c10; background: #7be05a; border-color: #7be05a; }
+@media (pointer: coarse) { .mm-green { padding: 5px 7px; font-size: 11px; } }
+.gm-head { display: flex; gap: 12px; align-items: center; margin: 4px 0 8px; }
+.gm-big { font: 700 26px/1.1 'Chakra Petch', system-ui, sans-serif; color: #b9f0a2; }
+.gm-big small { font-size: 13px; color: var(--muted, #9aa3b2); font-weight: 600; }
+.gm-sub { font-size: 12.5px; color: var(--muted, #9aa3b2); }
+.gm-hist { width: 100%; height: 60px; background: rgba(123, 224, 90, 0.06); border-radius: 4px; }
+.gm-sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.t5-lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; background: rgba(10, 213, 216, 0.18); border: 1px solid rgba(10, 213, 216, 0.6); vertical-align: middle; }
+.t5-lamp.on { background: #0ad5d8; box-shadow: 0 0 6px rgba(10, 213, 216, 0.8); }
+.o-flare.green .of-word { background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.95) 50%, transparent 62%) -160% 0 / 250% 100% no-repeat, linear-gradient(180deg, #f4ffe8 10%, #b9f0a2 58%, #7be05a);
+  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 28px rgba(123, 224, 90, 0.45)); }
+.o-flare.green .of-kick { color: #d6f7c6; text-shadow: 0 0 12px rgba(123, 224, 90, 0.5); }
+.o-flare.green .of-streak { background: linear-gradient(90deg, transparent, rgba(185, 240, 162, 0.6) 30%, #f4ffe8 50%, rgba(185, 240, 162, 0.6) 70%, transparent); box-shadow: 0 0 18px 4px rgba(123, 224, 90, 0.55); }
+.o-flare.green .of-flash { background: radial-gradient(ellipse 70% 45% at 50% 50%, rgba(220, 250, 200, 0.5), rgba(123, 224, 90, 0.14) 45%, transparent 72%); }
+#screen-over.won-green #o-title { background-image: linear-gradient(180deg, #f4ffe8 10%, #b9f0a2 58%, #7be05a); filter: drop-shadow(0 0 12px rgba(123, 224, 90, 0.3)); }
+#screen-over.won-green .o-kicker { color: #b9f0a2; }

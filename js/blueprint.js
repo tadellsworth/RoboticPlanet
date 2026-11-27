@@ -34,7 +34,7 @@ function bpKind(type) { return BUILD_MENU.includes(type) || type === 'wall' || t
 /** Is it in this game (as the Build menu has it: war, a Nuclear race, Colony's Lab, a sea map)? */
 function bpAvail(type) {
   const d = BDEFS[type];
-  return !!d && (!(d.war || type === 'wall' || type === 'gate') || warOn()) && !(d.nuke && !nukeOn()) && !(d.colony && !labOn()) && !(d.naval && !navalMap());
+  return !!d && (!(d.war || type === 'wall' || type === 'gate') || warOn()) && !(d.nuke && !nukeOn()) && !(d.colony && !labOn()) && !(d.naval && !navalOk());
 }
 
 function bpOk(bp) {

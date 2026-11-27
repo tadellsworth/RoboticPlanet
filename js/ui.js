@@ -106,7 +106,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'biome2', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods', 'hgoal']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'mega', 'upwin', 'biome', 'biome2', 'players', 'diff', 'style', 'styles', 'events', 'murmur', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods', 'hgoal', 'cgoal']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
     // (The Murmur were a Colony switch, `wild`, before they came to every game: switched off, they stay off.)
     if (saved.murmur === undefined && saved.wild !== undefined) UI.menu.murmur = saved.wild ? 'active' : 'off';
   } catch (e) { /* defaults */ }
@@ -186,7 +186,8 @@ function initUI() {
     });
   }
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
-  $('clock').addEventListener('click', () => {
+  $('clock').addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('.gm-chip') && typeof openGreening === 'function') { if (UI.sheetKind === 'green') closeSheet(); else openGreening(); return; } // (the greening ring: js/terraform5.js)
     const now = performance.now();
     UI.clockTaps = (UI.clockTaps || []).filter((t) => now - t < 1200);
     UI.clockTaps.push(now);
@@ -521,6 +522,7 @@ function checkMenuSettings() {
   // (a value another version or a damaged store left: one the menu can't show stopped the game booting)
   m.mode = m.mode === 'colony' || m.mode === 'horde' ? m.mode : 'versus';
   m.hgoal = m.hgoal === 'endless' ? 'endless' : 'fixed'; // (Horde: Fixed or Endless)
+  m.cgoal = m.cgoal === 'free' ? 'free' : 'ready'; // (Colony: Made ready, the default, or Free play: GREEN)
   m.players = ok(m.players, 5) && m.players >= 2 ? m.players : 2;
   m.style = ok(m.style, PERSONALITY_ORDER.length + 1) ? m.style : 1;
   // Each computer player's own doctrine (null: as the Rival doctrine chips say), by player slot 0 to 3. (A list of three
@@ -859,6 +861,7 @@ function initMenu() {
   const pick = (fn) => () => { fn(); syncMenu(); saveSettings(); sfx('click'); };
   for (const btn of $('m-mode').children) btn.onclick = () => { setMenuMode(btn.dataset.v); syncMenu(); sfx('click'); };
   for (const btn of $('m-hgoal').children) btn.onclick = () => { if (btn.disabled) return; UI.menu.hgoal = btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
+  for (const btn of $('m-cgoal').children) btn.onclick = () => { UI.menu.cgoal = btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); }; // (Colony's goal: Made ready or Free play)
   for (const btn of $('m-diff').children) { btn.dataset.info = DIFF_INFO[btn.dataset.v] || ''; btn.onclick = pick(() => { UI.menu.diff = btn.dataset.v; }); }
   for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
   for (const btn of $('m-teams').children) btn.onclick = pick(() => { UI.menu.teams = +btn.dataset.v; });
@@ -1088,6 +1091,9 @@ function syncMenu() {
   $('m-diff-field').hidden = colony && !horde;
   // Horde's goal: Fixed (survive HORDE.waves waves) or Endless; Warlord is always Endless.
   $('m-hgoal-field').hidden = !horde;
+  // Colony's goal: Made ready (green GREEN.goal of the open land; the default) or Free play.
+  $('m-cgoal-field').hidden = !colony || horde;
+  for (const btn of $('m-cgoal').children) mark(btn, btn.dataset.v === (m.cgoal === 'free' ? 'free' : 'ready'));
   for (const btn of $('m-hgoal').children) {
     const off = btn.dataset.v === 'fixed' && m.diff === 'warlord';
     mark(btn, btn.dataset.v === (m.diff === 'warlord' ? 'endless' : m.hgoal));
@@ -1314,6 +1320,7 @@ function setRowValue(id) {
   const name = on ? (on.getAttribute('aria-label') || on.textContent).trim() : '';
   if (id === 'm-size') return [name, ''];
   if (id === 'm-mode') return [name, m.mode === 'colony' ? 'no rival' : m.mode === 'horde' ? 'the Murmur\'s waves' : ''];
+  if (id === 'm-cgoal') return [name, m.cgoal === 'free' ? 'no goal' : `green ${Math.round(GREEN.goal * 100)}% of the land`];
   if (id === 'm-hgoal') return [name, m.diff === 'warlord' ? 'Warlord' : m.hgoal === 'fixed' ? `${HORDE.waves} waves` : 'best wave kept'];
   if (id === 'm-diff' && m.mode === 'horde') return [name, 'waves'];
   if (id === 'm-victory') return [name, menuUpWin() ? '+ Great Uplink win' : ''];
@@ -2634,7 +2641,7 @@ const BUILD_KEYS = {
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'b', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
   move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
-  mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
+  mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u', reservoir: 'v', leveller: 'g' }, // (stage 5: the reserVoir, V; the Leveller, G for Grade: L is the Lance) (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
   // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
   // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P);
   // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T); stage 4's: the Earth banK (K),
@@ -2690,6 +2697,8 @@ const SHEET_KEYS = {
   'sh-storm': ['f', 'Atmosphere Engine: Storm Front'],
   'sh-sluice': ['o', 'Open or shut the Sluice'],
   'sh-sap': ['t', 'Plan the sap'],
+  'sh-level': ['f', 'Leveller: Level a hill'],
+  'sh-lvstop': ['c', 'Leveller: Stop cutting'],
   'sh-stormoff': ['c', 'Call the storm off'],
   'rl-recall': ['c', 'Call back a rally'],
   'sh-land': ['l', 'Choose the beach'],
@@ -2873,6 +2882,7 @@ const SHIFT_KEYS = {
   w: { group: 'panels', label: 'Workforce: what your Workers are doing, and who gets them first', run: () => { if (UI.sheetKind === 'wf') closeSheet(); else openWorkforce(); } },
   t: { group: 'paths', label: 'Toggle Goods flow', run: () => togglePathsMap('goods', R.goodsMap) },
   a: { group: 'army', label: 'Ally: command your computer teammate (team games)', run: () => openAllySheet(), when: () => myAiAllies().length > 0 }, // (else Shift+A pans, as A does)
+  g: { group: 'panels', label: 'Greening: the land made ready, and what counts', run: () => { if (UI.sheetKind === 'green') closeSheet(); else openGreening(); } }, // (stage 5: js/terraform5.js)
   ...Object.fromEntries(Object.entries(PATHS_SHIFT_KEYS).map(([k, tool]) => [k, {
     group: 'paths', label: { viaduct: 'Viaducts', ropeway: 'Ropeways', maglev: 'Maglev lines', express: 'Express' }[tool],
     run: () => openPaths(tool),
@@ -3956,6 +3966,7 @@ function startNewGame(again) {
     nuke: !!UI.menu.nuke, mega: !!UI.menu.mega, upWin: menuUpWin(), biome: BIOME_ORDER[pick.biome], biome2: chosenSecondBiome(UI.menu, menuSize()), players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, murmur: UI.menu.murmur, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(), scars: scarsPref(),
+    greenWin: !horde && UI.menu.mode === 'colony' && UI.menu.cgoal !== 'free', // (stage 5: Colony's Made ready goal, GREEN)
   };
   newGame(opts);
   UI.lastGame = { s: S, opts }; // (for Rematch: this game, while it's the one being played)
@@ -4347,17 +4358,18 @@ function showGameOver() {
   // The narrator's last line (LORE.md): the region secured, or the command core lost.
   // (lost while the colony stands: on the Uplinks another colony speaks for the planet; else, settlement priority)
   // (Contact, the Great Uplink win: what answered, the same for every colony; see GUP_ANSWER.)
-  $('o-log').textContent = how === 'contact' ? GUP_ANSWER : won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
+  $('o-log').textContent = how === 'green' ? NARRATOR.madeReady : how === 'contact' ? GUP_ANSWER : won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
   $('o-log').hidden = false;
   // (Contact: silence, then one answering tone, the same for everyone: see gupSilence.)
   if (how === 'contact') gupSilence(); else sfx(won ? 'win' : 'lose');
   // (the heading, the word that flares in: overFlare; under it, how it was won or lost)
   const word = won ? (how === 'contact' ? 'Contact' : 'Victory') : 'Defeat';
-  const kick = won ? (S.teams ? 'Your team wins' : { domination: 'Domination', uplinks: 'Uplinks held', contact: 'The planet is yours', surrender: 'The rivals surrendered', nuke: 'Nuclear strike' }[how] || 'Capture')
+  const kick = won ? (S.teams ? 'Your team wins' : { green: 'Ithaca I made ready', domination: 'Domination', uplinks: 'Uplinks held', contact: 'The planet is yours', surrender: 'The rivals surrendered', nuke: 'Nuclear strike' }[how] || 'Capture')
     : how === 'surrender' && S.players[ME].out ? 'You surrendered' : how === 'contact' ? 'A rival made contact' : how === 'domination' ? 'Rival domination' : how === 'uplinks' ? 'A rival held the Uplinks'
       : S.players[ME].out ? 'Command Base lost' : 'The planet is lost';
   $('o-text').textContent = won
-    ? (how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
+    ? (how === 'green' ? `${Math.floor(greenShare(ME) * 100)}% of the open land is green: soil, groves, water and graded ground. Ithaca I is made ready.`
+      : how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
       : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
@@ -4386,7 +4398,7 @@ function showGameOver() {
   metaGameOver(); // (records that fell and achievements earned: js/goals.js)
   dailyOver(won); // (the Daily Planet's best time: js/polish3.js)
   syncRematch(); // (js/polish.js)
-  overFlare(word, kick, won ? 'win' : 'loss');
+  overFlare(word, kick, how === 'green' && won ? 'green' : won ? 'win' : 'loss');
 }
 
 /**
@@ -6063,6 +6075,7 @@ function startAim(silo, mode) {
   if (BDEFS[silo.type].lance) { if (silo.lAim) R.aim = { i: silo.lAim[0], j: silo.lAim[1] }; showAimBanner(); return; }
   // The Atmosphere Engine's Storm Front: anywhere on the map (the view stays); its own circle, kept clear, is shown.
   if (BDEFS[silo.type].atmos) { R.aim = null; showAimBanner(); return; }
+  if (BDEFS[silo.type].lvl) { R.aim = null; showAimBanner(); return; } // (stage 5: the Leveller's hill, within its reach: the view stays)
   // The Sundering Ray: Strike the Deep reaches anywhere (the view stays); a Quake shows its reach round the Ray.
   const ray = !!BDEFS[silo.type].sunder;
   if (ray) {
@@ -6109,7 +6122,7 @@ function mapGrab(x, y, mouse) {
 }
 
 /** Why the weapon being aimed (a Silo, a Nuclear Silo, the Lance) can't strike tile (i, j) ('' if it can). */
-function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.atmos ? atmosStormBlocked(silo, i, j) : d.sunder ? sunderAimBlocked(silo, i, j, UI.aimMode) : d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
+function aimBlocked(silo, i, j) { const d = BDEFS[silo.type]; return d.lvl ? (lvlHill(silo, tIdx(i, j)).why || '') : d.atmos ? atmosStormBlocked(silo, i, j) : d.sunder ? sunderAimBlocked(silo, i, j, UI.aimMode) : d.lance ? lanceAimBlocked(silo, i, j) : d.nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j); }
 
 function showAimBanner(problem) {
   const silo = getE(UI.aimSilo), md = BDEFS.silo.missile;
@@ -6123,6 +6136,7 @@ function showAimBanner(problem) {
     showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? (silo.lOn ? 'Aim here' : 'Charge') : null, 'Cancel');
     return;
   }
+  if (BDEFS[silo.type].lvl) { t5AimBanner(silo, html); return; } // (stage 5: js/terraform5.js)
   if (BDEFS[silo.type].atmos) {
     const st = silo.aeStage || 2;
     html += R.aim
@@ -6187,6 +6201,7 @@ function fireAimed() {
     });
     return;
   }
+  if (BDEFS[silo.type].lvl) { t5AimFire(silo, i, j); return; } // (stage 5: js/terraform5.js)
   if (BDEFS[silo.type].atmos) {
     const was = !!silo.aeStorm;
     act('atmosStorm', [sid, i, j], (why) => {
@@ -6552,7 +6567,7 @@ function buildingUpperAt(wx, wy) {
   for (const b of S.buildings) {
     if (b.dead || !b.built || wy >= b.y || wy < b.y - 3 || wx < b.x || wx > b.x + 4) continue;
     const d = BDEFS[b.type];
-    if (!d || ['crawlerbase', 'wall', 'gate', 'magpylon', 'viaduct', 'ramp', 'city', 'lift', 'gup', 'sunder', 'deepcore', 'atmos'].includes(b.type)) continue; // (drawn in code, or low)
+    if (!d || ['crawlerbase', 'wall', 'gate', 'magpylon', 'viaduct', 'ramp', 'city', 'lift', 'gup', 'sunder', 'deepcore', 'atmos', 'reservoir', 'leveller'].includes(b.type)) continue; // (drawn in code, or low)
     const w = d.foot || (d.long && b.mdAxis !== 'ns' ? 2 : 1);
     if (wx >= b.x + w) continue;
     const art = artFor(b.type, b.owner);
@@ -6686,6 +6701,7 @@ function onMapTap(i, j, wx, wy) {
       if (def.t2 && typeof t2PlaceText === 'function') extra = t2PlaceText(type, i, j); // (stage 2: js/terraform2.js)
       if (def.t3 && typeof t3PlaceText === 'function') extra = t3PlaceText(type, i, j); // (stage 3: js/terraform3.js)
       if (def.t4 && typeof t4PlaceText === 'function') extra = t4PlaceText(type, i, j); // (stage 4: js/terraform4.js)
+      if ((def.rsv || def.lvl) && typeof t5PlaceText === 'function') extra = ' ' + t5PlaceText(type, i, j); // (stage 5: js/terraform5.js)
       if (def.burner && !def.burner.heat) {
         let n = 0;
         for (const c of S.buildings) if (!c.dead && c.owner === ME && (BDEFS[c.type].work || BDEFS[c.type].t3pow) && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
@@ -8000,7 +8016,7 @@ function sheetCols() {
  * construction); none for a panel without a title.
  */
 const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots', wf: 'Command · Workforce',
-  econ: 'Command · Economy', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
+  econ: 'Command · Economy', green: 'Command · Greening', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
   move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral', bridge: 'Orbital platforms' };
 function sheetEyebrow(kind, id) {
   const head = $('sheet-body').querySelector('.sheet-title'), h3 = head && head.querySelector('h3');
@@ -8117,6 +8133,7 @@ function initSheetGrab() {
 }
 
 function closeSheet() {
+  if (UI.sheetKind === 'green') R.greenMap = false; // (the minimap's Green layer comes on with the Greening panel: js/terraform5.js)
   R.routePreview = null;
   R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
@@ -8147,7 +8164,7 @@ function costInline(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalOk()) && !modNoBuild(t));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'gather'; } catch (e) { UI.buildTab = 'gather'; } }
@@ -8353,6 +8370,9 @@ function ownedText(type) {
   if (BDEFS[type].city && !cityOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(CITY.at / 60)}:00`;
   if (BDEFS[type].lift && worldBan(type)) return 'No sky down here';
   if (BDEFS[type].deepcore && !deepOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(DEEP.at / 60)}:00`;
+  if ((BDEFS[type].rsv || BDEFS[type].lvl) && worldBan(type)) return biome() === 'lunar' ? 'Not on the moon' : 'Not down here';
+  if (BDEFS[type].rsv && !rsvOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(RSV.at / 60)}:00`;
+  if (BDEFS[type].lvl && !lvlOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(LVL.at / 60)}:00`;
   if (BDEFS[type].atmos && worldBan(type)) return biome() === 'lunar' ? 'No air on the moon' : 'No sky down here';
   if (BDEFS[type].atmos && !atmosOpen() && !ownedCount(type).sites) return `Opens at ${Math.round(ATMOS.at / 60)}:00`;
   if (worldBan(type)) return BDEFS[type].airfield || BDEFS[type].mast ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : BDEFS[type].mdriver || BDEFS[type].catcher ? 'Nothing flies underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
@@ -8489,7 +8509,7 @@ function openBuildingSheet(b) {
       html += `<div class="section-label orders-label">Order bots</div>
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
-        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}). Freight Trains are built at a Rail Station's rail yard, planes in an Airfield's hangar${navalMap() ? ', ships at a Port\'s shipyard' : ''}.
+        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}). Freight Trains are built at a Rail Station's rail yard, planes in an Airfield's hangar${navalOk() ? ', ships at a Port\'s shipyard' : ''}.
         <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks (two each): they lay planned roads and asphalt.</p>`;
     }
     if (def.roadworks && b.built) {
@@ -8522,6 +8542,7 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-suser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-suser-hint"></p>`;
     }
     if (def.t4 && b.built && b.owner === ME && typeof t4Buttons === 'function') html += t4Buttons(b); // (the Sluice's Open, the Sap Head's Plan sap: js/terraform4.js)
+    if (def.lvl && b.built && b.owner === ME && !megaDark(b) && typeof t5Buttons === 'function') html += t5Buttons(b); // (the Leveller's Level a hill: js/terraform5.js)
     if (def.atmos && b.built && b.owner === ME) {
       html += `<button class="btn primary big" id="sh-storm">Storm Front</button>
         <p class="hint" id="sh-storm-hint"></p><button class="btn" id="sh-stormoff" hidden>Call the storm off</button>`;
@@ -8595,6 +8616,7 @@ function openBuildingSheet(b) {
     if ($('sh-squake')) $('sh-squake').onclick = () => { sfx('click'); startAim(b, 'quake'); };
     if ($('sh-storm')) $('sh-storm').onclick = () => { sfx('click'); startAim(b); };
     if (typeof t4Bind === 'function') t4Bind(b); // (stage 4: js/terraform4.js)
+    if (typeof t5Bind === 'function') t5Bind(b); // (stage 5: js/terraform5.js)
     if ($('sh-stormoff')) $('sh-stormoff').onclick = () => { sfx('click'); act('atmosStormOff', [b.id], () => { toast('The storm front breaks up: the sky over there clears.', 'info'); refreshSheet(); }); };
     if ($('sh-sstop')) $('sh-sstop').onclick = () => { sfx('click'); act('sunderStop', [b.id], () => { toast('The Sundering Ray stands down: the blow is lost.', 'info'); refreshSheet(); }); };
     if ($('sh-suser')) $('sh-suser').onclick = () => { sfx('click'); const on = !b.sUseR; act('sunderReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Ray winds up on it (${SUNDER.reactorCharge} s, ${SUNDER.uranium} Uranium or an Enriched Uranium a blow).` : 'Use Reactor off: with Generators in reach the Ray winds up on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
@@ -8900,6 +8922,7 @@ function refreshBuildingSheet(b) {
     if (def.t2 && typeof t2Panel === 'function') parts.push(...t2Panel(b, mine)); // (Composter, Tree Nursery, Water Pump: js/terraform2.js)
     if (def.t3 && typeof t3Panel === 'function') parts.push(...t3Panel(b, mine)); // (Seam Drill, Seed Mast, Thermal Plant: js/terraform3.js)
     if ((def.t4 || def.sapexit) && typeof t4Panel === 'function') parts.push(...t4Panel(b, mine)); // (Sluice, Sap Head, Sap Exit: js/terraform4.js)
+    if ((def.rsv || def.lvl) && typeof t5Panel === 'function') parts.push(...t5Panel(b, mine)); // (the Reservoir, the Leveller: js/terraform5.js)
     if (def.farm) {
       const crops = reachableRes(b.x, b.y, def.radius, R_CROP), ripe = countResIn(b.x, b.y, def.radius, R_CROP, true, S.zone[tIdx(b.x, b.y)]);
       parts.push(`<div class="kv"><span>${S.wet ? 'Fertile or wet ground in reach' : 'Fertile soil in reach'}</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);
@@ -10069,7 +10092,7 @@ function refreshPopSheet() {
     else add(u.type, 'free');
   }
   const part = (o, k, label) => (o[k] ? `${o[k]} ${label}` : '');
-  const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
+  const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalOk() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = BOTS[k].army
       ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : BOTS[k].arc ? 'out of bolts' : 'out of Ammo'), part(o, 'recycling', 'going to be recycled')]
@@ -10162,6 +10185,7 @@ function refreshSheet() {
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'wf') { refreshWorkforce(); return; } // (the Workforce panel: js/workforce.js)
+  if (UI.sheetKind === 'green') { refreshGreening(); return; } // (the Greening panel: js/terraform5.js)
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
   if (UI.sheetKind === 'agroup') { refreshAgSheet(); if (isWide()) foldLong($('sheet-body')); return; }
   if (UI.sheetKind === 'ally') { refreshAllySheet(); return; }
@@ -10382,7 +10406,7 @@ function updateHUD() {
   if (cs && cs.dataset.k !== CALLSIGNS[ME] + PLAYER_COLORS[ME]) { cs.dataset.k = CALLSIGNS[ME] + PLAYER_COLORS[ME]; cs.style.setProperty('--pc', PLAYER_COLORS[ME]); $('callsign-name').textContent = callsign(ME); }
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
   const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
-  const ct = (todEnabled() ? `<small class="ck-l">${TOD_NAMES[tn]}</small>` : '') + '<span class="ck-v">' + tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.horde ? hordeTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)) + '</span>'; // (a Contingency battle against the Murmur: dawn and the nests)
+  const ct = (todEnabled() ? `<small class="ck-l">${TOD_NAMES[tn]}</small>` : '') + '<span class="ck-v">' + tod + (S.contingency && S.mode === 'colony' && typeof contTopLine === 'function' ? contTopLine() : S.horde ? hordeTopLine() : S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time)) + (typeof t5Chip === 'function' ? t5Chip() : '') + '</span>'; // (stage 5: the greening ring, js/terraform5.js) // (a Contingency battle against the Murmur: dawn and the nests)
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
@@ -10460,6 +10484,8 @@ function updateEventCard() {
  */
 function updateWinCard() {
   UI.winMini = '';
+  if (typeof t5MiniTag === 'function') t5MiniTag(); // (the minimap's GREEN tag: js/terraform5.js)
+  if (typeof t5WinCard === 'function' && t5WinCard()) return; // (Colony, the Made ready goal: js/terraform5.js)
   if (S.victory === 'uplinks') { updateUplinkCard(); return; }
   const el = $('win-card'), D = S.victory === 'domination' ? S.dom : null;
   if (!D || !D.held || S.winner >= 0) { el.hidden = true; return; }
@@ -11319,6 +11345,8 @@ function showHordeOver() {
  * result goes back to the globe): the word in the Command Deck's blue, then done().
  */
 function overFlare(word, kick, tone, done) {
+  const green = tone === 'green'; // (Colony's Made ready: the win's flare in leaf green, as Contingency's battles have their blue)
+  if (green) tone = 'win';
   const scr = $('screen-over'), fl = $('o-flare'), w = fl.querySelector('.of-word'), card = scr.querySelector('.card');
   if (UI.flareEnd) UI.flareEnd(true);
   $('o-title').textContent = word;
@@ -11326,8 +11354,10 @@ function overFlare(word, kick, tone, done) {
   $('o-kicker').textContent = kick || ''; $('o-kicker').hidden = !kick;
   w.textContent = word; fl.querySelector('.of-kick').textContent = kick || '';
   w.style.transform = ''; w.style.transition = '';
-  fl.className = `o-flare ${tone}${done ? ' blue' : ''}`;
-  scr.classList.remove('settling', 'flare-loss', 'flare-blue');
+  fl.className = `o-flare ${tone}${done ? ' blue' : ''}${green ? ' green' : ''}`;
+  scr.classList.remove('settling', 'flare-loss', 'flare-blue', 'flare-green');
+  if (green) scr.classList.add('flare-green');
+  scr.classList.toggle('won-green', green); // (and its heading stays leaf green once it settles)
   scr.classList.add('flaring');
   if (tone === 'loss') scr.classList.add('flare-loss');
   if (done) scr.classList.add('flare-blue');

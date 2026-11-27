@@ -116,6 +116,29 @@ function placeFertile(m, W, cx, cy, r) {
  * For a mission's setup: a finished `type` for `owner` on the nearest open spot to (x, y) it may stand on (within
  * `reach` tiles), joined to the owner's roads by finished road when `road` is set. Returns the building, or null.
  */
+/**
+ * Made Ready's land (Terraforming stage 5): east of the Command Base a dry basin closed in by a ridge a level up, a 3 by 3
+ * shelf on the ridge's west side for the Reservoir and a ramp up to it; north of the base a two-level mesa with room for
+ * the Leveller south of it (its yard cleared). What lay there is cleared; the ground is put back to the base's level first.
+ */
+function madeReadyLand(S, L) {
+  const e0 = S.elev[tIdx(L.x, L.y)], BX = L.x + 11.5, BY = L.y - 2.5, MX = L.x - 4, MY = L.y - 11;
+  for (let j = Math.max(1, L.y - 18); j <= Math.min(S.H - 2, L.y + 6); j++) for (let i = Math.max(1, L.x - 12); i <= Math.min(S.W - 2, L.x + 19); i++) {
+    const t = tIdx(i, j), d = Math.hypot(i + 0.5 - BX, j + 0.5 - BY), m = Math.max(Math.abs(i + 0.5 - MX) / 3.5, Math.abs(j + 0.5 - MY) / 2.5);
+    const shelf = i >= L.x + 4 && i <= L.x + 6 && j >= L.y - 5 && j <= L.y - 3, yard = i >= L.x - 6 && i <= L.x - 2 && j >= L.y - 7 && j <= L.y - 4;
+    if (d >= 7 && m >= 1.35 && !shelf && !yard) continue;
+    if (S.bAt[t]) continue;
+    S.terrain[t] = T_GROUND; S.res[t] = R_NONE; S.amt[t] = 0; S.road[t] = 0; S.ramp[t] = 0; S.fert[t] = 0; if (S.decor) S.decor[t] = 0; if (S.ford) S.ford[t] = 0;
+    S.elev[t] = e0;
+    if ((d >= 4.4 && d < 6.6) || shelf) S.elev[t] = e0 + 1;
+    if (m < 1) S.elev[t] = e0 + (m < 0.55 ? 2 : 1);
+  }
+  const up = tIdx(L.x + 3, L.y - 5); // (a ramp up onto the shelf from the base's side, by the Reservoir's door)
+  if (!S.bAt[up]) { S.terrain[up] = T_GROUND; S.res[up] = R_NONE; S.elev[up] = e0 + 1; S.ramp[up] = 1; }
+  for (const r of [tIdx(Math.floor(BX), Math.floor(BY) - 6), tIdx(L.x + 5, L.y - 1)]) if (S.elev[r] === e0 + 1 && !S.bAt[r]) S.ramp[r] = 1; // (and up onto the ridge from the north and the south-west, so the shelf is not its only way up)
+  terrainChanged();
+}
+
 function preBuild(owner, type, x, y, opts) {
   const o = opts || {}, reach = o.reach || 12;
   for (let r = 0; r <= reach; r++) {
@@ -1531,6 +1554,46 @@ const MISSIONS = [
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'thermal' && b.working).length,
         hint: '<b>Terraform</b> → <b>Thermal Plant</b> (<kbd>T</kbd>) beside a lava lake, a factory within 3 tiles.',
         ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='thermal']" },
+    ],
+  },
+
+  // Terraforming, stage 5: the big projects and greening (RSV, LVL, GREEN): a dry basin to fill and a mesa to cut by the base.
+  {
+    id: 'madeready', name: 'Made Ready', chapter: 'Sea and Sky',
+    brief: 'Reservoir, settlement plan phase 3: a town of forty thousand needs water, and a mesa stands where the town was drawn. Fill the basin, cut the mesa, and make the land ready.',
+    intro: [
+      'The last two projects are megastructures, on <b>Build → Mega</b> (<kbd>5</kbd>): one of each per colony, built slowly, in stages.',
+      'A <b>Reservoir</b> (<kbd>V</kbd>) stands on the rim of a dry basin. Its Dew Towers draw water out of the air, and over 8 minutes of power the basin fills: puddling, half, full. Its banks turn wet and grow rich; a Port goes on the new shore.',
+      'A <b>Leveller</b> (<kbd>G</kbd>) cuts a hill down to its own level, a level off a tile every 6 seconds, every step one a Ramp can climb, and fills its STONE hopper for the Haulers.',
+      'Both burn a Generator\'s Fuel: the Reservoir needs two in reach, the Leveller one.',
+      'The ring in the top bar is <b>land made ready</b>: soil, groves, water, shifted and graded ground. <kbd>Shift</kbd>+<kbd>G</kbd> opens the Greening panel; in free play, green 60% and you win.',
+    ],
+    mode: 'colony', seed: 37, size: 1, rough: 0, rich: 3, biome: 'desert', shape: 0, mega: true, limit: [0, 0, 40],
+    setup(S) {
+      kit(S, KIT7, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 140; L.stock.alloy += 90; L.stock.chip += 34; L.stock.crystal += 20; L.stock.fuel += 30; L.stock.fiber += 30; L.stock.stone += 30;
+      madeReadyLand(S, L);
+      for (const [dx, dy] of [[2, -3], [3, -8], [-1, -4]]) preBuild(0, 'generator', L.x + dx, L.y + dy, { road: true, stock: { fuel: BDEFS.generator.fuelCap } });
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the Generators' Fuel)
+      computeTerritory();
+    },
+    goals: [
+      { kind: 'built', type: 'reservoir', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Mega</b> (<kbd>5</kbd>) → <b>Reservoir</b> (<kbd>V</kbd>) on the ridge by the dry basin.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='reservoir']" },
+      { kind: 'lake', n: 3, text: 'Fill the basin: puddling, half, full', at: 'reservoir',
+        count: (P, S) => Math.max(0, ...S.buildings.filter((b) => !b.dead && b.owner === 0 && b.rv).map((b) => b.rv.st)),
+        hint: 'Keep 2 Generators with Fuel by the Reservoir: tap it to watch the basin\'s three lamps.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='reservoir']" },
+      { kind: 'cut', n: [8, 12, 16], text: 'Cut {n} levels off the mesa', at: 'leveller',
+        count: (P) => P.stats.levelled || 0,
+        hint: '<b>Mega</b> → <b>Leveller</b> (<kbd>G</kbd>) by the mesa; tap it → <b>Level a hill</b> (<kbd>F</kbd>), tap the mesa.',
+        ui: "#btn-build, #build-tabs [data-g='mega'], .bcard[data-t='leveller'], #sh-level" },
+      { kind: 'ready', n: [8, 10, 12], text: 'Make {n}% of the land ready', at: 'composter',
+        count: () => Math.floor(greenShare(0) * 100),
+        hint: 'Composters, Nurseries (<b>Terraform</b>, <kbd>6</kbd>), the banks, cut ground: the ring, <kbd>Shift</kbd>+<kbd>G</kbd>.',
+        ui: "#clock .gm-chip, #btn-build, #build-tabs [data-g='terra'], .bcard[data-t='composter']" },
     ],
   },
 

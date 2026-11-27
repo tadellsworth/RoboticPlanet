@@ -74,7 +74,7 @@ assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear 
 assert.deepEqual(chapters, [
   'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks greening deepground bughunt groundwar hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks greening deepground madeready bughunt groundwar hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 
@@ -102,11 +102,13 @@ const controls = [
   ['greening', 3, ['Tree Nursery (N)'], [".bcard[data-t='nursery']"]],
   ['greening', 4, ['Water Pump (P)', 'Pipe'], [".bcard[data-t='wpump']"]],
   ['deepground', 1, ['Terraform (6)', 'Seam Drill (I)'], ["#build-tabs [data-g='terra']", ".bcard[data-t='seamdrill']"]],
+  ['madeready', 1, ['Mega (5)', 'Reservoir (V)'], ["#build-tabs [data-g='mega']", ".bcard[data-t='reservoir']"]],
+  ['madeready', 3, ['Leveller (G)', 'Level a hill (F)'], [".bcard[data-t='leveller']", '#sh-level']],
   ['deepground', 3, ['Seed Mast (G)', 'Crystal Tap'], [".bcard[data-t='seedmast']", ".bcard[data-t='tap']"]],
   ['deepground', 4, ['Thermal Plant (T)'], [".bcard[data-t='thermal']"]],
   ['standing', 4, ['Retreat when weak', '50%', 'Stance', 'Aggressive', 'Hold fire'], []],
 ];
-const uiSource = read('js/ui.js') + read('index.html');
+const uiSource = read('js/ui.js') + read('index.html') + read('js/terraform5.js'); // (stage 5's panel buttons are made there)
 // (Standing Orders' Raid and behaviour goals: the panel makes those buttons from lists, so their ids are checked here.)
 for (const id of ['ag-order-raid', 'ag-ret-50', 'ag-st-agg', 'ag-st-hold']) assert.ok(/ag-order-\$\{k\}|ag-ret-\$\{v\}|ag-st-\$\{v\}/.test(uiSource), `the group panel makes ${id}`);
 {

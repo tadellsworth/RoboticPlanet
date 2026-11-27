@@ -27,6 +27,8 @@ for (let k = 0; k < 6; k++) for (let e = 0; e < 2; e++) TOD_KEYS.push(`sunder-pl
 for (const t of [0, 1]) TOD_KEYS.push(`deepcore@${t}`);
 // The Atmosphere Engine (renderer/tools/install_atmos.py): the cooling tower, its fans and control house.
 for (const t of [0, 1]) TOD_KEYS.push(`atmos@${t}`);
+// Terraforming stage 5 (renderer/tools/install_t5.py): the Reservoir and the Leveller (their moving parts, one set, are graded in code).
+for (const t of [0, 1]) TOD_KEYS.push(`reservoir@${t}`, `leveller@${t}`);
 // The Skirmisher, the Arc Caster and the Railgunner (renderer/tools/install_units.py): their driving frames.
 for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);
 // The Grader (renderer/tools/install_grader.py): its driving and work frames and the earth ahead of its blade.

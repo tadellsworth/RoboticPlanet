@@ -2097,6 +2097,45 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 42: Terraforming stage 5, the Reservoir and the Leveller (installed; the lake, the banks, the cut, the meter drawn in code)
+
+Stage 5 of terraforming (Nov 2026; README, "Terraforming, stage 5") went through Claude Design: the concept canvas
+https://claude.ai/artifact/VHV4A3euU7amL1QHzfrif1 showed three Lake Makers (Dew Towers, Ice Cradle, Aquifer Engines),
+three Mountain Movers (Bucket Wheel, Dragline, Gantry Saw), the basin filling and the mesa cut in the game, the greening
+meter's top bar, panel and minimap layer, and the greening victory. The owner's picks:
+
+- **Reservoir: concept A, Dew Towers** ("a condensation machine makes more sense than dropping ice from space. Gives Dune
+  vibes"; no ice drop): three tall finned condenser towers along the back, a big five-bladed fan in a shroud on each,
+  mist breathing off the fans, their downpipes into a long concrete cistern of the game's water, a stepped spillway off
+  the pad's front-right corner, a control house at the front left. Team colour on the towers' twin bands and the house;
+  the accent, **basin teal `#0ad5d8`**, on the towers' level lamps and the cistern's rim lamps (the basin's gauge). Red
+  beacons on the fan shrouds' rims, floodlights on the back corners and over the cistern.
+- **Leveller: concept A, Bucket Wheel**: a tracked excavator on four track units and a turntable, its lattice boom out
+  over the pad's north-west edge to a ten-bucket wheel, the spoil up the boom's belt and out along a discharge boom to a
+  stacker over the Stone heap, the **STONE** hopper on the front edge where Haulers load, a counter-boom and its weight
+  raking back south, a control cabin with the cut plan on its board. Team colour on the house's band and the hopper's
+  rim; the accent, **cut-stone tan `#d8b18c`**, on the hopper's label frame and the cut-plan board.
+- **Greening** has its own interface colour, leaf green `#7be05a` (the ring, the GREEN tag, the Greening panel, the
+  win card, the VICTORY flare), never on a building: it sits beside VIRIDIAN and the Nursery, so in Versus every bar keeps
+  its colony's callsign colour.
+
+Renders (`renderer/b/reservoir.js`, `leveller.js`, the shared kit `t5kit.js`: framed as the Deep Core, a 3 x 3 pad of
+30 x 30 units, the pad 0.62 of the frame, anchor 0.5, 0.6; `renderer/tools/render_t5.sh`, then `install_t5.py`):
+
+| Art | What | Sizes |
+|---|---|---|
+| `buildings/reservoir@T`, `leveller@T` | without their moving parts, both teams; re-lit in `tod/<morning, evening, night>/` | 512 |
+| `buildings/reservoir-work-0..3` | the moving parts alone (`part=work`, `worklib.js`): the fans a fifth of a turn a frame (five blades: the loop closes), the mist risen, the cistern's ripples, the spill's foam; one set for every team, graded in code | 512 |
+| `buildings/leveller-work-0..3` | the wheel a tenth of a turn a frame (ten buckets), the belts' load run on, the track pads, the dust at the wheel | 512 |
+| `buildings/<k>-site1@T`, `<k>-site2@T` | the build stages: footings, formwork and a crawler crane (shown to 45%), rising in scaffolding (45 to 85%), then the finished art rising over it | 512 |
+
+In the game (`js/terraform5.js`): the base art at the time of day with its lamps at night (`MEGA_LAMPS`), the work frame
+over it at 6 a second while it works (still where it stopped), dark while knocked out. Drawn in code: the lake itself (the
+basin's tiles become the game's water, its shore and foam), the banks as watered ground (stage 2's look), the basin's
+outline while placing (teal; red where something is in the way) and while it fills, the hill a Leveller cuts (tan,
+dashed) and the dust and a pulsing tan square at the tile it bites, the meter's ring, the panel and the minimap layer.
+The boom doesn't slew toward the cut (IDEAS); about 32 files, 450 KB.
+
 ### Batch 41: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
 
 On Half underground (README, Half underground) the gaps in the wall between the surface and the caves were plain square

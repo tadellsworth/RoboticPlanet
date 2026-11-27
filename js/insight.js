@@ -65,7 +65,7 @@ function insMakers(g) {
 /** Could you put up a `type` in this game (it's in the build menu)? */
 function insCanBuild(type) {
   const d = BDEFS[type];
-  return !!d && BUILD_MENU.includes(type) && !(d.war && !warOn()) && !(d.nuke && !nukeOn()) && !(d.colony && !labOn()) && !(d.naval && !navalMap());
+  return !!d && BUILD_MENU.includes(type) && !(d.war && !warOn()) && !(d.nuke && !nukeOn()) && !(d.colony && !labOn()) && !(d.naval && !navalOk());
 }
 /** Is building b at work (or out gathering) right now? */
 function insWorking(b) { return !!b.working || /^(Working|Gathering|Cutting|Digging|Harvesting|Planting|Laying)/.test(b.status || ''); }

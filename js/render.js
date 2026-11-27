@@ -1296,7 +1296,7 @@ function paintTile(ctx, i, j, other, blend) {
     ctx.fillStyle = `rgba(101,153,57,${green})`;
     ctx.fillRect(x, y, TP, TP);
   }
-  if (terr === T_GROUND && (S.soil || S.wet || S.tform || S.shift) && !S.ramp[t] && typeof t2PaintTile === 'function') t2PaintTile(ctx, i, j, x, y, t); // (soil, water, the biome shift: js/terraform2.js)
+  if (terr === T_GROUND && (S.soil || S.wet || S.tform || S.shift || S.rsvBank) && !S.ramp[t] && typeof t2PaintTile === 'function') t2PaintTile(ctx, i, j, x, y, t); // (soil, water, the biome shift: js/terraform2.js)
   if ((S.seams || S.sbed) && typeof t3PaintTile === 'function' && t3PaintTile(ctx, i, j, x, y, t)) return; // (a found seam's cracks, a Crystal Seedbed and its grown Crystal: js/terraform3.js)
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
   if ((S.ewK || S.caveIn) && typeof t4PaintTile === 'function') t4PaintTile(ctx, i, j, x, y, t); // (an earthwork, a caved-in tunnel's groove: js/terraform4.js)
@@ -3350,11 +3350,13 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (b && !b.built) {
     if (type === 'earthwork') { drawEarthwork(ctx, cx, cy, s, owner, b); return; } // (a Terraform job: js/terraform.js)
     if (type === 'sunder') { drawSunderSite(ctx, cx, cy, s, owner, b); return; }
+    if ((type === 'reservoir' || type === 'leveller') && typeof t5DrawSite === 'function' && t5DrawSite(ctx, type, cx, cy, s, owner, b)) return; // (stage 5: js/terraform5.js)
     if (BDEFS[type] && BDEFS[type].foot) { drawMegaSite(ctx, type, cx, cy, s, owner, b); return; }
     drawSite(ctx, type, cx, cy, s, owner, b); return;
   }
   if (type === 'magpylon' && b && b.id) return;
   if ((type === 'sluice' || type === 'saphead' || type === 'sapexit') && typeof t4DrawBuilding === 'function' && t4DrawBuilding(ctx, type, cx, cy, s, owner, b)) return; // (stage 4: js/terraform4.js)
+  if ((type === 'reservoir' || type === 'leveller') && typeof t5DrawBuilding === 'function' && t5DrawBuilding(ctx, type, cx, cy, s, owner, b)) return; // (stage 5: the Reservoir, the Leveller: js/terraform5.js)
   if (type === 'city') { drawCity(ctx, cx, cy, s, owner, b); return; }
   if (type === 'lift') { drawLift(ctx, cx, cy, s, owner, b); return; }
   if (type === 'gup') { drawGup(ctx, cx, cy, s, owner, b); return; }
@@ -7220,6 +7222,7 @@ function render(dtReal) {
   drawLavaCurrents(ctx, ox, oy, z, v0, v1);
   drawBiomeGlow(ctx, ox, oy, z);
   if (typeof t4Marks === 'function' && (S.tremors || S.ewK || R.mode === 'terra' || S.buildings.some((b) => b.sap))) t4Marks(ctx, ox, oy, z, v0, v1); // (your saps' routes, the tremors you feel, the earthworks your warbots are shooting: js/terraform4.js)
+  if (typeof t5Marks === 'function') t5Marks(ctx, ox, oy, z, v0, v1); // (stage 5: a Leveller's hill and the dust at its cut: js/terraform5.js)
   if ((S.seams || S.sbed) && typeof t3Marks === 'function') t3Marks(ctx, ox, oy, z, v0, v1); // (the found seams' survey marks and a drill's line to its seam: js/terraform3.js)
   drawReedLights(ctx, ox, oy, z, v0, v1); // (zoomed in, each Stalk's rings lit: js/reedcane.js)
   drawSeepShimmer(ctx, ox, oy, z, v0, v1); // (the slow shimmer in the oil seeps' sheen)
@@ -8889,6 +8892,7 @@ function drawBadge(ctx, b, x, y, z) {
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
   if (def.t2 && typeof t2Ranges === 'function') { t2Ranges(ctx, type, x, y, ox, oy, z, owner); return; } // (stage 2's reach rings: js/terraform2.js)
+  if ((def.rsv || def.lvl) && typeof t5Ranges === 'function') { t5Ranges(ctx, type, x, y, ox, oy, z, owner); return; } // (stage 5: the basin a Reservoir fills, a Leveller's reach: js/terraform5.js)
   if (def.t3 && typeof t3Ranges === 'function' && t3Ranges(ctx, type, x, y, ox, oy, z, owner)) return; // (stage 3's: a Seam Drill's survey, a Seed Mast's beds, a Thermal Plant's hot ground; js/terraform3.js)
   if (def.lift) { // (the Orbital Lift: the Generators' reach round its pad, and its fall line: the site's, or the one being placed)
     const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z, b = getE(S.bAt[tIdx(x, y)]);
@@ -10403,9 +10407,10 @@ function rebuildMinimapBase() {
       const key = c === MM_COLORS.ground ? 'ground' : c === MM_COLORS.water ? 'water' : c === MM_COLORS.rock ? 'rock' : null;
       if (key) c = mixBiomeRGB(c, R.secondRegion.mm[key], blend);
     }
-    if (terr === T_GROUND && (S.grove || S.wet || S.shift) && typeof t2MiniColor === 'function') c = t2MiniColor(t, c); // (groves, irrigated and shifted land: js/terraform2.js)
+    if (terr === T_GROUND && (S.grove || S.wet || S.shift || S.rsvBank) && typeof t2MiniColor === 'function') c = t2MiniColor(t, c); // (groves, irrigated and shifted land: js/terraform2.js)
     if (terr === T_GROUND && (S.ewK || S.fld || S.caveIn) && typeof t4MiniColor === 'function') c = t4MiniColor(t, c); // (earthworks, a flood, a groove: js/terraform4.js)
     if (terr === T_GROUND && (S.seams || S.sbed) && typeof t3MiniColor === 'function') c = t3MiniColor(t, c); // (found seams and Crystal Seedbeds: js/terraform3.js)
+    if (R.greenMap && typeof t5MiniGreen === 'function') c = t5MiniGreen(t, c); // (the Green layer: land made ready, the rest dimmed; js/terraform5.js)
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
     if (terr === T_WATER && ((S.lava && S.lava[t]) || renderBiomeAt(t) === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];
@@ -12405,6 +12410,9 @@ const MEGA_LAMPS = {
   gup: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.29, 0.37, 'r'], [0.71, 0.37, 'r'], [0.25, 0.74, 'r'], [0.37, 0.69, 'w'], [0.63, 0.69, 'w']] },
   deepcore: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.445, 0.275, 'r'], [0.35, 0.285, 'r'], [0.545, 0.285, 'r'], [0.34, 0.34, 'w'], [0.545, 0.34, 'w']] },
   atmos: { pad: [0.195, 0.8, 0.42, 0.19, 0.81, 0.925], lamps: [[0.35, 0.35, 'r'], [0.69, 0.35, 'r'], [0.52, 0.215, 'r'], [0.23, 0.38, 'w'], [0.76, 0.38, 'w']] },
+  // (Terraforming stage 5: framed as the Deep Core; tools/install_t5.py prints the marks)
+  reservoir: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.363, 0.248, 'r'], [0.555, 0.222, 'r'], [0.752, 0.248, 'r'], [0.235, 0.32, 'w'], [0.765, 0.32, 'w'], [0.47, 0.6, 'o']] },
+  leveller: { pad: [0.22, 0.775, 0.365, 0.195, 0.8, 0.865], lamps: [[0.643, 0.385, 'r'], [0.235, 0.32, 'w'], [0.765, 0.32, 'w'], [0.785, 0.61, 'w'], [0.57, 0.75, 'o']] },
 };
 const _megaNightLayers = new WeakMap();
 /**

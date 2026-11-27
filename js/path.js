@@ -81,7 +81,7 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
 function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1, lane = (opts && opts.lane) || 0;
   const who = opts ? opts.who : undefined, breach = !!(opts && opts.breach);
-  const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalMap();
+  const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalOk();
   const airOk = who !== undefined && !(opts && opts.noAir) && airLines().size > 0; // (Workers and Warbots ride Airship lines)
   const lineTile = (t) => (ferryOk && ferryLink(t) >= 0) || (airOk && airLink(t) >= 0); // a Port or Mast where a ride starts
   const guns = avoidFor !== undefined && avoidFor >= 0 && typeof dangerMap === 'function' && S.players[avoidFor] ? dangerMap(avoidFor) : null;

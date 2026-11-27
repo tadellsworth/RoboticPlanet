@@ -1567,6 +1567,54 @@ const ATMOS = { at: 1200, reach: 4, gens: 2, genFuel: 60, uEvery: 360, r: [8, 12
   crop: 1.25, wither: 60, seedEvery: 20, groves: 24, fade: 600, sappers: [0, 1, 2, 2], lure: 20, aiAt: 1260, burnEvery: 120, burnN: 2, mud: 0.5 };
 const ATMOS_STAGE_NAMES = ['Calm', 'Rain', 'Green', 'Garden'];
 /*
+ * Terraforming, stage 5: the big projects and greening (the owner's picks from the stage 5 canvas, Nov 27 2026). Rules in
+ * the stage 5 block of sim.js; interface and drawing in js/terraform5.js. Rivals never build either; they only meet the
+ * lakes and the levelled ground (routes, zones and the sea follow: terrainChanged).
+ *
+ * RSV, the Reservoir (BDEFS.reservoir; concept A, Dew Towers: condensation, never ice from orbit): a 3 x 3 megastructure,
+ * one per colony, that stands on the rim of a dry basin. The basin is found when it is placed (rsvBasin): the lowest
+ * ground beside its square, a level or more below it, and all the ground at that level joined to it (4-way), `min` to
+ * `max` tiles, closed in by higher ground, rock or water on every side (lower ground beside it: the water would run
+ * out). Nothing may stand in it (a building, road, track, pipe or ramp) and none of it may be a rival's; what grows or
+ * lies on it drowns. It opens `at` s into a free-play game. Power: `gens` Generators with Fuel within `reach` tiles of
+ * its square, a Fuel every `genFuel` s from each while it works; without power it waits, the water it has made kept.
+ * With `fill[k]` s of power the basin reaches stage k + 1 (puddling, half, full), when the deepest `frac[k]` of its tiles
+ * (the farthest from its edge first) become the game's water, all of a stage at once (one terrainChanged a stage: the
+ * Dam measured about 15 ms each); robots standing there step out onto the shore, ships keep to the water. The lake's
+ * tiles are marked as the Graders' are (S.tfTiles), so a Water Pump's water runs along it as along a canal. The new
+ * shore, `bank` tiles deep, is the Reservoir's banks (S.rsvBank, its owner + 1): wet ground, and every `soilEvery` s
+ * `soilGain` soil richer, toward rich farmland (stage 2's soil layer: crops faster, the biome shift follows). The lake
+ * takes Ports (navalOk), and ships sail it. No fishing. Destroyed, the lake stays; only the banks stop getting richer.
+ * Not on Argos (no air to wring water from) nor in the Hollow.
+ */
+const RSV = { at: 1200, reach: 4, gens: 2, genFuel: 60, min: 20, max: 120, fill: [120, 300, 480], frac: [0.25, 0.6, 1], bank: 2, soilEvery: 15, soilGain: 16 };
+const RSV_STAGE_NAMES = ['dry', 'puddling', 'half full', 'full'];
+/*
+ * LVL, the Leveller (BDEFS.leveller; concept A, the Bucket Wheel): a 3 x 3 megastructure, one per colony. Its owner aims
+ * it at a hill or mesa (an order: levelAim) whose ground lies within `reach` tiles of its square: the hill is all the
+ * ground joined to the tile picked that stands higher than the Leveller's own square, within that reach. With power (a
+ * Generator with Fuel within `powReach` tiles, a Fuel every `genFuel` s) it cuts a level off a tile every `every` s, the
+ * highest first and the nearest of those, never leaving a step steeper than a level (or than it already was: stage 1's
+ * rule, so every cliff stays one a Ramp can climb; a ramp left leading nowhere goes), and puts `stone` Stone a level into
+ * its STONE hopper (`cap` at most: full, it waits for the Haulers). The cut ground changes in batches of `batch` levels
+ * (one terrainChanged a batch). Tiles with a building, road, track, pipe, ramp, resources or an earthwork on them, or a
+ * rival's, are left standing. It opens `at` s into a free-play game. Not on Argos nor in the Hollow.
+ * (A ridge, banking the earth into a line: not built; see IDEAS.)
+ */
+const LVL = { at: 900, reach: 8, powReach: 4, genFuel: 60, every: 6, stone: 2, cap: 60, batch: 4 };
+/*
+ * GREEN, the greening meter ("Land made ready"): each colony's share of the map's open land that is green. Open land is
+ * ground (not rock, a chasm, the void, lava, tidal flats or water) with nothing built or laid on it (no building, road,
+ * track or ramp) and no deposit to dig (Ore, Crystal, Stone, Oil, Uranium): those count for no one. Green is any of:
+ * a grove; ground the biome shift has moved, or an Atmosphere Engine has made Green; wet ground (a Water Pump's water, an
+ * Engine's rain, the Reservoir's banks); improving or rich soil; ground the Graders or the Leveller have graded (S.tfTiles).
+ * A green tile is the colony's that holds the land, else the grove's planter's or the banks' Reservoir's (in Colony, with no
+ * rival, all of it is yours). Worked out every `every` ticks (once a second, and only when something green or graded is in
+ * the game or a goal is set), from the layers as they are: a pass over the map, about as dear as Domination's.
+ * The Colony goal "Made ready" (settings.greenWin): green `goal` of the open land and the colony wins (Keep playing goes on).
+ */
+const GREEN = { every: 30, goal: 0.6 };
+/*
  * The Engine's Storm Front (the owner's approval, Nov 21 2026): from Rain its owner sets a storm down anywhere on the map
  * (an order: atmosStorm; b.aeStorm the tile it's centred on), `r` tiles round, while the Engine stands and has power (no
  * power: the storm is gone until it has again, in the same place). Not where it would reach the Engine's own circle (its
@@ -1979,6 +2027,17 @@ const BDEFS = {
     desc: 'A huge drill into the crust under a red winding tower: it slowly brings up Ore, Crystal and a little Uranium, more the deeper it goes, and never runs dry. It goes deeper by itself while it has power: a Generator with Fuel within 4 tiles (it burns a Fuel a minute) or a Nuclear Reactor there (no Uranium used). Stage 1, at once: 6 Ore a minute. Stage 2, the buried ringfall, after 6 minutes of power: 8 Ore and 3 Crystal. Stage 3, the deep seam, 10 minutes later: 10 Ore, 4 Crystal and a Uranium every 4 minutes. It holds 30 of each; Haulers carry them off. Without power it stops but keeps its depth; below half its armor it goes no deeper and brings up half. Every depth is heard below: it draws the Murmur like a Generator, the night after stage 2 a bigger raid comes for it, and the night after stage 3 the Deep answers: two more Brutes, and a new tunnel exit near it. Destroyed, its depth and stock are lost, and with the Murmur on its open shaft is their way up until a Worker caps it (20 seconds, 4 Cement). On Argos, no Crystal. Opens 20 minutes into a game. One per colony.',
     cost: { cement: 60, alloy: 40, chip: 20, crystal: 10 }, deepcore: true, mega: true, foot: 3, out: { ore: 30, crystal: 30, uranium: 30 }, armor: 100, buildTime: 300,
   },
+  // Terraforming stage 5 (RSV, LVL): the big projects, on the Mega tab.
+  reservoir: {
+    name: 'Reservoir', short: 'Reservoir',
+    desc: 'Dew Towers on the rim of a dry basin: three finned condenser towers draw water out of the air into a cistern, and a stepped spillway runs it down into the basin. Place it on higher ground right beside a dry basin (low ground closed in on every side, 20 to 120 tiles; the basin is outlined as you place it). It needs power: 2 Generators with Fuel within 4 tiles (a Fuel a minute from each). Over 8 minutes of power the basin fills, puddling at 2, half full at 5, full at 8: real water, so a Port goes on its new shore and ships sail it, and your robots go round it. Its banks, 2 tiles deep, are wet ground that grows richer, toward farmland, and count as land made ready. One per colony; it opens 20 minutes into a game.',
+    cost: { cement: 50, alloy: 30, chip: 14, crystal: 16 }, rsv: true, mega: true, foot: 3, armor: 100, buildTime: 300,
+  },
+  leveller: {
+    name: 'Leveller', short: 'Leveller',
+    desc: 'A bucket-wheel excavator on four track units: aim it at a hill or mesa within 8 tiles (Level a hill on its panel, then tap the hill) and it cuts it down to its own level, a level off a tile every 6 seconds, the highest first, every step left one a Ramp can climb. Each level cut is 2 Stone in its STONE hopper (60 at most), and Haulers carry it off. It needs power: a Generator with Fuel within 4 tiles (a Fuel a minute). The ground it cuts counts as land made ready. One per colony; it opens 15 minutes into a game.',
+    cost: { cement: 50, alloy: 40, chip: 12 }, lvl: true, mega: true, foot: 3, out: { stone: 60 }, armor: 100, buildTime: 240,
+  },
   atmos: {
     name: 'Atmosphere Engine', short: 'Engine',
     desc: 'A terraforming tower: a great concrete cooling-tower shell with fans round its foot, venting a tall white plume. It slowly changes the weather and the land round it. It needs power: 2 Generators with Fuel within 4 tiles (it takes a Fuel a minute from each) or a Nuclear Reactor there (a Uranium every 6 minutes). Stage 1, Calm, at once: 8 tiles round it, no dust storm for you and your allies. Stage 2, Rain, after 6 minutes of power: 12 tiles, rain at night, barren ground turns fertile (Bio Farms work anywhere in it), the Bloom stops spreading there, enemy robots and vehicles in it wade through mud at half speed, and while it has power enemy Torches can\'t burn anything there. Stage 3, Green, 10 minutes later: 16 tiles of grass, your crops grow a quarter faster, the Bloom withers back a tile a minute. Stage 4, Garden, 12 minutes later: 20 tiles, groves seed themselves, no Bloom and no Murmur exit. From Rain its panel sends a Storm Front anywhere on the map (5 tiles round, not near its own circle nor inside another Engine\'s): under it enemy robots move at 60% speed, their sites go up at 60% and their guns reach three-quarters as far; from Green their crops stop growing and wither after 3 minutes; at the Garden lightning strikes one of their buildings about once a minute. A minute before it can be moved again; no power, no storm. Without power it stops growing; the land it changed stays. The Murmur hate it: they go for it first every night, and after each new stage Sappers dig in under it. Destroyed, its storm ends at once; what is green stays green, but the storms and the Bloom come back in over 10 minutes. Opens 20 minutes into a game. One per colony. Not on Argos or in the Hollow.',
@@ -2020,7 +2079,7 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal',
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'reservoir', 'leveller', 'depot', 'grower', 'lab', 'terminal',
   'composter', 'nursery', 'wpump', 'seamdrill', 'seedmast', 'thermal', 'sluice', 'saphead']; // (the last eight on the Terraform tab, with its tools: js/terraform2.js, js/terraform3.js, js/terraform4.js)
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
@@ -2029,7 +2088,7 @@ const BUILD_GROUPS = [
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, key 5 (then Terraform, 6: js/terraform.js).
-  { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'] },
+  { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'reservoir', 'leveller'] },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**
@@ -2787,6 +2846,8 @@ const NARRATOR = {
   victory: 'Region secured for the Sponsor. Report sent. No reply. Continuing current directive.',
   domination: 'Prepared land: majority held. Settlement priority confirmed under the Accord. Continuing current directive.',
   uplinks: 'Uplinks held. Ithaca I speaks with one voice. No reply. Continuing current directive.',
+  // (Colony's Made ready goal, GREEN.goal: the land made green. Nothing says who it is ready for.)
+  madeReady: 'Region prepared to Accord standard. Settlement priority: ours. Arrival clock: T+31 years. Ready.',
   // (the Wren, as it comes into orbit: LORE.md's event line)
   wren: 'The Wren is in orbit. On schedule, as always.',
 };
@@ -2851,6 +2912,8 @@ const FLAVOR = {
   lift: 'Rated for the colonists’ luggage. Going up: surplus. Coming down: what the Carrier has left.',
   deepcore: 'Core sample rig, rated to 40 kilometres. The survey filed the lower readings as instrument error.',
   atmos: 'Scheduled in the Pathfinder\'s plan for T−10. Started late. Running to plan.',
+  reservoir: 'Reservoir, settlement plan phase 3. Capacity: a town of forty thousand. Condensing. Filling.',
+  leveller: 'Grade the site to standard. Standard: level.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
   catcher: 'A canister every eight seconds, each way, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',

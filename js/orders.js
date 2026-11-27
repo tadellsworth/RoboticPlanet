@@ -563,6 +563,10 @@ const ORDERS = {
   atmosStorm(p, id, i, j) { const b = ownB(p, id); return b && BDEFS[b.type].atmos ? setAtmosStorm(b, i, j) : 'That Atmosphere Engine is gone.'; },
   /** Call Atmosphere Engine `id`'s Storm Front off. */
   atmosStormOff(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].atmos) atmosStormOff(b); },
+  /** Terraforming stage 5: aim Leveller `id` at the hill under tile t (setLevelAim). '' or why not. */
+  levelAim(p, id, t) { const b = ownB(p, id); return b && BDEFS[b.type].lvl ? setLevelAim(b, Number.isInteger(t) ? t : -1) : 'That Leveller is gone.'; },
+  /** Call Leveller `id` off its hill. */
+  levelStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lvl) levelStop(b); },
   /** Call off Lance `id`'s charge (the charge is lost). */
   lanceStop(p, id) { const b = ownB(p, id); if (b && BDEFS[b.type].lance && b.lOn) { lanceStop(b); b.lAim = null; } },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },

@@ -191,12 +191,12 @@ function t2PaintTile(ctx, i, j, x, y, t) {
       ctx.fillRect(x + hash2(i, j * 7 + q, 79) * (TP - 4), y + hash2(i * 5 + q, j, 81) * (TP - 4), 3 + (h < 0.2 ? 2 : 0), 2);
     }
   }
-  const w = S.wet ? S.wet[t] : 0;
+  const w = (S.wet ? S.wet[t] : 0) || (S.rsvBank && S.rsvBank[t] ? 1 : 0); // (a Reservoir's banks are wet too: stage 5)
   if (w) {
     const [r, g, b] = T2_COL.wet;
     ctx.fillStyle = `rgba(${r},${g},${b},${w === 2 ? 0.36 : 0.26})`; ctx.fillRect(x, y, TP, TP);
     ctx.fillStyle = 'rgba(20,40,16,0.14)'; // (damp: darker where it meets dry ground)
-    const dry = (di, dj) => inMap(i + di, j + dj) && !S.wet[tIdx(i + di, j + dj)] && S.terrain[tIdx(i + di, j + dj)] === T_GROUND;
+    const dry = (di, dj) => inMap(i + di, j + dj) && !(S.wet && S.wet[tIdx(i + di, j + dj)]) && !(S.rsvBank && S.rsvBank[tIdx(i + di, j + dj)]) && S.terrain[tIdx(i + di, j + dj)] === T_GROUND;
     if (dry(0, -1)) ctx.fillRect(x, y, TP, 4);
     if (dry(0, 1)) ctx.fillRect(x, y + TP - 4, TP, 4);
     if (dry(-1, 0)) ctx.fillRect(x, y, 4, TP);
@@ -285,6 +285,6 @@ function t2MiniColor(t, c) {
   const sh = typeof t2TileBiome === 'function' ? t2TileBiome(t) : null;
   if (sh) { const reg = t2Region(sh); if (reg && reg.mm.ground) c = mixBiomeRGB(c, reg.mm.ground, 0.85); }
   if (S.grove && S.grove[t]) return mixBiomeRGB(c, T2_COL.grove, 0.45 + 0.15 * groveStage(t));
-  if (S.wet && S.wet[t]) return mixBiomeRGB(c, T2_COL.irrigated, 0.55);
+  if ((S.wet && S.wet[t]) || (S.rsvBank && S.rsvBank[t])) return mixBiomeRGB(c, T2_COL.irrigated, 0.55);
   return c;
 }

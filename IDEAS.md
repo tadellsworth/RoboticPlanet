@@ -3,6 +3,62 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Terraforming stage 5: big projects and greening (built Nov 27 2026: calls made, open questions for the owner)
+
+Built from the owner's picks on the stage 5 canvas (https://claude.ai/artifact/VHV4A3euU7amL1QHzfrif1): the Reservoir
+(Dew Towers, condensation; no ice from orbit), the Leveller (Bucket Wheel), the meter in the top bar's land chip (ring
+A), the Greening panel on Shift+G (it was free), the minimap's Green layer, and the greening win in Colony only (no
+Versus option, as the owner said). README "Terraforming, stage 5", ART_GUIDE Batch 42, `tools/terraform5-test.js`, the
+mission Made Ready.
+
+**Calls made (for the owner's approval):**
+- **The Colony goal is 60% of the open land** (the owner's figure, after 40% and then 80%). Open land leaves out
+  everything that can't be greened or counts for no one: rock, chasms, the void, lava, tidal flats, water (the map's
+  and the Reservoir's), buildings, roads, track and ramps, and deposits to dig (Ore, Crystal, Stone, Oil, Uranium).
+  Measured with a scripted focused game (Composters and Tree Nurseries across the land from 10 minutes, the
+  Atmosphere Engine at 20, goods handed in free, buildings placed finished): **32 minutes** on Medium, Large and Huge
+  maps with about 30 Composters, **48 minutes** on Medium with half as many (the Engine's Green and the biome shift
+  carrying the rest). A real game, building and supplying it all (about 4 Fiber and 4 Stone a minute a Composter), takes
+  longer: an hour or more is a fair guess. Worth watching in play: if it's too quick, raise it, or stop counting
+  graded ground and soil short of rich.
+- **Made ready is the default Colony goal** (the setup's new Goal row: Made ready or Free play). Reaching it wins, and
+  Keep playing goes on as Colony did, so nothing is lost for a player who only wanted to build; one who wants no end at
+  all picks Free play (remembered). `newGame` only sets it when asked, so missions, the tests and older saves are as
+  before. Not in co-op Colony yet (the lobby's settings don't carry it).
+- **What counts as green:** improving or rich soil, any grove, wet ground (pumps, the Engine's rain, the Reservoir's
+  banks), shifted ground and an Engine's Green, and **graded ground** (anything the Graders or the Leveller changed, the
+  "reclaimed ground" of the brief: the narrator's "prepared to Accord standard"). Scorched ground never counts. In
+  Versus a tile is the colony's that holds the land (else the grove's planter's, else the banks' Reservoir's).
+- **The meter is a pass over the map once a second**, like Domination's (about 0.1 ms on a Medium map), worked out from
+  the layers as they are: not saved state that could drift, not hashed, the same on every device.
+- **The basin rule:** each stretch of lower ground beside the Reservoir's square (all the ground at its level joined
+  to it) is tried; the biggest that is closed in (no lower ground beyond it), 20 to 120 tiles (20: the least water a
+  Port's dock needs) and clear of buildings, roads, track, pipes, ramps and rivals' land is the one it fills. Water at
+  its edge closes it too (a lake can join the sea). What grows or lies in it drowns; crates float ashore.
+- **The water comes in three steps** (a quarter, 60%, all of it: puddling, half, full at 2, 5 and 8 minutes of
+  power), the deepest tiles first: one `terrainChanged` a step. The first frame after a step re-bakes the changed tiles
+  (about 50 to 105 ms once, measured): a single hitch, as the Dam's.
+- **The Leveller cuts in batches of four levels** (one every 6 s, a batch every 24 s, one `terrainChanged` a batch),
+  the highest first and the nearest of those, never a step steeper than stage 1 allows.
+- **Ports on a made lake on any map** (`navalOk`), so ships use the lake as the brief asked; the Foundry and the build
+  menu then offer ships and the Port. Rivals keep to `navalMap` and never build for a lake.
+- **The lore line:** "Reservoir, settlement plan phase 3. Capacity: a town of forty thousand. Condensing. Filling." The
+  Leveller: "Grade the site to standard. Standard: level." The win: "Region prepared to Accord standard. Settlement
+  priority: ours. Arrival clock: T+31 years. Ready." Nothing says who it is ready for.
+
+**Not built (for later):**
+- **A ridge mode for the Leveller** (bank the earth it cuts into a line, a level at a time: "Embankment, to standard.
+  The standard did not say against whom."). Cutting came first; a ridge needs its own planner (a line like Walls), an
+  earth stock and the cliff rule run the other way. Cheap enough next.
+- **The boom slewing toward the cut** (a few turned frames, as the Lance's head): the boom points north-west whatever
+  it cuts; the dust and a pulsing tan square mark the tile it bites.
+- **Contingency: greened territories carry over to the globe** (the canvas's World view: the globe painted green where
+  a won campaign battle greened its territory, a GREENED row on the territory card, the planet's share in the top bar,
+  a campaign goal such as "green a quarter of Ithaca I"). Not now.
+- Versus greening (the canvas's optional "Also win by" chip, held 5 minutes): the owner said Versus doesn't need it.
+- The Greening panel's History series beside the Statistics graphs (it keeps its own last hour for now).
+- Should the banks reach further, or the lake raise the water table round it? (2 tiles deep now.)
+
 ## A lighter dusk on slow devices (built Nov 27 2026, Auto only: open questions)
 
 On Graphics Auto, dusk and dawn frames averaging over 33 ms across 2 s bring in a lighter grade (`duskWatch`,
@@ -2878,7 +2934,7 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
 4. **Military uses** (stage 4 BUILT Nov 27 2026: the Earth Bank, Fire Trench, Dragon's Teeth, Cave in, the Sluice and the Sap Head; see below): earthworks (berms, trenches, tank traps) that block or slow warbots, cheaper than Walls; flooding
    enemy lowland by releasing dammed water anywhere (like the Dam map, buildable); collapsing Murmur tunnels, or digging
    your own under a wall for a surprise attack (mirrors the Sapper); rival terraformers whose equipment you can raid.
-5. **Big projects (megastructure-sized) — the owner's favourite:** a Lake Maker (turn a basin into a lake: ports,
+5. **Big projects (megastructure-sized) — the owner's favourite** (stage 5 BUILT Nov 27 2026: the Reservoir, the Leveller, the greening meter and Colony's Made ready goal; see "Terraforming stage 5" above): a Lake Maker (turn a basin into a lake: ports,
    fishing, fertile shores), a Mountain Mover (level a whole hill over minutes), and **planetary greening** — green a
    share of the planet as a goal (preparing Ithaca for Arrival, in LORE's terms).
    **Owner's direction:** use this to expand **Colony mode** with greening / terraforming goals, and as part of the

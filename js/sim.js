@@ -70,6 +70,7 @@ function simStep(dt) {
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
   if (S.horde && S.tick % Math.round(HORDE.pace * 30) === 5) hordeSpawn(); // (Horde: the waves out of the Maw, a few at a time)
   if (S.tick % 30 === 19) atmosTick(); // (the Atmosphere Engines' land: ATMOS)
+  if (S.tick % GREEN.every === 11) greenTick(); // (Terraforming stage 5: the greening meter, and the Colony goal Made ready)
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
   if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   // Only one AI thinks in a step. In Teams, interleave seats from both sides (0, 2, 1, 3)
@@ -4447,7 +4448,7 @@ function soilLv(t) {
   return lv < 1 && S.shift && S.shift[t] ? 1 : lv;
 }
 /** Is tile t wet (a Water Pump's water reaches it, or an Atmosphere Engine's rain: rainWetAt)? */
-function wetAt(t) { return !!(S.wet && S.wet[t]) || rainWetAt(t); }
+function wetAt(t) { return !!(S.wet && S.wet[t]) || !!(S.rsvBank && S.rsvBank[t]) || rainWetAt(t); } // (and a Reservoir's banks: RSV)
 /**
  * Is tile t in an Atmosphere Engine's rain: in the circle of a standing one at Rain or later, with power (rainHolds)?
  * Its ground counts as wet for crops and the biome shift, like a Water Pump's (worked out from the Engines, not stored).
@@ -4732,7 +4733,7 @@ function updateWpump(b) {
 }
 
 /** Is a stage 2 layer or building in this game (anything for t2Tick to do)? */
-function t2Any() { return !!(S.soil || S.grove || S.wet || S.tform || S.shift); }
+function t2Any() { return !!(S.soil || S.grove || S.wet || S.tform || S.shift || S.rsvBank); } // (stage 5: the Reservoir's banks)
 
 /**
  * A stage 2 Earthworks job done (completeEarthwork): Spread soil makes the ground a level of soil richer (SOIL.spreadGain);
@@ -6149,6 +6150,398 @@ function doStaff(u, t, dt) {
   }
 }
 
+/* ------------------------------------------------------------------ terraforming, stage 5 (RSV, LVL, GREEN) */
+
+/*
+ * The big projects and greening (the player's: no rival builds a Reservoir or a Leveller; rivals only meet the lakes and
+ * the levelled ground, which their routes, zones and the sea follow through terrainChanged). Nothing of it exists until
+ * it's built: the Reservoir's banks are a sparse layer (S.rsvBank, its owner + 1), the lake's tiles are marked as the
+ * Graders' are (S.tfTiles, so they're hashed and saved with the ground they changed), S.rsvLake says a lake has been
+ * made (Ports and ships: navalOk). The meter (S.gm) is worked out from the layers once a second (greenTick).
+ * A Reservoir: b.rv { lv (the basin's level), ts (its tiles, deepest first), st (its stage: 0 dry .. 3 full) }, b.rsvT
+ * (s of powered work), b.rsvFuel (s left of the Fuel it last took), b.rsvGens (the Generators it took it from), b.rsvS
+ * (s toward the banks' next soil). A Leveller: b.lvAim (the tile it was aimed at), b.lvTs (the hill's tiles then),
+ * b.lvAcc (s toward the next level), b.lvN (levels cut and not yet put to the ground), b.lvFuel, b.lvGen, b.lvDone.
+ */
+const T5_LAYERS = ['rsvBank'];
+
+/** What stands on tile t that keeps water or a cut off it ('' if nothing): a building, road, track, pipe, ramp, earthwork, neutral ground. */
+function t5Blocked(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (S.bAt[t]) return 'a building';
+  if (S.road[t] || S.plan[t]) return 'a road';
+  if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) return 'railway track';
+  if (S.pipe && (S.pipe[t] || (S.pipePlan && S.pipePlan[t]))) return 'a pipe';
+  if (S.ramp[t]) return 'a ramp';
+  if (S.ewK && S.ewK[t]) return 'an earthwork';
+  if (postAt(t) || calmAt(i + 0.5, j + 0.5) || uplinkAt(t)) return 'neutral ground';
+  if (S.landmarks && typeof lmWhy === 'function' && lmWhy(t)) return 'a landmark';
+  if ((S.dam && damAt(t)) || (S.town && townRuinAt(t)) || (S.walker && walkerYard(i, j)) || liftWreckAt(t) || runwayAt(t)) return 'something that stays';
+  return '';
+}
+
+/**
+ * The basin a Reservoir with its square's corner at (i, j) would fill: { lv, ts } (ts: its tiles, the farthest from its
+ * edge first), or { why } (and `at`, a tile in the way). Each stretch of lower ground beside the square (4-way, below the
+ * square's level) with all the ground at its level joined to it is a candidate; a basin is one closed in on every side
+ * (higher ground, rock or water: no lower ground beyond it), RSV.min to RSV.max tiles, nothing standing in it, none of it a
+ * rival's. The biggest of those (on a tie, the first round the square) is the one it fills.
+ */
+function rsvBasin(owner, i, j) {
+  const F = BDEFS.reservoir.foot, W = S.W, N = W * S.H;
+  if (!inMap(i, j)) return { why: 'Outside the map.' };
+  const P = S.elev[tIdx(i, j)], ring = [];
+  for (let c = j - 1; c <= j + F; c++) for (let a = i - 1; a <= i + F; a++) {
+    if (!inMap(a, c) || (a >= i && a < i + F && c >= j && c < j + F) || ((a === i - 1 || a === i + F) && (c === j - 1 || c === j + F))) continue;
+    const t = tIdx(a, c);
+    if (S.terrain[t] === T_GROUND && !(S.tidal && S.tidal[t]) && S.elev[t] < P) ring.push(t);
+  }
+  if (!ring.length) return { why: 'A Reservoir stands on the rim of a dry basin: there must be lower ground right beside its square.' };
+  const seen = new Uint8Array(N);
+  let best = null, why = null;
+  const rank = (r) => (r.at !== undefined ? 3 : r.small ? 2 : 1); // (what to say when none will do: something in the way first)
+  for (const t0 of ring) {
+    if (seen[t0]) continue;
+    const lv = S.elev[t0], q = [t0];
+    seen[t0] = 1;
+    let bad = '';
+    for (let h = 0; h < q.length && q.length <= 4 * RSV.max; h++) {
+      if (q.length > RSV.max && !bad) bad = `The low ground here runs on too far (more than ${RSV.max} tiles): a Reservoir fills a closed basin.`;
+      for (const u of tfSides(q[h])) {
+        if (seen[u] || S.terrain[u] !== T_GROUND || (S.lava && S.lava[u]) || (S.tidal && S.tidal[u]) || S.elev[u] > lv) continue; // (higher ground, rock, chasms and water close it in)
+        if (S.elev[u] < lv) { if (!bad) bad = 'The water would run out: the ground beyond this basin goes down further.'; continue; }
+        seen[u] = 1; q.push(u);
+      }
+    }
+    let r = null;
+    if (bad) r = { why: bad };
+    else if (q.length < RSV.min) r = { why: `Too small a basin: ${q.length} tiles of low ground here, and a Reservoir needs ${RSV.min} or more.`, small: 1 };
+    else for (const t of q) {
+      const w = t5Blocked(t);
+      if (w) { r = { why: `The basin must be clear: ${w} stands in it (outlined).`, at: t }; break; }
+      if (S.owner[t] >= 0 && S.owner[t] !== owner) { r = { why: 'Part of the basin is a rival\'s land.', at: t }; break; }
+      if (S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - (t % W)), Math.abs(e.y - ((t / W) | 0))) <= WILD.clear)) { r = { why: 'A Murmur nest is too close to the basin: clear it with warbots first.', at: t }; break; }
+    }
+    if (r) { if (!why || rank(r) > rank(why)) why = r; continue; }
+    if (!best || q.length > best.q.length) best = { lv, q };
+  }
+  if (!best) return why.at !== undefined ? { why: why.why, at: why.at } : { why: why.why };
+  const q = best.q, lv = best.lv;
+  // The fill order: how far each tile is from the basin's edge (a tile beside the rim is 0), the farthest first.
+  const d = new Int16Array(N).fill(-1), inB = new Uint8Array(N), fr = [];
+  for (const t of q) inB[t] = 1;
+  for (const t of q) {
+    const i0 = t % W, j0 = (t / W) | 0;
+    if (i0 === 0 || j0 === 0 || i0 === W - 1 || j0 === S.H - 1 || tfSides(t).some((u) => !inB[u])) { d[t] = 0; fr.push(t); }
+  }
+  for (let h = 0; h < fr.length; h++) for (const u of tfSides(fr[h])) if (inB[u] && d[u] < 0) { d[u] = d[fr[h]] + 1; fr.push(u); }
+  const ts = q.slice().sort((a, b) => d[b] - d[a] || a - b);
+  return { lv, ts };
+}
+
+/** A Generator of b's owner within `reach` of its square, with Fuel to give, built and on (the megastructures' rule: megaGens). */
+function t5Gens(b, reach) { return megaGens(b, reach).filter((g) => (g.stock.fuel || 0) >= 1); }
+
+/**
+ * Stage 5's power (a Fuel every `every` s from each of `need` Generators in `reach`): true while it has it. b[fk]: s left
+ * of the Fuel taken, b[gk]: the Generators it took it from (each must still stand in reach and be on).
+ */
+function t5Power(b, dt, need, reach, every, fk, gk) {
+  if (murmurCutOn(b)) return false;
+  const ok = (id) => { const g = getE(id); return g && !g.dead && g.built && !g.paused && !murmurCutOn(g) && g.owner === b.owner && footDist(b, g.x + 0.5, g.y + 0.5) <= reach + 0.5; };
+  if ((b[fk] || 0) <= 0 || !(b[gk] || []).every(ok) || (b[gk] || []).length < need) {
+    const gs = t5Gens(b, reach).slice(0, need);
+    if (gs.length < need) { b[fk] = 0; b[gk] = []; return false; }
+    for (const g of gs) { bump(g.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); }
+    b[fk] = every; b[gk] = gs.map((g) => g.id);
+  }
+  b[fk] -= dt;
+  return true;
+}
+/** Is Generator g feeding a Reservoir or a Leveller its Fuel now (it runs while it does: see updateGenerator)? */
+function t5Feeds(g) {
+  for (const c of S.buildings) {
+    if (c.dead || !c.built || c.owner !== g.owner || !c.working) continue;
+    if ((BDEFS[c.type].rsv && (c.rsvGens || []).includes(g.id)) || (BDEFS[c.type].lvl && (c.lvGens || []).includes(g.id))) return BDEFS[c.type].name;
+  }
+  return '';
+}
+
+/** The Reservoir, each tick: its power, the basin filling stage by stage, its banks growing richer. */
+function updateReservoir(b, dt) {
+  b.working = false;
+  if (!b.rv) {
+    const B = rsvBasin(b.owner, b.x, b.y);
+    if (B.why) { if (S.tick % 300 === b.id % 300) b.rvNo = B.why; b.status = `No basin to fill: ${b.rvNo || B.why}`; return; }
+    b.rv = { lv: B.lv, ts: B.ts, st: 0 }; b.rvNo = undefined;
+  }
+  const R = b.rv;
+  if (R.st >= 1) {
+    b.rsvS = (b.rsvS || 0) + dt;
+    if (b.rsvS >= RSV.soilEvery) { b.rsvS -= RSV.soilEvery; rsvSoil(b); }
+  }
+  if (R.st >= 3) { b.status = `Full: ${R.ts.length} tiles of lake. Its banks grow richer, toward farmland`; b.working = true; return; }
+  if (!t5Power(b, dt, RSV.gens, RSV.reach, RSV.genFuel, 'rsvFuel', 'rsvGens')) {
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power. It comes back at dawn, its water kept.'
+      : `Waiting, its water kept: no power (${RSV.gens} Generators with Fuel within ${RSV.reach} tiles)`;
+    return;
+  }
+  b.working = true;
+  b.rsvT = (b.rsvT || 0) + dt;
+  const want = RSV.fill.filter((s) => b.rsvT >= s).length;
+  if (want > R.st) rsvStage(b, want);
+  b.status = R.st >= 3 ? 'Full' : `Condensing: the basin ${RSV_STAGE_NAMES[R.st]}, ${RSV_STAGE_NAMES[R.st + 1]} in ${fmtSecs(RSV.fill[R.st] - b.rsvT)} more of power`;
+}
+
+/** Reservoir b's basin reaches stage st: its deepest tiles up to that stage's share become water, all at once. */
+function rsvStage(b, st) {
+  const R = b.rv, n = Math.ceil(R.ts.length * RSV.frac[st - 1]), made = [];
+  for (let k = 0; k < n; k++) {
+    const t = R.ts[k];
+    if (S.terrain[t] !== T_GROUND || S.elev[t] !== R.lv || t5Blocked(t)) continue; // (built on since, or changed: left dry)
+    groveClear(t);
+    S.tfTiles = S.tfTiles || {};
+    if (!S.tfTiles[t]) S.tfTiles[t] = 1; // (dry before: see tfDry0)
+    S.terrain[t] = T_WATER; S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0;
+    if (S.decor) S.decor[t] = 0;
+    if (S.soil) S.soil[t] = 0;
+    if (S.rsvBank) S.rsvBank[t] = 0;
+    if (S.burnt && S.burnt[t]) delete S.burnt[t];
+    made.push(t);
+  }
+  R.st = st;
+  if (!made.length) return;
+  S.rsvLake = 1;
+  for (const t of made) { const i = t % S.W, j = (t / S.W) | 0; for (let y = j - 1; y <= j + 1; y++) for (let x = i - 1; x <= i + 1; x++) if (inMap(x, y)) markDirty(x, y); }
+  terrainChanged();
+  // Robots on the new water step out onto the shore (ships stay on it); routes over it are worked out again.
+  const wet = new Set(made);
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air || BOTS[u.type].sea) continue;
+    const at = tIdx(Math.floor(u.x), Math.floor(u.y));
+    if (wet.has(at)) {
+      const to = nearestTile(at, (v) => !wet.has(v) && walkable(v) && !S.bAt[v] && S.terrain[v] !== T_WATER);
+      if (to >= 0) moveOff(u, to, 0); else dropPath(u);
+    } else if (u.path && u.path.slice(u.pi).some((v) => wet.has(v))) dropPath(u);
+  }
+  for (const l of S.loot || []) { const t = tIdx(Math.floor(l.x), Math.floor(l.y)); if (wet.has(t)) { const to = nearestTile(t, (v) => !wet.has(v) && S.terrain[v] === T_GROUND && !S.bAt[v]); if (to >= 0) { l.x = (to % S.W) + 0.5; l.y = ((to / S.W) | 0) + 0.5; } } } // (crates float ashore)
+  rsvBanks(b);
+  const c = bCentre(b), P = S.players[b.owner];
+  if (P) P.stats.lakeTiles = (P.stats.lakeTiles || 0) + made.length;
+  addFx('ring', c.x, c.y, { color: '#0ad5d8', r: 2.4 });
+  logEvent({ t: S.time, k: 'rsv', p: b.owner, g: st });
+  postMsg(b.owner, st === 1 ? 'Your Reservoir\'s basin is puddling: the first water stands in its deepest ground.'
+    : st === 2 ? 'Your Reservoir\'s basin is half full. Its banks are turning green.'
+      : `Your Reservoir\'s basin is full: a lake of ${made.length} tiles. A Port can go on its shore, and its banks grow toward farmland.`, c.x, c.y, 'good');
+}
+
+/** Mark Reservoir b's banks (RSV.bank tiles of ground round its lake, none of it a rival's) as its owner's. */
+function rsvBanks(b) {
+  const R = b.rv, A = t2Layer('rsvBank'), seen = new Map(), q = [];
+  for (const t of R.ts) if (S.terrain[t] === T_WATER) { seen.set(t, 0); q.push(t); }
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], d = seen.get(t);
+    if (d >= RSV.bank) continue;
+    for (const u of tfSides(t)) {
+      if (seen.has(u) || S.terrain[u] !== T_GROUND || (S.lava && S.lava[u]) || (S.owner[u] >= 0 && S.owner[u] !== b.owner)) continue;
+      seen.set(u, d + 1); q.push(u);
+      if (A[u] !== b.owner + 1) { A[u] = b.owner + 1; markDirty(u % S.W, (u / S.W) | 0); }
+    }
+  }
+}
+
+/** Every RSV.soilEvery s: Reservoir b's banks grow richer (stage 2's soil: rich soil is farmland). */
+function rsvSoil(b) {
+  const A = S.rsvBank;
+  if (!A) return;
+  const own = b.owner + 1, R = b.rv;
+  let i0 = S.W, i1 = 0, j0 = S.H, j1 = 0;
+  for (const t of R.ts) { const i = t % S.W, j = (t / S.W) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); }
+  const m = RSV.bank;
+  for (let j = Math.max(0, j0 - m); j <= Math.min(S.H - 1, j1 + m); j++) for (let i = Math.max(0, i0 - m); i <= Math.min(S.W - 1, i1 + m); i++) {
+    const t = j * S.W + i;
+    if (A[t] === own && soilOpen(t, b.owner)) soilAdd(t, RSV.soilGain);
+  }
+}
+
+/** The tiles of the hill Leveller b would cut if aimed at tile t0: { ts } or { why }. */
+function lvlHill(b, t0) {
+  if (!Number.isInteger(t0) || t0 < 0 || t0 >= S.W * S.H) return { why: 'Outside the map.' };
+  const base = S.elev[tIdx(b.x, b.y)], reach = (t) => footDist(b, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5) <= LVL.reach;
+  if (!reach(t0)) return { why: `Out of reach: the Leveller cuts ground within ${LVL.reach} tiles of it.` };
+  if (S.terrain[t0] !== T_GROUND || S.elev[t0] <= base) return { why: 'Pick ground higher than the Leveller\'s own: a hill or mesa within reach.' };
+  if (S.owner[t0] >= 0 && S.owner[t0] !== b.owner) return { why: 'A rival holds that ground.' };
+  const seen = new Set([t0]), q = [t0];
+  for (let h = 0; h < q.length; h++) for (const u of tfSides(q[h])) {
+    if (seen.has(u) || S.terrain[u] !== T_GROUND || S.elev[u] <= base || !reach(u)) continue;
+    seen.add(u); q.push(u);
+  }
+  return { ts: q.sort((a, c) => a - c) };
+}
+
+/** Can Leveller b cut a level off tile t now (open, its own or no-one's, and no step left steeper than stage 1 allows)? */
+function lvlCuttable(b, t) {
+  if (S.terrain[t] !== T_GROUND || S.elev[t] <= S.elev[tIdx(b.x, b.y)] || t5Blocked(t) || S.res[t] || (S.owner[t] >= 0 && S.owner[t] !== b.owner)) return false;
+  if ((S.lava && S.lava[t]) || (S.tidal && S.tidal[t]) || (S.fault && S.fault[t])) return false;
+  const e = S.elev[t], to = e - 1;
+  for (const u of tfSides(t)) {
+    if (S.terrain[u] !== T_GROUND) continue;
+    const v = S.elev[u];
+    if (Math.abs(to - v) > Math.max(1, Math.abs(e - v))) return false; // (stage 1's rule: every step one a Ramp can climb)
+  }
+  return true;
+}
+
+/** The tile Leveller b cuts next: the highest of its hill, the nearest of those (-1: none left it can cut). */
+function lvlPick(b) {
+  let best = -1, be = -1, bd = Infinity;
+  for (const t of b.lvTs || []) {
+    if (!lvlCuttable(b, t)) continue;
+    const e = S.elev[t], d = footDist(b, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5);
+    if (e > be || (e === be && d < bd)) { best = t; be = e; bd = d; }
+  }
+  return best;
+}
+
+/** Aim Leveller b at the hill under tile t (an order: levelAim). '' or why not. */
+function setLevelAim(b, t) {
+  if (!b || b.dead || !BDEFS[b.type].lvl) return 'That Leveller is gone.';
+  if (!b.built) return 'It isn\'t built yet.';
+  const H = lvlHill(b, t | 0);
+  if (H.why) return H.why;
+  b.lvAim = t | 0; b.lvTs = H.ts; b.lvAcc = 0; b.lvDone = 0;
+  if (lvlPick(b) < 0) { b.lvAim = undefined; b.lvTs = undefined; return 'Nothing there it can cut: buildings, roads or resources stand on it, or a cut would leave too steep a cliff.'; }
+  return '';
+}
+/** Call Leveller b off its hill (what it has cut stays cut). */
+function levelStop(b) {
+  if (!b || b.dead || !BDEFS[b.type].lvl) return;
+  if (b.lvN) lvlCommit(b);
+  b.lvAim = undefined; b.lvTs = undefined; b.lvAcc = 0;
+}
+
+/** The Leveller, each tick: its power, a level off a tile every LVL.every s, the Stone into its hopper. */
+function updateLeveller(b, dt) {
+  b.working = false;
+  if (b.lvAim === undefined || b.lvAim === null) { b.status = b.lvDone ? 'Done: the hill is level. Aim it at another (Level a hill)' : 'Idle: aim it at a hill or mesa within reach (Level a hill on its panel)'; return; }
+  const room = Math.floor((LVL.cap - (b.stock.stone || 0)) / LVL.stone) - (b.lvN || 0);
+  if (room <= 0) { if (b.lvN) lvlCommit(b); b.status = 'Its STONE hopper is full: Haulers carry the Stone off'; return; }
+  if (!t5Power(b, dt, 1, LVL.powReach, LVL.genFuel, 'lvFuel', 'lvGens')) {
+    if (b.lvN) lvlCommit(b);
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power. It comes back at dawn.' : `Stopped: no power (a Generator with Fuel within ${LVL.powReach} tiles)`;
+    return;
+  }
+  b.working = true;
+  b.lvAcc = (b.lvAcc || 0) + dt * (S.players[b.owner] ? S.players[b.owner].mult : 1);
+  if (b.lvAcc >= LVL.every) {
+    b.lvAcc -= LVL.every;
+    b.lvN = (b.lvN || 0) + 1;
+    if (b.lvN >= LVL.batch) lvlCommit(b);
+  }
+  if (b.lvAim === undefined) return; // (done in that batch)
+  const left = (b.lvTs || []).reduce((n, t) => n + Math.max(0, S.elev[t] - S.elev[tIdx(b.x, b.y)]), 0);
+  b.status = `Cutting the hill: ${left} level${left === 1 ? '' : 's'} of ground to go, ${LVL.stone} Stone a level`;
+}
+
+/** Leveller b's cuts so far (b.lvN levels) come down: each the next tile lvlPick gives, all at once (one terrainChanged). */
+function lvlCommit(b) {
+  const n = b.lvN || 0, cut = [], P = S.players[b.owner];
+  b.lvN = 0;
+  for (let k = 0; k < n; k++) {
+    const t = lvlPick(b);
+    if (t < 0) break;
+    groveClear(t);
+    S.tfTiles = S.tfTiles || {};
+    if (!S.tfTiles[t]) S.tfTiles[t] = 1;
+    S.elev[t]--;
+    if (S.decor) S.decor[t] = 0;
+    for (const u of tfSides(t)) if (S.ramp[u] && !tfRampHolds(u)) { S.ramp[u] = 0; S.tfTiles[u] = S.tfTiles[u] || 1; }
+    cut.push(t);
+  }
+  if (cut.length) {
+    bump(b.stock, 'stone', cut.length * LVL.stone); madeGood(b.owner, 'stone', cut.length * LVL.stone);
+    if (P) P.stats.levelled = (P.stats.levelled || 0) + cut.length;
+    for (const t of cut) { const i = t % S.W, j = (t / S.W) | 0; for (let y = j - 1; y <= j + 1; y++) for (let x = i - 1; x <= i + 1; x++) if (inMap(x, y)) markDirty(x, y); }
+    terrainChanged();
+    const set = new Set(cut);
+    for (const u of S.bots) if (!u.dead && !u.inside && u.path && u.path.slice(u.pi).some((v) => set.has(v))) dropPath(u);
+    const t = cut[cut.length - 1];
+    addFx('dustcloud', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 1.2 });
+  }
+  if (lvlPick(b) < 0) {
+    b.lvDone = 1; b.lvAim = undefined; b.lvTs = undefined; b.lvAcc = 0;
+    const c = bCentre(b);
+    postMsg(b.owner, 'Your Leveller has cut the hill down: the ground is graded to standard.', c.x, c.y, 'good');
+  }
+}
+
+/** Is a meter's worth of greening in this game (anything green, or a Colony game, whose top bar shows it)? */
+function greenWanted() {
+  return S.mode === 'colony' || !!(S.soil || S.grove || S.wet || S.shift || S.rsvBank || (S.green && Object.keys(S.green).length) || (S.tfTiles && Object.keys(S.tfTiles).length));
+}
+/** The deposits that leave a tile out of the open land (dug, not grown): Ore, Crystal, Stone, Oil, Uranium. */
+const GREEN_DEPOSIT = new Uint8Array(16);
+for (const r of [R_BOULDER, R_ORE, R_CRYSTAL, R_OIL, R_URANIUM]) GREEN_DEPOSIT[r] = 1;
+/** Is tile t open land, for the meter: ground with nothing built or laid on it and no deposit on it? */
+function greenOpen(t) {
+  return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t]) && !GREEN_DEPOSIT[S.res[t]];
+}
+/** The rain mask (Atmosphere Engines at Rain or later, with power): a Uint8Array, or null with none. */
+function greenRain() {
+  const L = S.buildings.length ? rainHolds() : [];
+  if (!L.length) return null;
+  const M = new Uint8Array(S.W * S.H);
+  for (const h of L) {
+    const r = Math.ceil(h.r);
+    for (let j = Math.max(0, Math.floor(h.y - r)); j <= Math.min(S.H - 1, Math.ceil(h.y + r)); j++) for (let i = Math.max(0, Math.floor(h.x - r)); i <= Math.min(S.W - 1, Math.ceil(h.x + r)); i++) if (dist2(i + 0.5, j + 0.5, h.x, h.y) <= h.r * h.r) M[j * S.W + i] = 1;
+  }
+  return M;
+}
+/** How tile t is green (0: not): 4 a grove, 3 shifted ground (or an Engine's Green), 2 wet, 1 improving soil or graded. `rain`: greenRain(). */
+function greenKind(t, rain) {
+  const k = S.grove && S.grove[t] ? 4 : (S.shift && S.shift[t]) || (S.green && S.green[t] >= 3) ? 3
+    : (S.wet && S.wet[t]) || (S.rsvBank && S.rsvBank[t]) || (rain && rain[t]) ? 2 : (S.soil && S.soil[t] >= SOIL.improving) || (S.tfTiles && S.tfTiles[t]) ? 1 : 0;
+  return k && S.burnt && S.burnt[t] ? 0 : k; // (scorched ground never counts)
+}
+/** Whose green tile t counts for: the colony holding the land, else the grove's planter, else the banks' Reservoir's (Colony: yours). */
+function greenOwner(t) {
+  let o = S.owner[t];
+  if (o < 0 && S.grove && S.grove[t]) o = groveOwner(t);
+  if (o < 0 && S.rsvBank && S.rsvBank[t]) o = S.rsvBank[t] - 1;
+  if (S.mode === 'colony' && (o < 0 || !S.players[o] || S.players[o].absent)) o = 0;
+  return o;
+}
+
+/**
+ * Once a second (simStep): the meter, from the layers as they are. S.gm: { of (open land), n (green tiles, a colony each),
+ * k (the player's own by kind: graded or soil, wet, shifted, groves), h (its share a minute, the last 60) }. In a Colony
+ * game with the "Made ready" goal (settings.greenWin), reaching GREEN.goal wins.
+ */
+function greenTick() {
+  if (!greenWanted()) return;
+  const N = S.W * S.H, rain = greenRain(), n = S.players.map(() => 0), k = [0, 0, 0, 0, 0];
+  let of = 0;
+  for (let t = 0; t < N; t++) {
+    if (!greenOpen(t)) continue;
+    of++;
+    const g = greenKind(t, rain);
+    if (!g) continue;
+    const o = greenOwner(t);
+    if (o < 0 || o >= n.length) continue;
+    n[o]++;
+    if (o === 0) k[g]++;
+  }
+  const G = S.gm || (S.gm = { of: 0, n: [], k: [], h: [] });
+  G.of = of; G.n = n; G.k = k;
+  if (S.tick % (60 * 30) < GREEN.every) { G.h.push(of ? Math.round((1000 * n[0]) / of) / 10 : 0); if (G.h.length > 60) G.h.shift(); }
+  if (S.settings && S.settings.greenWin && S.mode === 'colony' && !S.mission && !S.contingency && !S.horde && !S.endless && S.winner < 0 && of && n[0] / of >= GREEN.goal) {
+    S.winner = 0; S.endHow = 'green';
+    logEvent({ t: S.time, k: 'green', p: 0 });
+  }
+}
+/** Colony p's share of the open land that is green (0..1), as the meter last worked it out. */
+function greenShare(p) { const G = S.gm; return G && G.of ? (G.n[p] || 0) / G.of : 0; }
+
 /* ------------------------------------------------------------------ buildings */
 
 function updateBuilding(b, dt) {
@@ -6193,6 +6586,7 @@ function updateBuilding(b, dt) {
     if (def.deepcore) { deepHeld(b); deepWarn(b); } // (turned off, a raid it has already called still comes)
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
       : def.deepcore ? 'Off: not digging and burning no Fuel, its depth kept (the Murmur aren\'t drawn to it while it\'s off)'
+      : def.rsv ? 'Off: not condensing and burning no Fuel, its water kept' : def.lvl ? 'Off: not cutting, and burning no Fuel'
       : def.seamdrill ? 'Off: not drilling, and drawing no power' : def.seedmast ? 'Off: drawing no power, and its beds have stopped growing'
       : def.dome ? `Off: the dome is down and saves its Crystal (turned on, it takes ${DOME.warm} s to come up)`
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
@@ -6217,6 +6611,8 @@ function updateBuilding(b, dt) {
   else if (def.lift) updateLift(b, dt);
   else if (def.deepcore) updateDeep(b, dt);
   else if (def.atmos) updateAtmos(b, dt);
+  else if (def.rsv) updateReservoir(b, dt); // (stage 5: RSV)
+  else if (def.lvl) updateLeveller(b, dt); // (stage 5: LVL)
   else if (def.compost) updateComposter(b, dt * S.players[b.owner].mult); // (stage 2: SOIL)
   else if (def.wpump) updateWpump(b); // (stage 2: IRR)
   else if (def.seamdrill) updateSeamDrill(b, dt * S.players[b.owner].mult); // (stage 3: SEAM)
@@ -6317,12 +6713,12 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || BDEFS[c.type].t3pow || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !G.heat && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds; a Thermal Plant powers no megastructure: thermalNear)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || BDEFS[c.type].t3pow || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !G.heat && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos && !BDEFS[c.type].rsv && !BDEFS[c.type].lvl))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds; a Thermal Plant powers no megastructure: thermalNear)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
     if (c.working || /^Working/.test(c.status || '') || (BDEFS[c.type].t3pow && c.t3want && !c.paused)) busy++; // (a Seam Drill or Seed Mast asking for power: stage 3)
   }
-  const core = deepFeeds(b) ? 'the Deep Core' : atmosFeeds(b) ? 'the Atmosphere Engine' : ''; // (a Deep Core or an Atmosphere Engine takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel, ATMOS.genFuel)
+  const core = deepFeeds(b) ? 'the Deep Core' : atmosFeeds(b) ? 'the Atmosphere Engine' : t5Feeds(b) ? `the ${t5Feeds(b)}` : ''; // (stage 5: a Reservoir's or a Leveller's Fuel, RSV.genFuel, LVL.genFuel) // (a Deep Core or an Atmosphere Engine takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel, ATMOS.genFuel)
   if (core && !busy) { b.powered = S.time + step + 0.1; b.working = true; b.status = `Feeding ${core}: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute`; return; }
   if (!near.length) { b.status = 'Nothing in reach to power: build it among your factories'; return; }
   if (!busy) { b.status = `Idle: nothing in reach is working (${near.length} building${near.length === 1 ? '' : 's'} in reach)`; return; }
@@ -12614,7 +13010,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.t3pow || def.mortar || def.flak || def.minigun || def.dome || def.deepcore || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.t3pow || def.mortar || def.flak || def.minigun || def.dome || def.deepcore || def.rsv || def.lvl || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
@@ -22493,6 +22889,13 @@ function hashState() {
   if (t2Any()) for (const k in S.burnt || {}) int(+k); // (scorched ground: groves burn to it and Reclaim clears it)
   for (const k of T3_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (Crystal Seedbeds: stage 3)
   for (const e of S.seams || []) { int(e.id); int(e.n); int(e.f); } // (the seams, once a Seam Drill has surveyed: stage 3)
+  for (const k of T5_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (a Reservoir's banks: stage 5)
+  if (S.rsvLake) int(-91);
+  for (const b of S.buildings) { // (a Reservoir's basin and fill, a Leveller's hill and cut: stage 5)
+    if (b.rv) { int(b.id); int(b.rv.lv); int(b.rv.st); int(b.rv.ts.length); }
+    if (b.rsvT || b.rsvFuel || b.rsvS) { int(b.id); num(b.rsvT || 0); num(b.rsvFuel || 0); num(b.rsvS || 0); for (const g of b.rsvGens || []) int(g); }
+    if (b.lvAim !== undefined || b.lvN || b.lvFuel || b.lvDone) { int(b.id); int(b.lvAim ?? -1); int((b.lvTs || []).length); num(b.lvAcc || 0); int(b.lvN || 0); num(b.lvFuel || 0); int(b.lvDone || 0); for (const g of b.lvGens || []) int(g); }
+  }
   for (const k of T4_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (earthworks, floods, caved tunnels: stage 4)
   for (const b of S.buildings) { // (a Sluice's flood, a Sap Head's sap, what a flood knocked out: stage 4)
     if (b.fl) { int(b.id); num(b.fl.t0); int(b.fl.n); num(b.fl.rs); int(b.fl.ts.length); }
@@ -23733,6 +24136,8 @@ function megaReset(b) {
   if (def.dome) { b.dUp = 0; b.dCry = 0; delete b.dWarm; }
   if (def.lift) { b.lfMove = 0; b.lfT = 0; b.lfPaid = 0; b.lfLoad = ''; b.lfMul = 0; b.lfBoost = 0; b.lfSend = null; b.lfFeed = 0; b.lfWarn = 0; }
   if (def.deepcore) { b.dcAcc = {}; b.dcFuel = 0; b.dcGen = 0; b.dcGenT = 0; b.dcSrc = ''; }
+  if (def.rsv) { b.rsvFuel = 0; b.rsvGens = []; } // (stage 5: its water and banks are kept)
+  if (def.lvl) { b.lvFuel = 0; b.lvGens = []; b.lvN = 0; }
   if (def.atmos) { atmosStormOff(b); b.aeFuel = 0; b.aeGens = []; b.aeGenT = 0; b.aeU = 0; b.aeUr = 0; b.aeWith = 0; b.aeSeed = 0; b.aeBolt = 0; b.aeSrc = ''; }
   if (def.city) { b.cFuel = 0; b.cDry = 0; }
 }

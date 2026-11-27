@@ -1166,6 +1166,69 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     and `tunnel.js` (the Sluice and the Sap Head, the Sap Exit), `renderer/tools/render_t4.sh` then `install_t4.py`.
     Mission: **Ground War** (First Contact, after The Murmur; its goals: heap a bank, breach an old no one's bank
     with the three warbots in the Command Base, cave in a tunnel, open a Sluice, dig a sap). Tests: `node tools/terraform4-test.js`.
+- **Terraforming, stage 5: big projects and greening** (Nov 2026, the owner's picks from the stage 5 canvas; `RSV`,
+  `LVL`, `GREEN` in `js/defs.js`; the rules in the stage 5 block of `js/sim.js`: `rsvBasin`, `t5Blocked`, `t5Power`,
+  `t5Feeds`, `updateReservoir`, `rsvStage`, `rsvBanks`, `rsvSoil`, `lvlHill`, `lvlCuttable`, `lvlPick`, `setLevelAim`,
+  `levelStop`, `updateLeveller`, `lvlCommit`, `greenOpen`, `greenKind`, `greenOwner`, `greenRain`, `greenTick`,
+  `greenShare`; the panels, the aim, the drawing, the meter, the Greening panel and the minimap layer in
+  `js/terraform5.js`). The player's alone: rivals never build them and only meet the lakes and the levelled ground (their
+  routes, zones and the sea follow `terrainChanged`). Seeded AI-vs-AI games keep their hashes.
+  - **Reservoir** (`BDEFS.reservoir`, `rsv`, a megastructure on the Mega tab, key V; concept A "Dew Towers":
+    condensation, never ice from orbit; accent basin teal `#0ad5d8`; 3 x 3; 50 Cement, 30 Alloy, 14 Chips, 16 Crystal;
+    300 s; armor 100; opens `RSV.at` 20 minutes in, `rsvOpen`; one per colony; not on Argos or in the Hollow,
+    `worldBan`). Placed (`footPlace`) on the rim of a dry basin: `rsvBasin` takes each stretch of lower ground beside its
+    square (4-way) with all the ground at its level joined to it, and keeps the biggest that is closed in (no lower
+    ground beyond it), `RSV.min` 20 to `RSV.max` 120 tiles, clear (`t5Blocked`: no building, road, track, pipe, ramp,
+    earthwork or neutral ground) and none of it a rival's; its tiles ordered by how far they are from the basin's edge
+    (the deepest first). The basin is left out of `footBlocks` (it will be water). Power (`t5Power`): `RSV.gens` (2)
+    Generators with Fuel within `RSV.reach` (4), a Fuel every `RSV.genFuel` (60) s from each (`b.rsvFuel`,
+    `b.rsvGens`; the Generators run while they feed it, `t5Feeds`; never a Thermal Plant's). `b.rsvT` s of power: at
+    `RSV.fill` (120, 300, 480) the basin reaches stage 1 puddling, 2 half, 3 full (`b.rv.st`), and the deepest
+    `RSV.frac` (25%, 60%, all) of its tiles become `T_WATER` all at once (`rsvStage`: one `terrainChanged` a stage;
+    tiles built on since are left dry), marked in `S.tfTiles` as the Graders' (1: dry before), so they are hashed and
+    saved with the ground and a Water Pump's water runs along them like a canal. Robots on the new water step ashore
+    (`moveOff`), routes over it are dropped, crates float ashore. `S.rsvLake` then lets Ports and ships use any map
+    (`navalOk`, used by `canPlace`, the build menu, the Foundry's list, `ferryLines` and routes; rivals keep to
+    `navalMap`). The banks (`rsvBanks`, `S.rsvBank` its owner + 1, a sparse layer, `T5_LAYERS`): ground within
+    `RSV.bank` (2) tiles of its water, none of it a rival's: wet (`wetAt`, so crops grow faster and the biome shift
+    scores it; drawn as watered ground) and every `RSV.soilEvery` (15) s `RSV.soilGain` (16) soil richer (`rsvSoil`,
+    to rich farmland). Destroyed, the lake stays. In the basin before it is built: `b.rvNo`, why not.
+  - **Leveller** (`BDEFS.leveller`, `lvl`, key G; concept A "Bucket Wheel"; accent cut-stone tan `#d8b18c`; 3 x 3; 50
+    Cement, 40 Alloy, 12 Chips; 240 s; armor 100; `out: { stone: 60 }` for the Haulers; opens `LVL.at` 15 minutes in).
+    Aimed (`ORDERS.levelAim`, `setLevelAim`) at a tile within `LVL.reach` (8) of its square higher than its own: the
+    hill (`lvlHill`, `b.lvTs`) is all the ground joined to it, higher than the Leveller, within reach. With power (a
+    Generator with Fuel within `LVL.powReach` 4, a Fuel a minute) a level every `LVL.every` (6) s (`b.lvAcc`, `b.lvN`);
+    every `LVL.batch` (4) levels `lvlCommit` cuts them, each the next `lvlPick` (the highest of the hill, the nearest of
+    those) that `lvlCuttable` allows (open, its own or no one's, no step steeper than a level or than it already was:
+    stage 1's rule; a ramp left leading nowhere goes), one `terrainChanged` a batch, `LVL.stone` (2) Stone a level into
+    its hopper, `LVL.cap` (60) at most (full, it waits; `out` makes it a Haulers' pickup). `S.tfTiles` marks the cut
+    ground. Done: `b.lvDone`. `ORDERS.levelStop`. A ridge (banking earth into a line) is not built (IDEAS).
+  - **The greening meter** (`greenTick`, every `GREEN.every` 30 ticks while anything green or graded is in the game, or
+    in Colony): `S.gm` { `of` open land, `n` green tiles a colony, `k` the player's by kind, `h` its share a minute,
+    the last 60 }. Open land (`greenOpen`): ground with no building, road, track or ramp, no lava or tidal flat, and no
+    deposit to dig (`GREEN_DEPOSIT`). Green (`greenKind`): 4 a grove, 3 shifted (`S.shift`, or an Engine's Green,
+    `S.green` 3+), 2 wet (`S.wet`, the banks, an Engine's rain: `greenRain` once a pass), 1 improving soil or graded
+    (`S.tfTiles`); scorched ground isn't. Whose (`greenOwner`): the land's holder, else the grove's planter, else the
+    banks' Reservoir's; in Colony all of it the player's. A pass over the map once a second (as Domination's): about
+    0.1 ms on a Medium map. Not hashed (worked out from what is); kept in saves (`checkSave`).
+  - **Made ready** (Colony; `settings.greenWin`, the setup's Goal row, `UI.menu.cgoal`, `ready` by default, or `free`;
+    `newGame` only sets it when asked, so older games and the tests read as before): at `GREEN.goal` (60%) of the open
+    land `S.winner` 0, `S.endHow` `green` (not in missions, Contingency battles, Horde, or after Keep playing; not in
+    co-op Colony yet). The end: `NARRATOR.madeReady`, the kicker "Ithaca I made ready", `overFlare` with tone `green`
+    (the TERRAFALL flare in leaf green `#7be05a`, `.o-flare.green`, `#screen-over.won-green`). A scripted focused game
+    (Composters and Tree Nurseries across the land from 10 minutes, the Atmosphere Engine at 20) gets there in 32 to 48
+    minutes on Medium, Large and Huge maps.
+  - Interface (`js/terraform5.js`): the placing banner's line and the basin outlined teal (or what's in the way red,
+    `t5Ranges`); the Reservoir's panel (three teal stage lamps, the banks, power) and the Leveller's (Level a hill `F`,
+    the aim mode `startAim`/`t5AimBanner`/`t5AimFire`, the hill outlined tan; Stop cutting `C`; its hopper); the hill
+    and the dust at the cut on the map (`t5Marks`); the buildings (`t5DrawBuilding`, `t5DrawSite`, `MEGA_LAMPS`).
+    The meter: a ring in the top bar's land chip (`t5Chip`; tap it), the Greening panel (`openGreening`, Shift+G,
+    sheet `green`), the minimap's Green layer (`R.greenMap`, `t5MiniGreen`; the GREEN tag at its foot, `t5MiniTag`;
+    on while the panel is open), the win card in a Made ready game (`t5WinCard`).
+  - Art (ART_GUIDE Batch 42): `renderer/b/reservoir.js`, `leveller.js` and `t5kit.js`; `renderer/tools/render_t5.sh`
+    then `install_t5.py` (each without its moving parts at every time of day, the moving parts in 4 frames, two build
+    stages). Mission: **Made Ready** (Sea and Sky, after Deep Ground: build a Reservoir, fill its basin, cut levels off a
+    mesa with a Leveller, make a share of the land ready). Tests: `node tools/terraform5-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -5120,6 +5183,21 @@ knocked out, the refill; a Cave in caving a tunnel to a groove the Murmur never 
 Sap Head's route rules, its route its owner's alone, its dig rate, the tremor a rival feels, the break-out, its owner's
 robots through it out of reach, a rival shooting its exit down; saves mid-flood and mid-dig playing on to the same
 hash, a damaged flood refused; the same game twice the same.
+
+```bash
+node tools/terraform5-test.js
+```
+
+Terraforming, stage 5: nothing of it in a game without it; a Reservoir only on the rim of a dry, closed, clear basin
+(not on flat ground, not with a road in it, not where it runs out lower down, one per colony, from 20 minutes); its
+basin filling in three stages at 2, 5 and 8 minutes of power, the deepest quarter first, on a Fuel a minute from each of
+two Generators; robots in the basin stepping ashore; a route across the dry basin going round the full lake; its banks
+wet and rich; a Port on the new shore and a ship on the lake; a Leveller aimed only at higher ground in reach, cutting a
+two-level mesa down to its own level a level every 6 s with no step of more than a level, 2 Stone a level into its
+hopper and a ramp left leading nowhere gone; its full hopper waiting and Haulers emptying it; the meter matching a count
+by hand by kind, counting soil, groves, shifted and graded ground and not barren soil or a built tile, worked out once a
+second; the Colony goal won at 60% and not before, and not without the setting; saves mid-fill and mid-cut passing
+`checkSave` and playing on the same; the same game twice the same.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

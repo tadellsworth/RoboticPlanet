@@ -69,6 +69,7 @@ const LIFT_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Orbital Lift's
 const GUP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] };
 const DEEP_FRAME = { scale: 5.071, anchor: [0.5, 0.6] }; // (the Deep Core's wide frame, as the Uplink's: see tools/install_deepcore.py) // (the Great Uplink's wide frame, as the Lift's: see tools/install_gup.py)
 const SUNDER_FRAME = { scale: 5.071, anchor: [0.5, 0.56] }; // (the Sundering Ray's wide frame, as the Lance's: see tools/install_sunder.py)
+const T5_FRAME = { scale: 5.071, anchor: [0.5, 0.6] }; // (Terraforming stage 5's Reservoir and Leveller, framed as the Deep Core: see tools/install_t5.py)
 const ATMOS_FRAME = { scale: 6.7843, anchor: [0.5, 0.66] }; // (the Atmosphere Engine's wide frame, as Arrival City's: see tools/install_atmos.py)
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
@@ -281,6 +282,11 @@ const ART_MANIFEST = {
   // 60 degrees (deepcore-work-K, one set for every team), drawn over it by drawDeep; the shaft's glow and the gauge in code.
   ...Object.fromEntries([0, 1].map((t) => [`deepcore@${t}`, { src: `buildings/deepcore@${t}.webp`, ...DEEP_FRAME }])),
   ...Object.fromEntries(Array.from({ length: 8 }, (_, k) => [`deepcore-work-${k}`, { src: `buildings/deepcore-work-${k}.webp`, ...DEEP_FRAME }])),
+  // Terraforming stage 5 (renderer/b/reservoir.js, Dew Towers, and leveller.js, Bucket Wheel; installed by tools/install_t5.py):
+  // each without its moving parts (<k>@T, every time of day), the moving parts alone in 4 frames (<k>-work-F, one set for
+  // every team, drawn over it by t5DrawBuilding), and its two build stages (<k>-site1@T, <k>-site2@T).
+  ...Object.fromEntries(['reservoir', 'leveller'].flatMap((k) => [0, 1].flatMap((t) => [k, `${k}-site1`, `${k}-site2`].map((n) => [`${n}@${t}`, { src: `buildings/${n}@${t}.webp`, ...T5_FRAME }])))),
+  ...Object.fromEntries(['reservoir', 'leveller'].flatMap((k) => [0, 1, 2, 3].map((f) => [`${k}-work-${f}`, { src: `buildings/${k}-work-${f}.webp`, ...T5_FRAME }]))),
   // The Atmosphere Engine (renderer/b/atmos.js, the owner's look A, the Rain Tower, installed by tools/install_atmos.py): the
   // cooling-tower shell, its fans and control house (atmos@T, every time of day); the plume, its night light and the rain in code.
   ...Object.fromEntries([0, 1].map((t) => [`atmos@${t}`, { src: `buildings/atmos@${t}.webp`, ...ATMOS_FRAME }])),

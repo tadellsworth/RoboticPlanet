@@ -158,11 +158,11 @@ function drawGoodsPops(ctx, ox, oy, z) {
 /* ------------------------------------------------------------------ the ? on a panel */
 
 /** Panels that aren't about one building or robot, and the section each opens. */
-const PANEL_TOPICS = { ally: 'hs-ally', army: 'hs-army', rally: 'hs-army', agroup: 'hs-agroups', agsel: 'hs-agroups', post: 'hs-trade', road: 'hs-roads', dam: 'hs-dam', econ: 'hs-economy', pop: 'hs-bots', wf: 'hs-workforce', res: 'hs-supply', uplink: 'hs-rivals', soil: 'hs-colony', bridge: 'hs-orbital' };
+const PANEL_TOPICS = { ally: 'hs-ally', army: 'hs-army', rally: 'hs-army', agroup: 'hs-agroups', agsel: 'hs-agroups', post: 'hs-trade', road: 'hs-roads', dam: 'hs-dam', econ: 'hs-economy', pop: 'hs-bots', wf: 'hs-workforce', res: 'hs-supply', uplink: 'hs-rivals', soil: 'hs-colony', bridge: 'hs-orbital', green: 'hs-bigprojects' };
 /** Where a name's own section isn't the one that names it most. */
 const TOPIC_FIX = {
   lander: 'hs-start', outpost: 'hs-land', foundry: 'hs-bots', worker: 'hs-bots', hauler: 'hs-bots', repair: 'hs-defence', wall: 'hs-defence', gate: 'hs-defence',
-  silo: 'hs-missiles', nukesilo: 'hs-missiles', munitions: 'hs-missiles', reactor: 'hs-missiles', warbot: 'hs-army', rocket: 'hs-army', nest: 'hs-murmur', burrow: 'hs-murmur',
+  reservoir: 'hs-bigprojects', leveller: 'hs-bigprojects', silo: 'hs-missiles', nukesilo: 'hs-missiles', munitions: 'hs-missiles', reactor: 'hs-missiles', warbot: 'hs-army', rocket: 'hs-army', nest: 'hs-murmur', burrow: 'hs-murmur',
 };
 
 /**
