@@ -20,7 +20,8 @@
  *  - Over the graded ground (t4Marks): your saps' routes (dashed, the head ringed; only yours: sapSeen), the tremors
  *    you feel (rings where the ground shook), and the earthworks your warbots are ordered to shoot (a reticle, its
  *    strength as a ring). An Attack order on an earthwork's tile: ewOrderAt (right-click a foe's; Ctrl, Alt or Cmd for
- *    your own), the rules in sim.js (orderEwShoot, ewShoot).
+ *    your own; under a finger, Breach on the selection bar: t4BreachOffered, t4BreachTap), the rules in sim.js
+ *    (orderEwShoot, ewShoot).
  *  - The minimap's colours (t4MiniColor).
  * The look is the owner's picks from the stage 4 concept canvas (ART_GUIDE Batch 38): Earth Bank (Berm A), Fire Trench
  * (Revetted, A), Dragon's Teeth (Tank traps B), Sluice (Radial Gates, A; spillway mint), Sap Head (Tunnel Bore A;
@@ -54,6 +55,34 @@ function ewOrderAt(i, j, force) {
   if (!S.ewK || !inMap(i, j)) return 0;
   const t = tIdx(i, j), k = ewAt(t), o = ewOwner(t);
   return k && (force || o < 0 || foes(o, ME)) ? k : 0;
+}
+
+/**
+ * Breach, on the selection bar under a finger (no Ctrl there): shown with warbots selected while you or an ally have an
+ * earthwork standing. A tap arms it (UI.breachArm); the next tap on the map is then the Attack order on the earthwork
+ * there, your own or an ally's too (the Ctrl + right-click order: ewOrderAt with force), and it is off again.
+ */
+let _t4Mine = { at: -1, n: 0 };
+function t4BreachOffered() {
+  if (!S || !S.ewK || !orderable(ME, UI.sel).some((u) => !BOTS[u.type].siege)) return false;
+  if (_t4Mine.at < 0 || Math.abs(S.tick - _t4Mine.at) >= 30) {
+    let n = 0;
+    for (let t = 0; t < S.ewK.length && !n; t++) if (S.ewK[t] && ewAt(t)) { const o = ewOwner(t); if (o >= 0 && !foes(o, ME)) n++; }
+    _t4Mine = { at: S.tick, n };
+  }
+  return _t4Mine.n > 0;
+}
+/** The selection bar's status line while Breach is armed (your and your allies' earthworks are outlined in coral: t4Marks). */
+const T4_BREACH_TEXT = '<b>Breach:</b> tap an outlined earthwork to shoot it';
+/** A finger's tap on the map with Breach armed (touchOrder): the earthwork there is attacked, whoever built it. True if used. */
+function t4BreachTap(i, j, wx, wy, done) {
+  if (!UI.breachArm) return false;
+  if (!ewOrderAt(i, j, true)) { sfx('error'); toast('Tap an earthwork: an Earth Bank, Fire Trench or Dragon\'s Teeth (yours are outlined in coral). Breach again to call it off.', 'warn'); return true; }
+  UI.breachArm = false;
+  INPUT.force = true; // (as Ctrl + right-click: onMapCommand reads it at once)
+  try { onMapCommand(i, j, wx, wy, done); } finally { INPUT.force = false; }
+  refreshSelection();
+  return true;
 }
 
 /** Their cards on the Terraform tab, after stage 3's (openBuildMenu binds them as it does every building card). */
@@ -550,6 +579,18 @@ function t4Marks(ctx, ox, oy, z, v0, v1) {
       ctx.stroke();
       ctx.fillStyle = '#ffe9c2'; ctx.beginPath(); ctx.arc(x, y, Math.max(1.5, z * 0.05), 0, Math.PI * 2); ctx.fill();
     }
+  }
+  // Breach armed (the selection bar, under a finger): your and your allies' earthworks in view, outlined in coral
+  if (S.ewK && typeof UI !== 'undefined' && UI.breachArm && UI.sel.length) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,90,110,0.9)'; ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.setLineDash([z * 0.18, z * 0.1]);
+    for (let j = Math.max(0, Math.floor(v0.y) - 1); j <= Math.min(S.H - 1, Math.ceil(v1.y) + 1); j++) for (let i = Math.max(0, Math.floor(v0.x) - 1); i <= Math.min(S.W - 1, Math.ceil(v1.x) + 1); i++) {
+      const t = tIdx(i, j);
+      if (!S.ewK[t] || !ewAt(t)) continue;
+      const o = ewOwner(t);
+      if (o >= 0 && !foes(o, ME)) ctx.strokeRect(ox + i * z + z * 0.08, oy + j * z + z * 0.08, z * 0.84, z * 0.84);
+    }
+    ctx.restore();
   }
   for (const r of S.tremors || []) {
     if (r.p !== ME) continue;

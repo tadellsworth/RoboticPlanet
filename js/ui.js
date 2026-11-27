@@ -3162,7 +3162,7 @@ function initSelBar() {
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
     <span class="hint sel-mouse">Right-click open ground to hold it, a rival building, robot or earthwork to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl or Shift + 1–9)"></button><button class="btn small ghost" id="sel-agroup" title="Add them to an Army Group, or make a new one">Army group</button></div>`;
+    <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small" id="sel-breach" aria-pressed="false" title="Attack your own or an ally's earthwork: tap Breach, then the Earth Bank, Fire Trench or Dragon's Teeth" hidden>Breach</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl or Shift + 1–9)"></button><button class="btn small ghost" id="sel-agroup" title="Add them to an Army Group, or make a new one">Army group</button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
   $('sel-agroup').onclick = () => { sfx('click'); openAgSelSheet(); };
@@ -3172,8 +3172,10 @@ function initSelBar() {
   $('sel-info').onclick = () => { sfx('click'); const us = selectable(ME, UI.sel).filter((u) => !u.inside); if (us.length === 1) openBotSheet(us[0]); else openPopSheet(); };
   $('sel-scorch').onclick = () => { const us = orderable(ME, UI.sel).filter((u) => BOTS[u.type].flame); if (!us.length) return; sfx('click'); startScorch(us.map((u) => u.id)); };
   $('sel-recycle').onclick = () => recycleSelection();
+  // Breach: the next tap on the map attacks the earthwork there, your own or an ally's (Ctrl + right-click with a mouse: js/terraform4.js)
+  $('sel-breach').onclick = () => { sfx('click'); UI.breachArm = !UI.breachArm; INPUT.boxArmed = false; refreshSelection(); };
   // Box: the next one-finger drag on the map draws a selection box (input.js), then it's off again. Tap Box again to call it off.
-  $('sel-box').onclick = () => { sfx('click'); INPUT.boxArmed = !INPUT.boxArmed; refreshSelection(); };
+  $('sel-box').onclick = () => { sfx('click'); INPUT.boxArmed = !INPUT.boxArmed; UI.breachArm = false; refreshSelection(); };
 }
 
 /** The selected robots that Recycle on the selection bar would send (not those already on their way). */
@@ -3264,6 +3266,7 @@ function orderSnapshot(u) {
  */
 function touchOrder(i, j, wx, wy) {
   const was = selectable(ME, UI.sel).map(orderSnapshot);
+  if (UI.breachArm && typeof t4BreachTap === 'function' && t4BreachTap(i, j, wx, wy, () => { haptic('order'); UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); })) return;
   onMapCommand(i, j, wx, wy, () => { haptic('order'); UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); });
 }
 
@@ -3413,19 +3416,25 @@ function refreshSelection() {
   bar.hidden = !on;
   document.body.classList.toggle('sel-on', on && touch); // (on an upright phone the bar takes the bottom bar's place)
   bar.classList.toggle('touch', touch);
-  if (!on) { UI.undo = null; INPUT.boxArmed = false; refreshGroupBar(); return; }
+  if (!on) { UI.undo = null; INPUT.boxArmed = false; UI.breachArm = false; refreshGroupBar(); return; }
   // (its parts are made once, by initSelBar: made again if one isn't there, so a bar that lost a part can't stop this)
-  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-scorch', 'sel-recycle', 'selbar-group', 'sel-agroup'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
+  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-scorch', 'sel-breach', 'sel-recycle', 'selbar-group', 'sel-agroup'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
   $('sel-scorch').hidden = !orderable(ME, UI.sel).some((u) => BOTS[u.type].flame); // (Torches selected: Scorch the earth)
   $('sel-agroup').hidden = !orderable(ME, UI.sel).length || !!UI.watch; // (army units selected: Army group)
   $('sel-box').classList.toggle('on', INPUT.boxArmed);
+  // (Breach: under a finger, warbots selected and an earthwork of yours or an ally's standing: js/terraform4.js)
+  const breach = touch && !UI.watch && typeof t4BreachOffered === 'function' && t4BreachOffered();
+  if (!breach) UI.breachArm = false;
+  $('sel-breach').hidden = !breach;
+  $('sel-breach').classList.toggle('on', !!UI.breachArm);
+  $('sel-breach').setAttribute('aria-pressed', UI.breachArm ? 'true' : 'false');
   let inside = 0, empty = 0;
   for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
   const undo = UI.undo && performance.now() < UI.undo.until ? UI.undo : (UI.undo = null);
   const set = (id, html) => { const el = $(id); if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
   set('sel-title', `${groupWords(UI.sel)} selected`);
   set('sel-notes', (inside ? `<span class="muted">(${inside} in garrisons)</span> ` : '') + (empty ? `<span class="err">${empty} out of Ammo or Fuel</span>` : ''));
-  set('sel-status', INPUT.boxArmed ? '<b>Box:</b> drag a finger round warbots (two fingers move the map)'
+  set('sel-status', INPUT.boxArmed ? '<b>Box:</b> drag a finger round warbots (two fingers move the map)' : UI.breachArm ? T4_BREACH_TEXT
     : undo ? `<span class="ok">${esc(undo.text)}</span> Undo takes it back.` : (touch ? '<b>Tap the map</b> to send them · ' : '') + esc(selStatus(selectable(ME, UI.sel))));
   set('selbar-group', `Save<span class="sl-long"> as</span> group ${nextGroupNo()}`);
   $('sel-undo').hidden = !undo;
@@ -6888,7 +6897,9 @@ function onMapTap(i, j, wx, wy) {
   const ahead = (u) => u.y >= overFoot || seeThrough;
   if (!INPUT.mouse && R.mode === 'normal') {
     const unit = unitAtTap(wx, wy);
-    if (selBarShowing()) { if (unit && (!(town || upper) || ahead(unit))) touchSelect(unit); else touchOrder(i, j, wx, wy); return; }
+    // (Breach armed: a tap on an earthwork is its order, even with one of yours standing on it: js/terraform4.js)
+    const breach = UI.breachArm && typeof ewOrderAt === 'function' && ewOrderAt(i, j, true);
+    if (selBarShowing()) { if (unit && !breach && (!(town || upper) || ahead(unit))) touchSelect(unit); else touchOrder(i, j, wx, wy); return; }
     if (unit && !rally && (!bb || upper) && ahead(unit)) { closeSheet(); touchSelect(unit); return; }
   }
   // Everything under the tap: a rally flag, a building, then robots, nearest first. Tapping the same spot

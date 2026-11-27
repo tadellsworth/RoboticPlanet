@@ -941,6 +941,7 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .selbar.touch .sel-br ~ .btn, .selbar.touch .sel-tools #selbar-group { margin-top: 6px; }
 @container (max-width: 379px) { .selbar.touch .sl-long { display: none; } }
 .selbar #sel-box.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.selbar #sel-breach.on { background: #ff5a6e; color: #1a0a0d; border-color: #ff5a6e; }
 /* Where panels cover the bottom of the screen the bar steps aside for them (and taps are then not orders: selBarShowing),
    and so do the control-group chips, for a panel or a mode's banner. */
 @media (max-width: 999px), (max-height: 519px) { body.sheet-open .selbar.touch, body.sheet-open .groupbar, body.mode-on .groupbar { display: none; } }
@@ -2986,7 +2987,7 @@ body.deck #hud .btn.primary, body.deck :is(#screen-pause, #screen-boost, #screen
 body.deck #hud .btn.ghost, body.deck :is(#screen-pause, #screen-over, #screen-mp, #screen-stats, #screen-help, #screen-missions) .btn.ghost { background: transparent; border-color: rgba(180, 185, 201, 0.32); }
 body.deck #hud .btn.danger, body.deck :is(#screen-pause, #screen-over) .btn.danger { background: rgba(255, 77, 138, 0.08); border-color: rgba(255, 77, 138, 0.5); color: #ffc9de; }
 body.deck #hud .btn.danger-glow { background: #d1205a; color: #fff; border-color: #ff6b9e; }
-body.deck #hud .btn.on, body.deck .ag-orders .btn.on, body.deck .ag-row .btn.on, body.deck .selbar #sel-box.on { background: rgba(255, 107, 74, 0.2); color: #fff; border-color: var(--dk-c); box-shadow: inset 0 -2px 0 var(--dk-c); }
+body.deck #hud .btn.on, body.deck .ag-orders .btn.on, body.deck .ag-row .btn.on, body.deck .selbar #sel-breach.on, body.deck .selbar #sel-box.on { background: rgba(255, 107, 74, 0.2); color: #fff; border-color: var(--dk-c); box-shadow: inset 0 -2px 0 var(--dk-c); }
 body.deck #hud .btn:hover:not(:disabled) { filter: none; border-color: var(--dk-c); }
 body.deck #hud .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
 body.deck #sheet button[data-key]::after, body.deck kbd { border-radius: 2px; border: 1px solid rgba(180, 185, 201, 0.4); border-bottom-width: 1px; background: rgba(0, 0, 0, 0.25); color: var(--dk-mut); font-family: var(--dk-mono); }
@@ -2996,6 +2997,12 @@ body.deck .seg { gap: 2px; padding: 2px; border: 1px solid var(--dk-cl); backgro
 body.deck .seg button { border-radius: 2px; color: var(--dk-mut); font: 600 12.5px/1.1 var(--dk-disp); letter-spacing: 0.06em; text-transform: uppercase; }
 body.deck .seg button.on { background: rgba(255, 107, 74, 0.16); color: #fff; box-shadow: inset 0 -2px 0 var(--dk-c); }
 body.deck .build-tabs .n { font-family: var(--dk-mono); border-radius: 2px; }
+/* (a phone: all six tabs, 1 Gather to 6 Terraform, across the sheet without scrolling sideways: tighter letters and padding) */
+@media (max-width: 480px) {
+  body.deck .build-tabs { gap: 2px; padding: 2px; }
+  body.deck .build-tabs button { flex: 1 1 auto; min-width: 0; padding: 8px 2px; letter-spacing: 0.01em; font-size: 12px; }
+}
+@media (max-width: 360px) { body.deck .build-tabs button { font-size: 11px; letter-spacing: 0; } }
 /* the Build list's cards */
 body.deck .bcard { background: rgba(255, 107, 74, 0.04); border: 1px solid rgba(255, 107, 74, 0.18); border-radius: 3px; color: var(--dk-ink); }
 body.deck .bcard:hover:not(:disabled) { border-color: var(--dk-c); background: rgba(255, 107, 74, 0.1); }
