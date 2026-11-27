@@ -1686,6 +1686,49 @@ const MISSIONS = [
     ],
   },
 
+  // Chapter 6, Into the Void (space expansion, phase 2): The Graveyard, a wreck field of dead Accord ships. Salvage towed in by
+  // Shuttle, a Drop Outpost landed by Shuttle on the Arbiter's hulk, the Arbiter taken and its salvage sent home.
+  {
+    id: 'graveyard', name: 'The Graveyard', chapter: 'Into the Void',
+    brief: 'Your colony landed on the hulk of a dead Accord ship. Past your starter fields there is little Ore or Crystal: live off the salvage, and take the Arbiter.',
+    intro: [
+      'The Graveyard is a wreck field from the first fights after the Accord fell. Your Launch Pad stands ready.',
+      'Wreckage drifts through the void. A <b>Shuttle</b> tows it to its pad, where it is broken down for <b>Alloy and Chips</b>.',
+      'A Shuttle can also land a <b>Drop Outpost</b> on a hulk no bridge reaches: it unfolds and claims the land round it.',
+      'The <b>Arbiter</b>, the relay ship in the middle, is yours while your land covers its relay. Held, it sends you salvage.',
+      'Debris lanes drift through the void too: craft that fly through them are clipped. Fly round, or take the hits.',
+    ],
+    mode: 'colony', seed: 7711, size: 1, rough: 1, rich: 3, biome: 'lunar', shape: SHAPE_PRESETS.findIndex((s) => s.graveyard), limit: [0, 0, 30],
+    setup(S) {
+      const out = kit(S, [...KIT6, 'launchpad'], 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 20; L.stock.alloy += 12; L.stock.chip += 8; L.stock.fuel += 20;
+      if (out.launchpad) out.launchpad.stock.fuel = 8;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the pad's Fuel)
+      spaceSetup(S.seed); // (the salvage, the debris lanes and the derelicts: a Versus game's, laid out here)
+    },
+    goals: [
+      { kind: 'salvage', n: [2, 3, 4], text: ['Tow a salvage wreck home', 'Tow {n} salvage wrecks home'], at: 'launchpad',
+        count: (P) => P.stats.towed || 0,
+        focus: (S) => { const u = S.bots.find((v) => !v.dead && v.owner === 0 && v.type === 'shuttle'); return u ? { e: u, ui: '#sh-sp-tow' } : null; },
+        hint: '<b>Launch Pad</b> → <b>Yard</b>: Shuttles <b>+1</b>. Shuttle → <b>Tow salvage</b>, then tap a drifting wreck.',
+        ui: "#sh-yard .order-row[data-k='shuttle'] [data-d='1'], #sh-sp-tow" },
+      { kind: 'shuttlePost', n: 1, text: 'Land a Drop Outpost on the Arbiter\'s hulk', at: 'launchpad',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'dropost' && S.grave && graveHulkKind(b.x, b.y) === 'arb').length,
+        focus: (S) => { const u = S.bots.find((v) => !v.dead && v.owner === 0 && v.type === 'shuttle'); return u ? { e: u, ui: '#sh-sp-post' } : null; },
+        hint: 'Shuttle → <b>Land a Drop Outpost</b>, then tap the Arbiter\'s deck by its relay twice (or <b>Land</b>).',
+        ui: '#sh-sp-post, #banner-ok' },
+      { kind: 'arbiter', n: 1, text: 'Take the Arbiter', hold: true,
+        count: () => (arbHolder() === 0 ? 1 : 0),
+        hint: 'Your land must cover its relay: an Outpost by it (<b>Build</b> <kbd>B</kbd> → <b>Defend</b> <kbd>4</kbd> → <b>Outpost</b>).',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost']" },
+      { kind: 'arbHauls', n: [1, 2, 3], text: ['Receive the Arbiter\'s salvage', 'Receive the Arbiter\'s salvage {n} times'],
+        count: (P) => P.stats.arbHauls || 0,
+        hint: 'Hold it: every 30 s it sends Alloy and Chips home. The Arbiter is the diamond on the minimap.',
+        ui: '#minimap' },
+    ],
+  },
+
   // Chapter 7, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)

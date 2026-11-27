@@ -106,6 +106,7 @@ function simStep(dt) {
   if (S.fld || S.tremors) t4Tick(); // (Terraforming stage 4: a Sluice's flood, the tremors felt)
   if (S.orb) orbTick(); // (Orbital platforms: the bridges' warnings and leaves, the control boxes)
   if (S.space) spaceTick(); // (space: towed asteroids, the drifting rocks mined in passing, the derelict modules' holds)
+  if (S.grave && S.tick % 30 === 23) graveTick(); // (The Graveyard: who holds the Arbiter, and its salvage)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -15466,6 +15467,7 @@ function placePosts(seed) {
       if (walkOnly && !walked[t]) continue;
       if (S.town && !townPostOk(i, j)) continue; // (Passenger Town: only on a square or a parking lot, the town market)
       if (S.walker && walkerYard(i, j)) continue; // (nor on the Walking Factory's yard)
+      if (S.grave && S.grave.core && i >= S.grave.core.x0 - R - 3 && i <= S.grave.core.x1 + R + 3 && j >= S.grave.core.y0 - R - 3 && j <= S.grave.core.y1 + R + 3) continue; // (nor round the Arbiter's relay: it is fought over)
       let room = 0;
       for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
       if (room < lv.room || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
@@ -15653,6 +15655,7 @@ function uplinkOrbit(t) {
  * (small home islands), a second try lets them stand nearer (`close`: UPLINK_CLOSE).
  */
 function placeUplinks(seed, anyGround, close) {
+  if (S.grave) { const C = S.grave.core; S.uplinks = [{ id: 1, x: (C.x0 + C.x1) >> 1, y: (C.y0 + C.y1) >> 1, owner: -1, jam: 0, arb: 1 }]; return S.uplinks; } // (The Graveyard: the Arbiter is the Uplink: Hold the Arbiter)
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
   const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (quadShape(SH, nColonies()) && nColonies() >= 3) || haul4Map(S.settings);
@@ -15784,6 +15787,7 @@ function updateUplinks() {
   const held = S.players.map(() => 0), j2 = UPLINK.jam * UPLINK.jam;
   const who = (p) => playerName(p);
   for (const u of U) {
+    if (u.arb && S.grave) { u.owner = S.grave.owner; u.jam = S.grave.jam; if (u.owner >= 0 && !u.jam) held[u.owner]++; continue; } // (The Graveyard: the Arbiter, held as graveTick says; its own messages)
     const o = S.owner[tIdx(u.x, u.y)], was = u.owner;
     u.owner = o >= 0 && S.players[o] && !S.players[o].out && !S.players[o].absent ? o : -1;
     let jam = 0;
@@ -18644,6 +18648,7 @@ function ropeEndBlocked(owner, ai, aj, i, j) {
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds the ground at the far end.';
   if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground.';
   if (S.bAt[t]) return 'There is a building at the far end.';
+  if (S.grave && (graveCoreAt(t) || graveCoreAt(a))) return 'The Arbiter\'s relay stands there.';
   return '';
 }
 
@@ -23340,6 +23345,7 @@ function hashState() {
     for (const u of S.bots) if (!u.dead && BOTS[u.type].craft) { int(u.id); num(u.alt); num(u.vel); num(u.ramp); str(u.sf && u.sf.ph); num(u.sf && u.sf.tx); num(u.sf && u.sf.ty); str(u.mission && u.mission.kind); str(u.mission && u.mission.phase); num(u.cd); int(u.home || 0); for (const id of u.aboard || []) int(id); }
     for (const b of S.buildings) if (!b.dead && BDEFS[b.type].pd) { num(b.aim); num(b.spin); int(b.rounds || 0); int(b.tgt || 0); }
   }
+  if (S.grave) { int(S.grave.owner); int(S.grave.jam); num(S.grave.held || 0); num(S.grave.acc || 0); int(S.grave.paid || 0); } // (The Graveyard: the Arbiter)
   for (const k of T4_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (earthworks, floods, caved tunnels: stage 4)
   for (const b of S.buildings) { // (a Sluice's flood, a Sap Head's sap, what a flood knocked out: stage 4)
     if (b.fl) { int(b.id); num(b.fl.t0); int(b.fl.n); num(b.fl.rs); int(b.fl.ts.length); }
@@ -27573,7 +27579,7 @@ function craftSpeed(u) {
 
 /** Can a craft come down on tile t: flat, free ground (no building, slope, drawbridge, derelict or deposit in the way) where no craft has landed? */
 function craftLandable(t, self) {
-  if (t < 0 || S.terrain[t] !== T_GROUND || !walkable(t) || S.bAt[t] || S.ramp[t] || orbTile(t) || S.res[t] || spaceModAt(t)) return false;
+  if (t < 0 || S.terrain[t] !== T_GROUND || !walkable(t) || S.bAt[t] || S.ramp[t] || orbTile(t) || S.res[t] || spaceModAt(t) || (S.grave && graveCoreAt(t))) return false;
   if (S.tidal && S.tidal[t]) return false;
   const D = craftDownAt(t);
   return !D.some((v) => v !== self);
@@ -27710,6 +27716,7 @@ function craftLost(u) {
   const M = u.mission;
   if (M && M.kind === 'supply') { const c = getE(M.to), load = u.cargo || M.load; if (c && load && M.phase !== 'back') for (const g in load) bump(c.inc, g, -load[g]); }
   if (M && M.kind === 'tow') { const r = rockById(M.rock); if (r && r.tow === u.id) rockFree(r); }
+  if (M && M.kind === 'outpost' && M.phase === 'load') refundRoad(u.owner, BDEFS.dropost.cost, Math.floor(u.x), Math.floor(u.y)); // (in the air, the kit is lost with it)
   for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id) v.task = null;
   u.cargo = null; u.mission = null;
 }
@@ -27777,6 +27784,7 @@ function updateCraft(u, dt) {
 function craftAbort(u, why) {
   const M = u.mission, b = craftPad(u);
   if (M && M.kind === 'supply') { const c = getE(M.to); for (const g in u.cargo || {}) { if (c) bump(c.inc, g, -u.cargo[g]); if (b) bump(b.stock, g, u.cargo[g]); } u.cargo = null; }
+  if (M && M.kind === 'outpost') refundRoad(u.owner, BDEFS.dropost.cost, b ? b.x : M.x, b ? b.y : M.y); // (the Drop Outpost kit goes back into storage)
   for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; if (b) { v.x = b.x + 0.5; v.y = b.y + 0.5; } }
   u.aboard = [];
   u.mission = null;
@@ -27840,6 +27848,12 @@ function craftGround(u, dt) {
     craftHome(u);
     return;
   }
+  if (M.kind === 'outpost') { // (a Drop Outpost kit: it unfolds beside the Shuttle, which then lifts off for home)
+    if (S.time - F.t0 < SPACE.load) return;
+    if (!M.done) shuttleOutpostDown(u);
+    u.mission = null;
+    return;
+  }
   // A squad: the ramp comes down, they walk out one by one, the ramp goes up.
   if ((u.ramp || 0) < 1) { u.ramp = Math.min(1, (u.ramp || 0) + dt / SPACE.ramp); if (u.ramp >= 1) F.outT = S.time; return; }
   if (S.time - (F.outT || 0) < SPACE.out) return;
@@ -27901,7 +27915,8 @@ function craftUnload(u) {
 }
 
 /**
- * Order Shuttle u (parked on its pad) to tow drifting asteroid `rid` (an Ore or Crystal one, on its lane) home: '' or why not.
+ * Order Shuttle u (parked on its pad) to tow drifting asteroid `rid` (an Ore or Crystal one, or on The Graveyard a salvage
+ * wreck, on its lane) home: '' or why not.
  */
 function orderTow(owner, u, rid) {
   if (!u || u.dead || u.owner !== owner || u.type !== 'shuttle') return 'Pick one of your Shuttles.';
@@ -27911,6 +27926,7 @@ function orderTow(owner, u, rid) {
   const r = rockById(rid);
   if (!r || r.gone) return 'That asteroid is gone.';
   if (r.k === 'plain') return 'A plain rock holds nothing worth towing: pick an Ore or Crystal one.';
+  if (r.k === 'junk') return 'Loose debris: too many shards, too small to tow. Pick a salvage wreck.';
   if (r.tow || S.bots.some((v) => !v.dead && v.mission && v.mission.kind === 'tow' && v.mission.rock === r.id)) return 'Another Shuttle is already after that asteroid.';
   u.mission = { kind: 'tow', rock: r.id, phase: 'load', since: S.time - SPACE.load + 0.5 };
   return '';
@@ -28240,14 +28256,16 @@ function rockIn(r) {
   if (tw && !tw.gone && !tw.tow) { r.t0 = tw.t0; r.ph = tw.ph; } // (back in step with its twin where it can be)
 }
 
-/** Shuttle u has towed asteroid r over pad b: the rock is broken up into a field of deposit tiles beside the pad. */
+/** Shuttle u has towed asteroid r over pad b: the rock is broken up into a field of deposit tiles beside the pad (salvage: into Alloy and Chips, salvageIn). */
 function rockToField(r, b, u) {
+  if (r.k === 'salvage') { salvageIn(r, b, u); return; }
   const res = r.k === 'ore' ? R_ORE : R_CRYSTAL, c = bCentre(b), cand = [];
   for (let j = b.y - 4; j <= b.y + 5; j++) for (let i = b.x - 4; i <= b.x + 5; i++) {
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || orbTile(t) || (S.rail && S.rail[t]) || spaceModAt(t) || postAt(t) || uplinkAt(t) || calmAt(i + 0.5, j + 0.5)) continue;
     if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue;
+    if (S.grave && graveCoreAt(t)) continue;
     cand.push([dist2(i + 0.5, j + 0.5, c.x, c.y) + hash2(i, j, r.id) * 0.5, t]);
   }
   cand.sort((a, d) => a[0] - d[0]);
@@ -28263,6 +28281,21 @@ function rockToField(r, b, u) {
     bump(b.stock, r.k, amt); madeGood(b.owner, r.k, amt);
     postMsg(u.owner, `A Shuttle brought in an asteroid: no room beside the pad to break it up, so its ${amt} ${r.k === 'ore' ? 'Ore' : 'Crystal'} went into the pad.`, b.x, b.y, 'good');
   }
+  r.tow = 0; r.gone = S.time; r.amt = 0;
+}
+
+/**
+ * The Graveyard: Shuttle u has towed salvage wreck r over pad b. The pad's crew break it down at once: DRIFT.salvage (Alloy
+ * and Chips) into the pad's store, and another wreck drifts in on its lane DRIFT.salvageBack s later.
+ */
+function salvageIn(r, b, u) {
+  const G = DRIFT.salvage, P = S.players[b.owner];
+  for (const g in G) { bump(b.stock, g, G[g]); madeGood(b.owner, g, G[g]); }
+  P.stats.towed = (P.stats.towed || 0) + 1;
+  const c = bCentre(b);
+  blastFx(c.x, c.y, 0.4, { small: true });
+  addFx('ring', c.x, c.y, { color: '#ffcf7a', r: 1.2 });
+  postMsg(u.owner, `A Shuttle towed in a salvage wreck: the Launch Pad broke it down for ${costText(G)}.`, b.x, b.y, 'good');
   r.tow = 0; r.gone = S.time; r.amt = 0;
 }
 
@@ -28282,7 +28315,7 @@ function segDist(L, x, y) {
 function rockTick() {
   const SP = S.space;
   for (const r of SP.rocks) {
-    if (r.gone) { if (S.time - r.gone >= DRIFT.respawn) rockIn(r); continue; }
+    if (r.gone) { if (S.time - r.gone >= (r.k === 'salvage' ? DRIFT.salvageBack : DRIFT.respawn)) rockIn(r); continue; }
     if (r.tow || r.k === 'plain' || !(r.amt > 0)) continue;
     const p = rockPos(r), R2 = DRIFT.reach * DRIFT.reach;
     for (const b of S.buildings) {
@@ -28382,6 +28415,148 @@ function spaceTick() {
   if (S.tick % 30 === 23) { rockTick(); modTick(); }
 }
 
+/* -- The Graveyard: the Arbiter (space expansion, phase 2) */
+
+/*
+ * The Graveyard (SHAPE_PRESETS graveyard; graveMap in world.js, GRAVE in defs.js, the look in js/grave.js). S.grave =
+ * { hulks, core: { x0, y0, x1, y1 }, owner, jam, held, paid, acc }: the hulks the map laid out, and the Arbiter, the old
+ * Accord arbitration relay ship in the middle, whose relay (the dish and masts) stands on the core's tiles. Like an Uplink it
+ * is held by land: `owner` is the colony with the most land on the core's tiles (a tie keeps the one it had), `jam` set (that
+ * colony + 1) while another colony's armed robots stand within GRAVE.arb.jam tiles of its middle. Held and not jammed, it
+ * sends its holder GRAVE.arb.haul every GRAVE.arb.every s (`acc` counts toward it; `held` the seconds it has been held in
+ * all, `paid` the hauls sent). With Victory: Uplinks it is the game's one Uplink (placeUplinks, updateUplinks).
+ */
+
+/** Is tile t one of the Arbiter's relay tiles (nothing is built, laid or landed there)? */
+function graveCoreAt(t) {
+  const C = S.grave && S.grave.core;
+  if (!C) return false;
+  const i = t % S.W, j = (t / S.W) | 0;
+  return i >= C.x0 && i <= C.x1 && j >= C.y0 && j <= C.y1;
+}
+/** The hulk (S.grave.hulks) tile (i, j) lies in, or null; its kind ('home', 'arb', 'bridge', 'far') or ''. */
+function graveHulkAt(i, j) {
+  if (!S.grave) return null;
+  for (const h of S.grave.hulks) if (i >= h.x0 && i <= h.x1 && j >= h.y0 && j <= h.y1) return h;
+  return null;
+}
+function graveHulkKind(i, j) { const h = graveHulkAt(i, j); return h ? h.kind : ''; }
+/** The middle of the Arbiter's relay, in world units. */
+function graveMid() { const C = S.grave.core; return { x: (C.x0 + C.x1 + 1) / 2, y: (C.y0 + C.y1 + 1) / 2 }; }
+/** Who holds the Arbiter now (-1: no one, or jammed). */
+function arbHolder() { return S.grave && S.grave.owner >= 0 && !S.grave.jam ? S.grave.owner : -1; }
+
+/** Once a second on The Graveyard: who holds the Arbiter, its jam, and the salvage it sends its holder. */
+function graveTick() {
+  const A = S.grave, C = A.core, was = arbHolder(), n = S.players.map(() => 0);
+  for (let j = C.y0; j <= C.y1; j++) for (let i = C.x0; i <= C.x1; i++) { const o = S.owner[tIdx(i, j)]; if (o >= 0 && o < n.length) n[o]++; }
+  let best = -1, bn = 0, tie = false;
+  for (let p = 0; p < n.length; p++) {
+    const P = S.players[p];
+    if (!P || P.out || P.absent || isWild(p) || !n[p]) continue;
+    if (n[p] > bn) { bn = n[p]; best = p; tie = false; } else if (n[p] === bn) tie = true;
+  }
+  A.owner = tie ? (A.owner >= 0 && n[A.owner] === bn ? A.owner : -1) : best;
+  let jam = 0;
+  if (A.owner >= 0) {
+    const m = graveMid(), J = GRAVE.arb.jam * GRAVE.arb.jam;
+    for (const v of S.bots) {
+      if (v.dead || v.inside || !isArmy(v) || v.owner < 0 || isWild(v.owner) || !foes(v.owner, A.owner) || !botArmed(v)) continue;
+      if (dist2(v.x, v.y, m.x, m.y) <= J) { jam = v.owner + 1; break; }
+    }
+  }
+  A.jam = jam;
+  const now = arbHolder(), m = graveMid();
+  if (now !== was) {
+    A.acc = 0;
+    if (now >= 0) {
+      postMsg(now, `The Arbiter is yours: its relay stands in your land. It sends you salvage, ${costText(GRAVE.arb.haul)} every ${GRAVE.arb.every} s.`, Math.floor(m.x), Math.floor(m.y), 'good');
+      for (const P of S.players) if (P.id !== now && !P.absent && !isWild(P.id)) postMsg(P.id, `${playerName(now)} holds the Arbiter!`, Math.floor(m.x), Math.floor(m.y), 'bad');
+      addFx('ring', m.x, m.y, { color: PLAYER_COLORS[now], r: 2.4 });
+    }
+    if (was >= 0) postMsg(was, now >= 0 ? `${playerName(now)} took the Arbiter!` : A.jam && A.owner === was ? 'Enemy warbots are jamming the Arbiter: drive them off!' : 'You lost the Arbiter.', Math.floor(m.x), Math.floor(m.y), 'bad');
+  }
+  if (now < 0) return;
+  A.held = (A.held || 0) + 1;
+  A.acc = (A.acc || 0) + 1;
+  if (A.acc < GRAVE.arb.every) return;
+  A.acc = 0;
+  const L = getE(S.players[now].lander), H = GRAVE.arb.haul;
+  if (!L || L.dead || L.owner !== now) return;
+  for (const g in H) { bump(L.stock, g, H[g]); madeGood(now, g, H[g]); }
+  A.paid = (A.paid || 0) + 1;
+  S.players[now].stats.arbHauls = (S.players[now].stats.arbHauls || 0) + 1;
+  if (A.paid <= 1 || A.paid % 6 === 0) postMsg(now, `The Arbiter sent salvage: ${costText(H)} into your Command Base.`, L.x, L.y, 'good');
+}
+
+/** A save's S.grave (checkSave): the hulks and the relay, plain numbers on the map. */
+function graveCheckSave(o, bad) {
+  const G = o.grave, obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v), int = Number.isInteger, num = Number.isFinite;
+  if (!obj(G) || !Array.isArray(G.hulks) || G.hulks.length > 16 || !obj(G.core)) bad();
+  if (!G.hulks.every((h) => obj(h) && ['x0', 'y0', 'x1', 'y1', 'id', 'tw'].every((k) => int(h[k])) && h.x0 >= 0 && h.y0 >= 0 && h.x1 < o.W && h.y1 < o.H && ['home', 'arb', 'bridge', 'far'].includes(h.kind))) bad();
+  const C = G.core;
+  if (!['x0', 'y0', 'x1', 'y1'].every((k) => int(C[k])) || C.x0 < 0 || C.y0 < 0 || C.x1 >= o.W || C.y1 >= o.H || C.x1 < C.x0 || C.y1 < C.y0) bad();
+  if (!int(G.owner) || G.owner < -1 || G.owner >= o.players.length || !int(G.jam) || !['held', 'paid'].every((k) => num(G[k]))) bad();
+}
+
+/* -- a Shuttle lands a Drop Outpost (space maps) */
+
+/** Why owner's Shuttle u can't land a Drop Outpost at (i, j) ('' if it can). */
+function shuttleOutpostBlocked(owner, u, i, j) {
+  if (!u || u.dead || u.owner !== owner || u.type !== 'shuttle') return 'Pick one of your Shuttles.';
+  const b = craftPad(u);
+  if (!b || u.inside !== b.id) return 'The Shuttle must be parked on its Launch Pad.';
+  if (u.mission) return 'That Shuttle is already on a job.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j);
+  if (S.terrain[t] !== T_GROUND || orbTile(t)) return 'Land it on a deck or a hulk: open, flat ground.';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+  if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
+  if (craftLandSpot(u, i, j, 2) < 0 || shuttleOutpostSpot(owner, i, j) < 0) return 'Nowhere flat and free there for it to land and unfold: pick open ground (no building, road, deposit or slope).';
+  if (!canAffordRoad(owner, BDEFS.dropost.cost)) return `A Drop Outpost costs ${costText(BDEFS.dropost.cost)}: not enough ${missingGoods(owner, BDEFS.dropost.cost)} in storage.`;
+  return '';
+}
+/** Where a Drop Outpost landed by Shuttle near (i, j) unfolds: as deploySpot, but never on the Arbiter's relay or the tile `not`. -1 if nowhere. */
+function shuttleOutpostSpot(owner, i, j, not) {
+  let best = -1, bd = Infinity;
+  for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+    const x = i + di, y = j + dj;
+    if (!inMap(x, y)) continue;
+    const t = tIdx(x, y);
+    if (t === not || S.terrain[t] !== T_GROUND || orbTile(t) || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || (S.grave && graveCoreAt(t)) || (S.space && spaceModAt(t)) || postAt(t) || uplinkAt(t) || calmAt(x + 0.5, y + 0.5)) continue;
+    if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
+    if (ringOverRival(owner, x, y, BDEFS.dropost.terr)) continue;
+    const d = di * di + dj * dj;
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+/** Order owner's Shuttle u to fly a Drop Outpost kit (paid from storage now) out and land it at (i, j). '' or why not. */
+function orderShuttleOutpost(owner, u, i, j) {
+  const why = shuttleOutpostBlocked(owner, u, i, j);
+  if (why) return why;
+  payRoad(owner, BDEFS.dropost.cost);
+  u.mission = { kind: 'outpost', x: i, y: j, phase: 'load', since: S.time };
+  return '';
+}
+/** Shuttle u, landed at its spot, unfolds the Drop Outpost it carried (beside it): it claims the land round it and is supplied by air. */
+function shuttleOutpostDown(u) {
+  const M = u.mission, t0 = tIdx(Math.floor(u.x), Math.floor(u.y)), at = shuttleOutpostSpot(u.owner, Math.floor(u.x), Math.floor(u.y), t0);
+  M.done = 1;
+  if (at < 0) { refundRoad(u.owner, BDEFS.dropost.cost, M.x, M.y); postMsg(u.owner, 'The Shuttle found nowhere to unfold the Drop Outpost: its goods went back into storage.', M.x, M.y, 'warn'); return; }
+  if (S.plan[at]) cancelPlan(at);
+  const b = addBuilding(u.owner, 'dropost', at % S.W, (at / S.W) | 0, true);
+  b.airSupply = true; b.keep = { fuel: 3 }; b.deployedAt = S.time;
+  computeTerritory();
+  computeZones();
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2 });
+  postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it, and your Shuttles keep it supplied.', b.x, b.y, 'good');
+  if (isMe(b.owner)) sfx('complete');
+  const foe = S.owner[at];
+  if (foe >= 0 && foes(foe, b.owner)) postMsg(foe, `${playerName(b.owner)} landed an Outpost nearby!`, b.x, b.y, 'bad');
+  S.players[u.owner].stats.shuttlePosts = (S.players[u.owner].stats.shuttlePosts || 0) + 1;
+}
+
 /* -- setting it up (newGame) */
 
 /**
@@ -28412,11 +28587,11 @@ function spaceSetup(seed) {
   const clear = Math.ceil(DRIFT.clear), at = (x, y) => (inMap(Math.floor(x), Math.floor(y)) ? D[tIdx(Math.floor(x), Math.floor(y))] : 0);
   const mx = (x) => W - x, my = (y) => H - y; // (the half turn, in world units)
   const b0 = { x: L0.x + 0.5, y: L0.y + 0.5 }, b1 = L1 ? { x: L1.x + 0.5, y: L1.y + 0.5 } : { x: W - b0.x, y: H - b0.y }; // (one colony, a mission's: its twin's place stands in)
-  const kinds = DRIFT.kinds[S.orb ? 'orbital' : 'asteroids'];
+  const kinds = DRIFT.kinds[S.grave ? 'graveyard' : S.orb ? 'orbital' : 'asteroids'];
   const lanes = [];
   for (const k of kinds) {
     let best = null, bs = -Infinity;
-    for (let n = 0; n < 1500; n++) {
+    for (let n = 0; n < (S.grave ? 3000 : 1500); n++) {
       const px = 1 + rng() * (W - 2), py = 1 + rng() * (H - 2);
       if (at(px, py) < clear) continue;
       // (through a point on colony 0's side of the map, as far each way as the void runs clear, up to the longest)
@@ -28426,7 +28601,7 @@ function spaceSetup(seed) {
       while (f + bk < DRIFT.len[1] && at(px + ca * (f + 0.5), py + sa * (f + 0.5)) >= clear) f += 0.5;
       while (f + bk < DRIFT.len[1] && at(px - ca * (bk + 0.5), py - sa * (bk + 0.5)) >= clear) bk += 0.5;
       const len = f + bk;
-      if (len < DRIFT.len[0]) continue;
+      if (len < DRIFT.len[0] - (S.grave ? 2 : 0)) continue; // (The Graveyard: its void is crowded with hulks, so a lane may be a little shorter and closer to the next)
       const x0 = px - ca * bk, y0 = py - sa * bk, x1 = px + ca * f, y1 = py + sa * f, cxm = (x0 + x1) / 2, cym = (y0 + y1) / 2;
       const L = { x0: Math.round(x0 * 4) / 4, y0: Math.round(y0 * 4) / 4, x1: Math.round(x1 * 4) / 4, y1: Math.round(y1 * 4) / 4, len: 0, k };
       L.len = Math.round(dist(L.x0, L.y0, L.x1, L.y1) * 100) / 100;
@@ -28437,14 +28612,14 @@ function spaceSetup(seed) {
       // Apart from its own twin and the other lanes (each rock its own room), the twin on clear void too.
       if ([[twin.x0, twin.y0], [twin.x1, twin.y1], [(twin.x0 + twin.x1) / 2, (twin.y0 + twin.y1) / 2]].some(([x, y]) => at(x, y) < clear)) continue;
       const sep = Math.min(segSeg(L, twin), ...lanes.map((o) => segSeg(L, o)));
-      if (sep < 4) continue;
+      if (sep < (S.grave ? 3 : 4)) continue;
       // Close enough to the colony's ground to be of use (Ore and Crystal ones: in a Mine's reach of some ground),
       // not too close to its Command Base, a little randomness.
       const home = dist(cxm, cym, b0.x, b0.y);
       let near = Infinity;
       for (let q = 0; q <= len; q += 1) { const x = x0 + ca * q, y = y0 + sa * q, i = Math.floor(x), j = Math.floor(y); if (i > 0 && j > 0 && i < W - 1 && j < H - 1) near = Math.min(near, at(x, y)); }
-      if (k !== 'plain' && near > DRIFT.reach - 2) continue; // (an Ore or Crystal rock passes in a Mine's reach of some ground)
-      const s = len * 0.35 - Math.abs(home - (k === 'plain' ? 26 : 20)) * 0.6 + Math.min(sep, 12) * 0.3 + rng() * 3;
+      if ((k === 'ore' || k === 'crystal') && near > DRIFT.reach - 2) continue; // (an Ore or Crystal rock passes in a Mine's reach of some ground)
+      const s = len * (k === 'junk' ? 0.6 : 0.35) - Math.abs(home - (k === 'plain' || k === 'junk' ? 26 : 20)) * 0.6 + Math.min(sep, 12) * 0.3 + rng() * 3; // (The Graveyard: debris lanes long, salvage where a Shuttle reaches it soon)
       if (s > bs) { bs = s; best = L; }
     }
     if (!best) continue;
@@ -28456,6 +28631,15 @@ function spaceSetup(seed) {
   for (let n = 0; n < lanes.length; n += 2) {
     const ph = Math.round(rng() * 6283) / 1000;
     for (const m of [0, 1]) S.space.rocks.push({ id: n + m + 1, k: lanes[n].k, lane: n + m, tw: n + (1 - m) + 1, t0: 0, ph, amt: DRIFT.amt[lanes[n].k] || 0, tow: 0, gone: 0, x: 0, y: 0 });
+  }
+  // (The Graveyard's debris lanes: more shards on each, spread along it, each with its twin on the twin lane.)
+  for (let n = 0; n < lanes.length; n += 2) {
+    if (lanes[n].k !== 'junk') continue;
+    const ph0 = S.space.rocks[n].ph;
+    for (let q = 1; q < DRIFT.junkN; q++) {
+      const id = S.space.rocks.length + 1, ph = Math.round((ph0 + (q * Math.PI * 2) / DRIFT.junkN) * 1000) / 1000;
+      for (const m of [0, 1]) S.space.rocks.push({ id: id + m, k: 'junk', lane: n + m, tw: id + 1 - m, t0: 0, ph, amt: 0, tow: 0, gone: 0, x: 0, y: 0 });
+    }
   }
   // The derelict modules: a pair of each kind adrift in the void, moored right off a deck or rock (2 by 2 tiles of open
   // space with ground within two tiles: the colony whose land reaches out over it holds it), off the asteroids' lanes,
@@ -28502,8 +28686,8 @@ function segSeg(a, b) {
 /** A save's S.space (checkSave): lanes, rocks and modules of plain numbers on the map. */
 function spaceCheckSave(o, bad) {
   const P = o.space, obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v), num = Number.isFinite, int = Number.isInteger;
-  if (!obj(P) || !Array.isArray(P.lanes) || !Array.isArray(P.rocks) || !Array.isArray(P.mods) || P.lanes.length > 32 || P.rocks.length > 32 || P.mods.length > 16) bad();
-  if (!P.lanes.every((L) => obj(L) && ['x0', 'y0', 'x1', 'y1', 'len'].every((k) => num(L[k])) && L.x0 >= 0 && L.x1 >= 0 && L.y0 >= 0 && L.y1 >= 0 && L.x0 <= o.W && L.x1 <= o.W && L.y0 <= o.H && L.y1 <= o.H && ['plain', 'ore', 'crystal'].includes(L.k))) bad();
-  if (!P.rocks.every((r) => obj(r) && int(r.id) && int(r.lane) && r.lane >= 0 && r.lane < P.lanes.length && ['plain', 'ore', 'crystal'].includes(r.k) && ['t0', 'ph', 'amt', 'x', 'y', 'gone'].every((k) => num(r[k])) && int(r.tow) && int(r.tw))) bad();
+  if (!obj(P) || !Array.isArray(P.lanes) || !Array.isArray(P.rocks) || !Array.isArray(P.mods) || P.lanes.length > 32 || P.rocks.length > 64 || P.mods.length > 16) bad();
+  if (!P.lanes.every((L) => obj(L) && ['x0', 'y0', 'x1', 'y1', 'len'].every((k) => num(L[k])) && L.x0 >= 0 && L.x1 >= 0 && L.y0 >= 0 && L.y1 >= 0 && L.x0 <= o.W && L.x1 <= o.W && L.y0 <= o.H && L.y1 <= o.H && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(L.k))) bad();
+  if (!P.rocks.every((r) => obj(r) && int(r.id) && int(r.lane) && r.lane >= 0 && r.lane < P.lanes.length && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(r.k) && ['t0', 'ph', 'amt', 'x', 'y', 'gone'].every((k) => num(r[k])) && int(r.tow) && int(r.tw))) bad();
   if (!P.mods.every((m) => obj(m) && int(m.id) && DERELICT.kinds.includes(m.k) && int(m.x) && int(m.y) && m.x >= 0 && m.y >= 0 && m.x < o.W - 1 && m.y < o.H - 1 && int(m.owner) && m.owner >= -1 && m.owner < o.players.length && int(m.jam) && (m.done === 0 || m.done === 1) && int(m.st) && m.st >= 0 && m.st < o.W * o.H)) bad();
 }

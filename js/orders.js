@@ -508,6 +508,8 @@ const ORDERS = {
   squad(p, uid, i, j, ids, kind, n) { const u = ownU(p, uid, 'craft'); if (!u) return 'That Dropship is gone.'; return orderSquad(p, u, i | 0, j | 0, Array.isArray(ids) ? ownIds(p, ids).slice(0, 12) : null, kind === 'worker' ? 'worker' : kind === 'warbot' ? 'warbot' : null, n | 0); },
   /** Gunships `ids`: 'attack' building tid, 'hunt' robot tid, 'hold' at (i, j), 'home' to their pads. */
   gunships(p, ids, kind, tid, i, j) { if (!['attack', 'hunt', 'hold', 'home'].includes(kind)) return 0; const t = tid ? getE(tid) : null; if ((kind === 'attack' || kind === 'hunt') && (!t || t.dead || !foes(t.owner, p))) return 0; return orderGunships(p, ownIds(p, ids), kind, tid | 0, (+i || 0) + 0.5, (+j || 0) + 0.5); },
+  /** Shuttle uid flies a Drop Outpost kit out and lands it at (i, j) (space maps). */
+  outpost(p, uid, i, j) { const u = ownU(p, uid, 'craft'); return u ? orderShuttleOutpost(p, u, i | 0, j | 0) : 'That Shuttle is gone.'; },
   /** Craft uid back to its pad (a job not yet under way called off). */
   craftHome(p, uid) { const u = ownU(p, uid, 'craft'); return !!u && recallCraft(u); },
   sail(p, fid, i, j) { const f = ownU(p, fid, 'ferry'); return f ? orderSail(p, f, i, j) : 'That Ferry is gone.'; },

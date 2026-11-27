@@ -117,7 +117,7 @@ function watchSummary(w) {
   if (watchUpWin(w)) main.push('Great Uplink win');
   const size = watchSize(w, n), otherBiome = chosenSecondBiome(w, size);
   if (otherBiome) main.push(BIOMES[otherBiome].name);
-  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, ['ring', 'orbital'].includes(biomeForced(w.shapeRnd, w.shape)) ? 'Argos' : w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
+  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, ['ring', 'orbital', 'grave'].includes(biomeForced(w.shapeRnd, w.shape)) ? 'Argos' : w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
   if (w.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[w.rough].name + ' terrain');

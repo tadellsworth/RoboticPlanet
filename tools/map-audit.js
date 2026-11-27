@@ -35,8 +35,8 @@ const OIL_R = 14, OIL_EXEMPT = ['Sky islands', 'Half underground', 'The Hollow',
 // Trade Posts and Uplinks on maps meant to be walked (all but SITE_CROSS, built round a crossing) stand on ground every
 // colony walks to (Tidal flats: at low tide); and every map that has them has at least a Trade Post a colony (two in
 // Teams) and three Uplinks (as many as colonies, for three or four).
-const SITE_CROSS = ['Islands', 'Four Isles', 'Sky islands', 'The Ring'];
-const FLOOR_OF = { 'Orbital platforms': { ore: 8, crystal: 8 }, 'The Ring': { ore: 6, crystal: 6 }, 'The Hollow': { ore: 3, crystal: 3 } }; // (the Hollow's own home fields hold 3: hollowMap)
+const SITE_CROSS = ['Islands', 'Four Isles', 'Sky islands', 'The Ring', 'The Graveyard'];
+const FLOOR_OF = { 'Orbital platforms': { ore: 8, crystal: 8 }, 'The Ring': { ore: 6, crystal: 6 }, 'The Graveyard': { ore: 8, crystal: 8 }, 'The Hollow': { ore: 3, crystal: 3 } }; // (the Hollow's own home fields hold 3: hollowMap)
 // (Every map holds the floor now: each colony's starter Ore and Crystal fields have at least HOME_FIELD tiles, defs.js. Before
 // that, a sweep of seeds 1 to 8, 11, 21, 37, 99, 123 on Small to Immense found twelve map types whose small random stamps a seed
 // could leave at a tile or two; they were listed as THIN rather than failed until the floor went in, Nov 27 2026.)
@@ -209,13 +209,23 @@ const api = new Function('sfx', 'PROGRESS', source + `
       const fullPosts = S.teams ? 4 : live.length + 1, floorPosts = S.teams ? 2 : live.length;
       out.postsFull = out.posts >= fullPosts;
       if (out.posts < floorPosts) out.siteShort.push(out.posts + ' Trade Posts (want at least ' + floorPosts + ')');
-      if (S.victory === 'uplinks') { const wantUp = live.length === 2 ? 3 : live.length; if (out.uplinks < wantUp) out.siteShort.push(out.uplinks + ' Uplinks (want at least ' + wantUp + ')'); }
+      if (S.victory === 'uplinks') { const wantUp = S.grave ? 1 : live.length === 2 ? 3 : live.length; if (out.uplinks < wantUp) out.siteShort.push(out.uplinks + ' Uplinks (want at least ' + wantUp + ')'); } // (The Graveyard: the Arbiter is the one Uplink)
     }
     if (S.orb) {
       out.orb = { decks: S.orb.plats.length, bridges: S.orb.br.length, boxes: S.orb.bx.length };
       for (const b of S.orb.bx) if (!walkable(tIdx(b.x, b.y)) && !S.bAt[tIdx(b.x, b.y)]) out.problems.push('control box off the deck at ' + b.x + ',' + b.y);
       const per = {}; for (const b of S.orb.bx) per[b.br] = (per[b.br] || 0) + 1;
       for (const k in per) if (per[k] !== 2) out.problems.push('bridge ' + k + ' has ' + per[k] + ' control boxes');
+    }
+    // The Graveyard: its hulks (each start on a home hulk), the Arbiter's relay bare and held by no one at the start, the salvage and debris lanes.
+    if (S.grave) {
+      const kinds = {}; for (const h of S.grave.hulks) kinds[h.kind] = (kinds[h.kind] || 0) + 1;
+      out.grave = { hulks: kinds, salvage: S.space ? S.space.rocks.filter((r) => r.k === 'salvage').length : 0, junk: S.space ? S.space.rocks.filter((r) => r.k === 'junk').length : 0 };
+      Ls.forEach((L, k) => { const h = graveHulkAt(L.x, L.y); if (!h || h.kind !== 'home') out.problems.push('colony ' + (k + 1) + ' not on a home hulk'); });
+      const C = S.grave.core;
+      for (let j = C.y0; j <= C.y1; j++) for (let i = C.x0; i <= C.x1; i++) { const t = tIdx(i, j); if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t]) out.problems.push('the Arbiter relay not bare at ' + i + ',' + j); }
+      if (S.grave.owner >= 0) out.problems.push('the Arbiter held at the start');
+      if (out.grave.salvage < 6) out.problems.push('only ' + out.grave.salvage + ' salvage wrecks');
     }
     if (S.caves) out.caves = { variant: S.caves.variant, entrances: S.caves.entrances.length, nestsIn: S.caves.nests.length, nestsOut: (S.caves.nestsOut || []).length };
     if (S.town) out.town = true;

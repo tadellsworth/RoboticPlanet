@@ -1104,6 +1104,7 @@ function syncMenu() {
   const noUplinks = !m.shapeRnd && noSkyShape(m.shape), vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
   for (const btn of $('m-victory').children) {
     mark(btn, btn.dataset.v === vic);
+    if (btn.dataset.v === 'uplinks') { const gy = !m.shapeRnd && graveShape(m.shape || 0); btn.textContent = gy ? GRAVE_VICTORY.name : VICTORY.uplinks.name; btn.dataset.info = gy ? GRAVE_VICTORY.info : VICTORY.uplinks.info; } // (The Graveyard: Hold the Arbiter)
     const off = noUplinks && btn.dataset.v === 'uplinks';
     btn.disabled = off;
     btn.title = off ? noUplinksWhy(m.shape) : '';
@@ -1123,7 +1124,7 @@ function syncMenu() {
   $('m-upwin').setAttribute('aria-disabled', upOk ? 'false' : 'true');
   $('m-upwin-row').dataset.info = upOk ? $('m-upwin-row').dataset.base
     : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow or Half underground, which have no open sky to transmit to.';
-  $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? noUplinksWhy(m.shape).replace(/\.$/, '') + ': this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
+  $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? noUplinksWhy(m.shape).replace(/\.$/, '') + ': this game is won by Capture.' : vic === 'uplinks' && !m.shapeRnd && graveShape(m.shape || 0) ? GRAVE_VICTORY.note : (VICTORY[vic] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -1273,10 +1274,10 @@ function shapePickRow(row, rnd, shape, np, when = 'when you land') {
   drawThumbOnce(row.querySelector('canvas'), 'shape:' + (rnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, rnd ? null : SH));
 }
 /** Does map type `shape` set its own look, whatever the biome picked? 'hollow' (The Hollow), 'ring' (The Ring: Argos's), 'orbital' (Orbital platforms: Argos's rules), or false. */
-function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : P.orbital ? 'orbital' : false) : false; }
+function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : P.orbital ? 'orbital' : P.graveyard ? 'grave' : false) : false; }
 /** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`forced`: 'hollow' or 'ring', the map type sets its own look). */
 function biomePickRow(row, rnd, biome, forced, when = 'when you land') {
-  const ring = forced === 'ring' || forced === 'orbital', hollow = !!forced && !ring, mapName = forced === 'orbital' ? 'Orbital platforms' : 'The Ring';
+  const ring = forced === 'ring' || forced === 'orbital' || forced === 'grave', hollow = !!forced && !ring, mapName = forced === 'orbital' ? 'Orbital platforms' : forced === 'grave' ? 'The Graveyard' : 'The Ring';
   if (ring) { rnd = false; biome = BIOME_ORDER.indexOf('lunar'); }
   const bk = BIOME_ORDER[biome];
   row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : biomeName(biome);
@@ -1714,6 +1715,23 @@ function drawShapeThumb(cv, P) {
     rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
     for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
     crags = 0;
+  } else if (P.graveyard) {
+    // The Graveyard: dark wrecked hulls in space (a home hulk each at opposite corners, a bridge wreck toward the middle, a far
+    // wreck beside home, the Arbiter's pale hull in the middle with its relay), the spans between (dashes), salvage (gold
+    // shards) and the debris lanes (faint orange dashes) drifting between.
+    ctx.fillStyle = '#070a14'; ctx.fillRect(x0, y0, mw, mh);
+    ctx.fillStyle = 'rgba(214,226,255,0.7)';
+    for (let k = 0; k < 22; k++) ctx.fillRect(X(rnd()), Y(rnd()), Math.max(1, U * 0.012), Math.max(1, U * 0.012));
+    const hull = (u0, v0, u1, v1, c, e) => { for (const [a, b, cc, d] of [[u0, v0, u1, v1], [1 - u1, 1 - v1, 1 - u0, 1 - v0]]) { ctx.fillStyle = c; ctx.fillRect(X(a), Y(b), X(cc) - X(a), Y(d) - Y(b)); ctx.strokeStyle = e; ctx.lineWidth = Math.max(1, U * 0.012); ctx.strokeRect(X(a), Y(b), X(cc) - X(a), Y(d) - Y(b)); } };
+    for (const [a, b, c, d] of [[0.4, 0.86, 0.4, 0.69], [0.66, 0.6, 0.66, 0.52]]) for (const [p, q, r2, s2] of [[a, b, c, d], [1 - a, 1 - b, 1 - c, 1 - d]]) line([[p, q], [r2, s2]], '#f2d27a', Math.max(1, U * 0.028), [U * 0.03, U * 0.03]);
+    line([[0, 0.66], [0.25, 0.63], [0.55, 0.66], [1, 0.64]], 'rgba(255,170,110,0.55)', Math.max(1, U * 0.02), [U * 0.04, U * 0.03]);
+    line([[0, 0.36], [0.45, 0.34], [0.75, 0.37], [1, 0.35]], 'rgba(255,170,110,0.55)', Math.max(1, U * 0.02), [U * 0.04, U * 0.03]);
+    hull(0.45, 0.75, 0.94, 0.97, '#4b4f56', '#7d838c'); hull(0.08, 0.61, 0.53, 0.7, '#41454b', '#6c727a'); hull(0.04, 0.78, 0.3, 0.95, '#41454b', '#6c727a');
+    ctx.fillStyle = '#b9b6ad'; ctx.fillRect(X(0.29), Y(0.43), X(0.71) - X(0.29), Y(0.57) - Y(0.43)); ctx.strokeStyle = '#ffcf7a'; ctx.lineWidth = Math.max(1, U * 0.018); ctx.strokeRect(X(0.29), Y(0.43), X(0.71) - X(0.29), Y(0.57) - Y(0.43));
+    ctx.fillStyle = '#ffcf7a'; ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), Math.max(2, U * 0.04), 0, 7); ctx.fill();
+    ctx.fillStyle = '#d9b56a'; for (const [u, v] of [[0.85, 0.55], [0.2, 0.47], [0.78, 0.72], [0.35, 0.27], [0.9, 0.42]]) for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.save(); ctx.translate(X(uu), Y(vv)); ctx.rotate(uu * 5); ctx.fillRect(-U * 0.022, -U * 0.012, U * 0.044, U * 0.024); ctx.restore(); }
+    for (const [u, v, k] of [[0.62, 0.84, 1], [0.78, 0.84, 2], [0.2, 0.65, 1], [0.15, 0.86, 2]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.022), 0, 7); ctx.fill(); } }
+    crags = 0;
   } else if (P.orbital) {
     // Orbital platforms: station decks over the planet's curve (a cloudy blue below, the dark of space above), a home deck at each end,
     // a middle deck and a side deck each side, the bridges between them (dashes) with their control boxes (dots).
@@ -1972,7 +1990,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.orbital && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.orbital && !P.graveyard && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2139,10 +2157,10 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital || (SHAPE_PRESETS[p.st.shape || 0] || {}).graveyard ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
   const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
-    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
+    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital || (SHAPE_PRESETS[p.st.shape || 0] || {}).graveyard ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const caveMask = m.cave || null; // (Half underground: the caves are the Hollow's look over their tiles)
   const other = caveMask ? biomeLook('hollow')?.mm : p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
@@ -4017,7 +4035,8 @@ function startNewGame(again) {
     postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${nColonies() > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
   if (opts.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && (S.hollow || S.caves)) postMsg(ME, noUplinksWhy(S.settings.shape) + ' This game is won by Capture.', 0, 0, 'info');
-  if (S.victory === 'uplinks' && S.uplinks) {
+  if (S.victory === 'uplinks' && S.uplinks && S.grave) postMsg(ME, `Hold the Arbiter: the old relay ship in the middle of the wreck field is the one Uplink (a ringed diamond on the minimap). It is yours while your land covers its relay: build an Outpost on its deck, or land a Drop Outpost there by Shuttle. It comes online ${UPLINK.online / 60} minutes in: from then on your clock runs while you hold it, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots by its relay jam it.`, ((S.grave.core.x0 + S.grave.core.x1) >> 1), ((S.grave.core.y0 + S.grave.core.y1) >> 1), 'info');
+  else if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
     postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
   }
@@ -4390,13 +4409,13 @@ function showGameOver() {
     ? (how === 'green' ? `${Math.floor(greenShare(ME) * 100)}% of the open land is green: soil, groves, water and graded ground. Ithaca I is made ready.`
       : how === 'contact' ? `Your Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact. The planet is yours.`
       : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
-      : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
+      : how === 'uplinks' ? (S.grave ? `You held the Arbiter for ${UPLINK.hold / 60} minutes. The planet is yours.` : `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`)
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
       : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : `Your nuclear missile destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
         : many ? `${nColonies() > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
     : how === 'contact' ? `${The} held its Great Uplink's transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
-      : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
+      : how === 'uplinks' ? (S.grave ? `${The} held the Arbiter for ${UPLINK.hold / 60} minutes. Regroup and try again.` : `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`)
       : how === 'surrender' && S.players[ME].out ? `You surrendered to ${The === 'The rival' ? 'the rival' : The}: everything you built is theirs. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   if (S.teams && how === 'contact') $('o-text').textContent = won ? `${S.winner === ME ? 'Your' : `${playerName(S.winner)}'s`} Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact: your team wins.`
@@ -6969,6 +6988,7 @@ function onMapTap(i, j, wx, wy) {
   UI.lastTap = null;
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (S.space && spaceTapped(wx, wy)) return; // (a drifting asteroid or a derelict module out in the void: js/space-ui.js)
+  if (S.grave && arbAtTap(wx, wy)) { sfx('click'); openArbSheet(); return; } // (The Graveyard: the Arbiter's relay: js/grave.js)
   if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && S.orb && orbTapped(i, j, wx, wy) >= 0) { sfx('click'); openBridgeSheet(orbTapped(i, j, wx, wy)); return; } // (a drawbridge or one of its control boxes: Orbital platforms)
@@ -10689,11 +10709,11 @@ function updateUplinkCard() {
   el.classList.toggle('theirs', lead >= 0 && lead !== ME);
   const dot = el.querySelector('.ev-dot'), col = lead >= 0 ? PLAYER_COLORS[lead] : '#dfefff';
   dot.style.background = col; dot.style.color = col;
-  el.querySelector('.wc-head').textContent = pre ? 'Uplinks come online in' : lead < 0 ? `Uplinks: hold ${need} of ${U.length}${U.length % 2 ? '' : ' (the most)'}` : lead === ME ? `You hold ${held[ME]} of ${U.length} Uplinks` : `${playerName(lead)} holds ${held[lead]} of ${U.length}`;
+  el.querySelector('.wc-head').textContent = S.grave ? (pre ? 'The Arbiter comes online in' : lead < 0 ? 'The Arbiter: no one holds it' : lead === ME ? 'You hold the Arbiter' : `${playerName(lead)} holds the Arbiter`) : pre ? 'Uplinks come online in' : lead < 0 ? `Uplinks: hold ${need} of ${U.length}${U.length % 2 ? '' : ' (the most)'}` : lead === ME ? `You hold ${held[ME]} of ${U.length} Uplinks` : `${playerName(lead)} holds ${held[lead]} of ${U.length}`;
   el.querySelector('.ev-time').textContent = pre ? fmtClock(UPLINK.online - S.time) : lead >= 0 ? fmtClock(UPLINK.hold - clock[lead]) : '';
   el.querySelector('.up-dots').innerHTML = U.map((u) => `<i title="Uplink ${u.id}" style="--c:${u.jam ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : 'transparent'}" class="${u.jam ? 'jam' : u.owner < 0 ? 'free' : ''}"></i>`).join('');
   el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${Math.min(100, ((clock[P.id] || 0) / UPLINK.hold) * 100).toFixed(1)}%"></i></span><span class="wp">${fmtClock(UPLINK.hold - (clock[P.id] || 0))}</span>`).join('');
-  el.querySelector('.win-note').textContent = pre ? `Claim them now: an Uplink is yours while your land covers it. Once they're online, hold ${uplinkGoal()} and your clock runs; ${UPLINK.hold / 60} minutes in all wins. Tap to look at each.`
+  el.querySelector('.win-note').textContent = S.grave ? (pre ? `Claim it now: the Arbiter is yours while your land covers its relay. Once it's online, your clock runs while you hold it; ${UPLINK.hold / 60} minutes in all wins. Tap to look at it.` : `Bars: time held so far, of ${UPLINK.hold / 60} minutes. The Arbiter is yours while your land covers its relay; enemy warbots by it jam it. Tap to look at it.`) : pre ? `Claim them now: an Uplink is yours while your land covers it. Once they're online, hold ${uplinkGoal()} and your clock runs; ${UPLINK.hold / 60} minutes in all wins. Tap to look at each.`
     : `Bars: time held so far, of ${UPLINK.hold / 60} minutes. An Uplink is yours while your land covers it; enemy warbots beside it jam it. Tap to look at each.`;
   // Folded under the Goal chip (tap it): the card hides, and the chip shows a dot per Uplink and the time.
   UI.winMini = ` <span class="win-mini">${U.map((u) => `<i class="${u.owner < 0 && !u.jam ? 'free' : ''}" style="background:${u.jam ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : 'transparent'}"></i>`).join('')}` +

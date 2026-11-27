@@ -3,6 +3,38 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Space expansion, phase 2: The Graveyard (built Nov 27 2026: calls made, open questions for the owner)
+
+Built from the approved design (the space canvas's Graveyard board, https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): a
+wreck field of dead Accord ships, landable hulks drawn as decks of torn hull plating, salvage towed in for Alloy and Chips,
+debris lanes, the derelict modules of phase 1, and the Arbiter in the middle. README ("The Graveyard"), How to play
+("The Graveyard"), the guide, ART_GUIDE.md (Batch 44), a mission (*The Graveyard*, in Into the Void).
+
+Calls made, to confirm:
+- **Two players only.** The layout (a home hulk at opposite corners, a bridge wreck and a far wreck each, the Arbiter in the
+  middle) is built round the half turn, as The Ring's and Orbital's are; four would need a quarter-turn layout and a square map.
+- **Salvage is broken down at the pad at once**, 10 Alloy and 6 Chips a wreck, into the pad's store (Haulers take it from
+  there); it drifts back 2½ minutes later. Four salvage lane pairs. No new good, as decided.
+- **Fuel is home oil**: three oil fields on each home hulk (as on The Ring and Orbital) and one on each far wreck; no Fuel-tank
+  salvage.
+- **The Arbiter: both.** Held (land over its relay, jammed by rival armed robots within 4 tiles), it always sends its holder
+  4 Alloy and 3 Chips every 30 s; and the Victory row's Uplinks choice is **The Arbiter** here: it is the one Uplink, on
+  the Uplinks clock (online at 8 minutes, 5 minutes held in all wins). The holder is the colony with the *most* land over its
+  16 relay tiles (a tie keeps the holder it had), so a single tile can't tip it.
+- **A Shuttle lands a Drop Outpost** (6 Cement, 3 Alloy), on every space map: the way to a hulk no Viaduct reaches yet, and
+  the rival's way to the Arbiter. It unfolds beside the Shuttle, never on the relay.
+- **Hulks are joined for Viaducts where it makes sense**: home to bridge wreck to Arbiter, 3 tiles of space each (a short span),
+  the far wreck 8 tiles out (a long span, or fly). On Small there are no bridge or far wrecks: the home hulk lies a short span
+  from the Arbiter.
+- **Debris lanes are a light hazard**: three shard clouds a lane, phase 1's asteroid rule (2 damage, at most every 3 s).
+- Past home there is a small Ore and a small Crystal field (spilled cargo) on each bridge and far wreck: scarce, not absent.
+
+Open questions:
+- AI games end by capture in about 10 to 25 minutes: the Viaduct chain through the Arbiter is short. A longer gap, or
+  Viaducts that cost more out here, would slow the rush and give salvage more time to matter.
+- The rival uses its Dropship bands and Gunships against what holds the Arbiter, but it doesn't yet land warbots just to jam it.
+- Capital ships (the canvas's Tender and Line) and The Void Fleet are still to come (phase 3).
+
 ## Space expansion, phase 1 (built Nov 27 2026: calls made, open questions for the owner)
 
 Built from the owner's picks on the space canvas (https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): the Launch Pad
@@ -39,7 +71,7 @@ Open questions:
 - The rival seldom takes a derelict (they lie out on the far decks and rocks); it leans its Outposts toward them. Worth a
   stronger pull, or a Dropship landing to take one?
 - Space art loads with the rest on every map (about 0.5 MB a time of day); it could load only for the two space maps.
-- Phase 2: the Graveyard map (the Arbiter), capital ships (the canvas's Tender and Line), more derelict kinds.
+- Phase 2: the Graveyard map (the Arbiter) is built (above); capital ships (the canvas's Tender and Line) and more derelict kinds wait.
 
 ## Clear ground (built Nov 27 2026: calls made, open questions for the owner)
 

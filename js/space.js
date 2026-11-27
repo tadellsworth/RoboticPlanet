@@ -117,6 +117,7 @@ function spaceDrawBuilding(ctx, type, cx, cy, s, owner, b) {
 
 /** Where drifting asteroid r is on screen this frame (rockPos, smoothed between steps by nothing more than the sim's own). */
 function drawRock(ctx, r, ox, oy, z) {
+  if (typeof drawGraveRock === 'function' && drawGraveRock(ctx, r, ox, oy, z)) return; // (The Graveyard's salvage and debris: js/grave.js)
   const p = rockPos(r), x = ox + p.x * z, y = oy + p.y * z, d = 2 * DRIFT.r[r.k] * z;
   if (r.tow) {
     const u = getE(r.tow), art = ART['rock-' + r.k + '-tow'];

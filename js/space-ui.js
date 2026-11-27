@@ -29,7 +29,9 @@ function craftStatus(u) {
   if (!M) return F ? 'flying home' : u.inside ? 'parked on its pad' : 'flying to a Launch Pad';
   const n = ferryAboard(u).length;
   if (M.kind === 'supply') return M.phase === 'load' ? 'loading supplies' : F && F.ph === 'ground' ? 'unloading' : M.phase === 'back' ? 'flying home' : 'flying supplies out';
-  if (M.kind === 'tow') return M.phase === 'load' ? 'off to tow an asteroid' : M.phase === 'tow' ? 'towing an asteroid home' : 'flying out to an asteroid';
+  const what = (rockById(M.rock) || {}).k === 'salvage' ? 'a salvage wreck' : 'an asteroid';
+  if (M.kind === 'tow') return M.phase === 'load' ? `off to tow ${what}` : M.phase === 'tow' ? `towing ${what} home` : `flying out to ${what}`;
+  if (M.kind === 'outpost') return M.phase === 'load' ? 'loading a Drop Outpost kit' : F && F.ph === 'ground' ? 'down: unfolding the Drop Outpost' : M.done ? 'flying home' : 'flying a Drop Outpost out';
   if (M.phase === 'load') return `boarding: ${n} of ${M.n} aboard`;
   if (F && F.ph === 'ground') return u.ramp < 1 ? 'landed: lowering its ramp' : `letting its squad out (${n} still aboard)`;
   return `flying ${n} robot${n === 1 ? '' : 's'} out`;
@@ -47,7 +49,7 @@ function craftRows(u) {
 
 /** A craft's buttons on its panel (yours). */
 function craftButtons(u) {
-  if (u.type === 'shuttle') return '<div class="actions"><button class="btn primary" id="sh-sp-tow">Tow an asteroid</button><button class="btn" id="sh-sp-home">Call off</button></div><p class="hint"><b>Tow an asteroid</b>: tap an Ore or Crystal rock drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken up into a field beside the pad to mine. Supplies: switch on <b>Supply by air</b> in a Depot\'s or Outpost\'s panel, and it keeps that place stocked by itself.</p>';
+  if (u.type === 'shuttle') return `<div class="actions"><button class="btn primary" id="sh-sp-tow">${S.grave ? 'Tow salvage' : 'Tow an asteroid'}</button><button class="btn" id="sh-sp-post">Land a Drop Outpost</button></div><button class="btn" id="sh-sp-home">Call off</button><p class="hint">${S.grave ? '<b>Tow salvage</b>: tap a wreck drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken down for ' + costText(DRIFT.salvage) + '.' : '<b>Tow an asteroid</b>: tap an Ore or Crystal rock drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken up into a field beside the pad to mine.'} <b>Land a Drop Outpost</b> (${costText(BDEFS.dropost.cost)}): tap open ground on a deck or hulk nobody holds; it lands the kit there and it unfolds, claiming the land round it. Supplies: switch on <b>Supply by air</b> in a Depot\'s or Outpost\'s panel, and it keeps that place stocked by itself.</p>`;
   if (u.type === 'dropship') return `<div class="actions"><button class="btn primary" id="sh-sp-sq-w">Land ${BOTS.dropship.seats} Warbots</button><button class="btn" id="sh-sp-sq-k">Land ${BOTS.dropship.seats} Workers</button></div><button class="btn" id="sh-sp-home">Call off</button><p class="hint">Then tap where: any flat, free ground, a deck behind a raised drawbridge or a rock no bridge reaches. They board at its pad (Warbots from your garrisons, idle Workers), it flies straight over the void, lands and they walk out down its ramp. With a mouse, select robots and the Dropship together and right-click where to land them.</p>`;
   if (BOTS[u.type].gunship) return '<div class="actions"><button class="btn primary" id="sh-sp-gun">Attack: tap a target</button><button class="btn" id="sh-sp-home">Come home</button></div><p class="hint">Tap an enemy building, robot or craft to attack it, open space or ground to hold there, or its Launch Pad to come home. With a mouse, select it and right-click, as for warbots. It flies home by itself to refuel and mend.</p>';
   return '';
@@ -56,6 +58,7 @@ function craftButtons(u) {
 /** Wire a craft's buttons. */
 function bindCraftButtons(u) {
   if ($('sh-sp-tow')) $('sh-sp-tow').onclick = () => { sfx('click'); startSpaceMode('tow', u.id); };
+  if ($('sh-sp-post')) $('sh-sp-post').onclick = () => { sfx('click'); startSpaceMode('post', u.id); };
   if ($('sh-sp-sq-w')) $('sh-sp-sq-w').onclick = () => { sfx('click'); startSpaceMode('squad', u.id, { sub: 'warbot' }); };
   if ($('sh-sp-sq-k')) $('sh-sp-sq-k').onclick = () => { sfx('click'); startSpaceMode('squad', u.id, { sub: 'worker' }); };
   if ($('sh-sp-gun')) $('sh-sp-gun').onclick = () => { sfx('click'); startSpaceMode('gun', u.id); };
@@ -90,7 +93,8 @@ function showSpaceBanner(problem) {
   const A = UI.spaceAct, u = A && getE(A.uid);
   if (!u || u.dead) { setMode('normal'); return; }
   const err = problem ? `<span class="err">${problem}</span> ` : '';
-  if (A.kind === 'tow') { showBanner(err + 'Tap an <b>Ore or Crystal asteroid</b> drifting through the void: the Shuttle tows it home to its pad.', null, 'Cancel'); return; }
+  if (A.kind === 'tow') { showBanner(err + (S.grave ? 'Tap a <b>salvage wreck</b> drifting through the void: the Shuttle tows it home to its pad, where it is broken down for Alloy and Chips.' : 'Tap an <b>Ore or Crystal asteroid</b> drifting through the void: the Shuttle tows it home to its pad.'), null, 'Cancel'); return; }
+  if (A.kind === 'post') { showBanner(err + (R.spaceAt ? 'Land the Drop Outpost here?' : `Tap where the Shuttle lands a <b>Drop Outpost</b> (${costText(BDEFS.dropost.cost)}): open ground on a deck or hulk nobody holds.`), R.spaceAt ? 'Land' : null, 'Cancel'); return; }
   if (A.kind === 'gun') { showBanner(err + 'Tap an <b>enemy</b> to attack, <b>open space or ground</b> to hold there, or its <b>Launch Pad</b> to come home.', null, 'Cancel'); return; }
   const what = A.ids ? `${A.ids.length} robot${A.ids.length === 1 ? '' : 's'}` : `${BOTS.dropship.seats} ${BOTS[A.sub].plural}`;
   showBanner(err + (R.spaceAt ? `Land ${what} here?` : `Tap where the Dropship lands ${what}: flat, free ground anywhere.`), R.spaceAt ? 'Land' : null, 'Cancel');
@@ -140,8 +144,8 @@ function spaceTap(i, j, wx, wy) {
     });
     return;
   }
-  // a squad's landing spot: a second tap there (or Land) sends it
-  const why = squadBlocked(ME, u, i, j);
+  // a squad's (or a Drop Outpost's) landing spot: a second tap there (or Land) sends it
+  const why = A.kind === 'post' ? shuttleOutpostBlocked(ME, u, i, j) : squadBlocked(ME, u, i, j);
   if (why) { sfx('error'); R.spaceAt = null; showSpaceBanner(why); return; }
   if (R.spaceAt && R.spaceAt.i === i && R.spaceAt.j === j) { spaceConfirm(); return; }
   R.spaceAt = { i, j };
@@ -150,6 +154,14 @@ function spaceTap(i, j, wx, wy) {
 }
 function spaceConfirm() {
   const A = UI.spaceAct, u = A && getE(A.uid), at = R.spaceAt;
+  if (u && at && A.kind === 'post') {
+    act('outpost', [u.id, at.i, at.j], (why) => {
+      if (why) { sfx('error'); R.spaceAt = null; showSpaceBanner(why); return; }
+      sfx('order'); addFx('ring', at.i + 0.5, at.j + 0.5, { color: '#d9c8ff' }); setMode('normal');
+      toast('The Shuttle is loading the Drop Outpost kit: it lands it there and it unfolds.', 'info');
+    });
+    return;
+  }
   if (!u || !at || A.kind !== 'squad') return;
   act('squad', [u.id, at.i, at.j, A.ids || null, A.sub || null, BOTS.dropship.seats], (why) => {
     if (why) { sfx('error'); R.spaceAt = null; showSpaceBanner(why); return; }
@@ -166,14 +178,23 @@ function spaceTapped(wx, wy) {
   if (m) { sfx('click'); openModSheet(m); return true; }
   return false;
 }
-const ROCK_NAMES = { plain: 'Drifting asteroid', ore: 'Ore-bearing asteroid', crystal: 'Crystal-bearing asteroid' };
+const ROCK_NAMES = { plain: 'Drifting asteroid', ore: 'Ore-bearing asteroid', crystal: 'Crystal-bearing asteroid', salvage: 'Salvage wreck', junk: 'Debris lane' };
 function openRockSheet(r) {
+  if (r.k === 'salvage' || r.k === 'junk') { openSalvageSheet(r); return; }
   const good = r.k === 'plain' ? '' : r.k === 'ore' ? 'Ore' : 'Crystal';
   const sh = S.bots.find((u) => !u.dead && u.owner === ME && u.type === 'shuttle' && !u.mission && craftPad(u) && u.inside === craftPad(u).id);
   openSheet('space', r.id, `<div class="sheet-title"><div><h3>${ROCK_NAMES[r.k]}</h3><div class="owner">drifting through the void</div></div></div>
     <p class="desc">${r.k === 'plain' ? 'A loose rock of the Ring, drifting slowly on its lane through the void, never over a deck or a rock. Nothing to mine: a craft that clips one takes a little damage.' : `A rock of the Ring with ${good} in it, drifting slowly on its lane through the void. A ${r.k === 'ore' ? 'Mine' : 'Crystal Tap'} within ${DRIFT.reach} tiles of where it passes mines it as it goes, or a Shuttle tows it home to its Launch Pad, where it is broken up into a field to mine. Towed away or mined out, another drifts in on its lane ${Math.round(DRIFT.respawn / 60)} minutes later.`}</p>
     ${r.k !== 'plain' ? `<div class="kv"><span>${good}</span><span>${Math.floor(r.amt)} left</span></div>` : ''}
     ${r.k !== 'plain' && sh ? '<button class="btn primary big" id="sh-rock-tow">Tow it home</button>' : ''}`);
+  if ($('sh-rock-tow')) $('sh-rock-tow').onclick = () => act('tow', [sh.id, r.id], (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('order'); toast('A Shuttle is off to tow it home.', 'info'); closeSheet(); } });
+}
+/** The Graveyard: a salvage wreck's or a debris lane's panel. */
+function openSalvageSheet(r) {
+  const sh = r.k === 'salvage' && S.bots.find((u) => !u.dead && u.owner === ME && u.type === 'shuttle' && !u.mission && craftPad(u) && u.inside === craftPad(u).id);
+  openSheet('space', r.id, `<div class="sheet-title"><div><h3>${ROCK_NAMES[r.k]}</h3><div class="owner">drifting through the wreck field</div></div></div>
+    <p class="desc">${r.k === 'salvage' ? `Wreckage from the old fight: a torn-off engine bell, hull plates round a cargo pod. A Shuttle tows it home to its Launch Pad, where it is broken down for ${costText(DRIFT.salvage)}. Towed away, another drifts in on its lane ${Math.round(DRIFT.salvageBack / 60 * 10) / 10} minutes later.` : `Loose shards of hull and beam, drifting on a lane through the void. Too many and too small to tow: a craft that flies through them is clipped (${SPACE.bump} damage, once every ${SPACE.bumpGap} s). Fly round, or take the hits.`}</p>
+    ${sh ? '<button class="btn primary big" id="sh-rock-tow">Tow it home</button>' : ''}`);
   if ($('sh-rock-tow')) $('sh-rock-tow').onclick = () => act('tow', [sh.id, r.id], (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('order'); toast('A Shuttle is off to tow it home.', 'info'); closeSheet(); } });
 }
 const MOD_TEXT = {
@@ -215,7 +236,7 @@ function refreshSpaceTab() {
     : `<p class="hint">None yet: order one at a Launch Pad (+ Dropship above). It lands up to ${BOTS.dropship.seats} robots on any flat, free ground: over a raised drawbridge, onto a rock no bridge reaches.</p>`;
   const shs = craft.filter((u) => u.type === 'shuttle');
   h += '<div class="section-label">Shuttles <span class="label-note">goods and towing</span></div>';
-  h += shs.length ? shs.map((u) => row(u, parked(u) ? `<button class="btn small" data-act="sptow" data-id="${u.id}">Tow</button>` : '')).join('')
+  h += shs.length ? shs.map((u) => row(u, parked(u) ? `<button class="btn small" data-act="sptow" data-id="${u.id}">Tow</button><button class="btn small" data-act="sppost" data-id="${u.id}">Drop Outpost</button>` : '')).join('')
     : `<p class="hint">None yet: order one at a Launch Pad (+ Shuttle above). It keeps the places you switch to Supply by air stocked, ${BOTS.shuttle.carry} goods a flight, and tows drifting Ore and Crystal rocks home.</p>`;
   $('ar-body').innerHTML = h;
 }
@@ -226,6 +247,7 @@ function spaceArmyButton(btn, what, e) {
     case 'sphome': if (e) act('craftHome', [e.id], () => { UI.armySig = ''; }); return true;
     case 'spsquad': if (e) startSpaceMode('squad', e.id, { sub: btn.dataset.k }); return true;
     case 'sptow': if (e) startSpaceMode('tow', e.id); return true;
+    case 'sppost': if (e) startSpaceMode('post', e.id); return true;
     case 'spselgun': { const ids = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].gunship).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Gunship${UI.sel.length > 1 ? 's' : ''} selected: ${onTouch() ? 'tap' : 'right-click'} an enemy to attack, open space to hold there.`, 'info'); return true; }
   }
   return false;

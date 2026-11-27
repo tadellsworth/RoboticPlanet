@@ -850,7 +850,12 @@ const PDT = { ground: 3, reload: 0.2, craft: 1.5, bot: 0.8, rounds: 30, spin: 0.
  * `respawn` s later. `r`: each kind's size (tiles from its middle). `kinds`: the lane pairs on each map.
  */
 const DRIFT = { speed: 0.22, clear: 2, len: [8, 26], reach: 5, mine: 0.5, respawn: 240, tiles: 6, amt: { ore: 36, crystal: 28 },
-  r: { plain: 0.7, ore: 0.85, crystal: 0.8 }, kinds: { asteroids: ['ore', 'crystal', 'plain', 'plain'], orbital: ['ore', 'crystal', 'plain'] } };
+  r: { plain: 0.7, ore: 0.85, crystal: 0.8, salvage: 0.9, junk: 1.15 }, kinds: { asteroids: ['ore', 'crystal', 'plain', 'plain'], orbital: ['ore', 'crystal', 'plain'],
+    graveyard: ['salvage', 'salvage', 'salvage', 'salvage', 'junk', 'junk', 'junk'] },
+  // The Graveyard (GRAVE): `salvage`, wreckage a Shuttle tows to its Launch Pad, where it is broken down for these goods (into
+  // the pad), drifting back in `salvageBack` s after; `junk`, debris lanes: `junkN` loose shards on each lane, spread along
+  // it, never towed or mined: a craft that flies through one is clipped (SPACE.bump), the light hazard of the wreck field.
+  salvage: { alloy: 10, chip: 6 }, salvageBack: 150, junkN: 3 };
 /**
  * Derelict modules (space maps: S.space.mods): old Accord station modules adrift on the decks and rocks, neutral until a
  * colony holds them. One is held, as an Uplink is, by the colony whose land its middle stands in, unless an armed robot
@@ -1023,9 +1028,16 @@ const SHAPE_PRESETS = [
   // Two colonies. Argos's rules whatever the Biome setting (no Murmur, no weather, no dust storm).
   { name: 'Orbital platforms', group: 'heights', noMurmur: true, blurb: 'Accord station decks high over the planet, joined by drawbridges. A control box at each end raises or lowers its bridge: hold the boxes and you choose who can cross.', w: 1.2, h: 1.2, orbital: true, flat: true,
     tip: 'Orbital platforms: your colony stands on a station deck high over the planet, and the other decks are joined to it by bridges. Every bridge starts down. Each has a control box at both ends (small consoles, lit in the colour of whoever holds them): hold a box with armed robots, or the ground round it, and tap it to Raise or Lower its bridge. A bridge goes up only when nothing stands on it, after a short warning, and a raised bridge is a gap nothing can walk across. Aircraft, Airships and Missiles still fly over it. Argos\'s rules: no Murmur, no weather.' },
+  // The Graveyard (space expansion, phase 2: the owner's design, Nov 2026): a wreck field of dead Accord ships adrift in space
+  // (graveMap in world.js, GRAVE in defs.js, the rules in sim.js, the look in js/grave.js; the backdrop is The Ring's). Two
+  // colonies, each on a home hulk; salvage towed in by Shuttle is the economy, and the Arbiter in the middle is the prize.
+  { name: 'The Graveyard', group: 'heights', noMurmur: true, blurb: 'A wreck field of dead Accord ships adrift in space: a home hulk each, more hulks to land on, and the Arbiter, an old arbitration relay ship, in the middle. Shuttles tow salvage in for Alloy and Chips.', w: 1.45, h: 1.3, graveyard: true, flat: true,
+    tip: 'The Graveyard: your colony stands on the hulk of a dead Accord ship. Past your starter fields there is little Ore or Crystal: build a Launch Pad and a Shuttle, and tow the drifting salvage in (tap a wreck, Tow it home), where the pad breaks it down for Alloy and Chips. The Arbiter, the relay ship in the middle, is the prize: hold it (your land over its relay) and it sends you salvage. Land a Drop Outpost by Shuttle, or span the gaps with Viaducts. Debris lanes clip craft that fly through them.' },
 ];
 /** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
-function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && (P.asteroids || P.orbital)); } // (Orbital platforms lie in open space too: the void between its decks)
+function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && (P.asteroids || P.orbital || P.graveyard)); } // (Orbital platforms and The Graveyard lie in open space too: the void between the decks and hulks)
+/** Is this game (or map type `shape`) The Graveyard (graveMap: hulks, salvage and the Arbiter)? */
+function graveShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.graveyard); }
 /** Is this game (or map type `shape`) out in space, The Ring or Orbital platforms? There spacecraft fly and nothing flies on wings (see SPACE). */
 function spaceMap(shape) { return ringShape(shape); }
 /** Is tile t space on The Ring: empty void that nothing can cross or build on (T_CHASM there, never a Sky bridge)? */
@@ -1293,6 +1305,28 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  *   ringfall  deposit tiles each Ringfall strike leaves (3 elsewhere): the decks are crowded, so it comes a little richer, as in
  *           the Hollow. A strike never lands on or beside a drawbridge or a control box (spaceRingfall in sim.js)
  */
+/**
+ * The Graveyard (SHAPE_PRESETS graveyard: graveMap in world.js, the rules in sim.js (graveTick), the look in js/grave.js).
+ * A wreck field of dead Accord ships adrift in space, the space between them `T_CHASM` (voidTile), drawn over The Ring's
+ * backdrop. Two colonies, each on a home hulk (a wrecked ship's flat deck: player 0's at the bottom right, its twin at the top
+ * left); the rest is laid out on player 0's half and turned onto the other, every tile to its twin:
+ *   home    the home hulk: `hh` of the map's height tall and `hw` of its width wide (with least and most, in tiles)
+ *   arb     the Arbiter's hulk in the middle (its own twin), `ah` of the height tall and `aw` of the width wide; its relay (the
+ *           dish and the masts) stands on `core` tiles at its middle, `core.w` wide (one less on an odd-width map) and `core.h`
+ *           tall: nothing is built or laid there, and the colony with the most land on those tiles holds the Arbiter (a tie
+ *           keeps the holder it had), unless another colony's armed robots stand within `jam` tiles of its middle. Held, it
+ *           sends its holder `haul` (Alloy and Chips, into its Command Base) every `every` s. With Victory: Uplinks it is the
+ *           one Uplink (UPLINK's rules: online at 8 minutes, held 5 minutes in all wins): Hold the Arbiter.
+ *   bridge  a wreck between the home hulk and the Arbiter, `gap` tiles of space from each (a Viaduct spans it), where the map
+ *           is tall enough; else the home hulk is that close to the Arbiter itself
+ *   far     a wreck out beyond the bridge wreck, `farGap` tiles of space from the home hulk (a long Viaduct, or fly)
+ *   mul, oil, stone  as RING's: Ore and Crystal hold a little more, oil seeps on the home hulk (Fuel), Stone topped up to `stone`
+ *   field   the fewest tiles each of the home hulk's two Ore and two Crystal fields holds (the starter fields: as Orbital's)
+ *   spill   Ore and Crystal fields (`n` of each, `r` tiles across) on the bridge and far wrecks: spilled cargo, the only Ore
+ *           and Crystal past home; Stone `stone` fields on each
+ */
+const GRAVE = { home: { hh: [0.22, 15, 26], hw: [0.5, 27, 50] }, arb: { ah: [0.14, 8, 13], aw: [0.4, 16, 34], core: { w: 4, h: 4 }, jam: 4, haul: { alloy: 4, chip: 3 }, every: 30 },
+  gap: 3, farGap: 8, mul: 1.25, oil: { home: 3, far: 1 }, stone: HOME_STONE, field: 5, spill: { n: 1, r: 1.3, stone: 1 } };
 const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 }, ringfall: 4 };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }
@@ -1356,6 +1390,9 @@ const VICTORY = {
     note: 'Win by holding most of the neutral Uplink towers (one is yours while it stands in your land) for 5 minutes in all, once they come online 8 minutes in.' },
 };
 const VICTORY_ORDER = ['capture', 'domination', 'uplinks'];
+/** On The Graveyard the Uplinks choice is Hold the Arbiter: the Arbiter is the one Uplink (placeUplinks; the same clock). */
+const GRAVE_VICTORY = { name: 'The Arbiter', info: 'The Arbiter: the old relay ship in the middle of the wreck field is the one Uplink. It is yours while your land covers its relay. Once it comes online, 8 minutes in, hold it for a total of 5 minutes to win.',
+  note: 'Win by holding the Arbiter, the relay ship in the middle (yours while your land covers its relay), for 5 minutes in all, once it comes online 8 minutes in.' };
 /**
  * Uplinks: neutral relay towers (see placeUplinks). Each is held by the colony whose land it stands in, and is
  * jammed (counts for no one) while an armed warbot of another colony stands within `jam` tiles of it. The colony
