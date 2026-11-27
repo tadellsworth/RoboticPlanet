@@ -1079,18 +1079,18 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  * other the caves (the Hollow's look, always dark, no weather); a solid wall between them is broken only by two or three
  * entrances. S.cave tiles: 0 surface, 1 inside the caves, 2 the wall (rock nothing tunnels through).
  *   stock     the opening stock on top of START_STOCK for a colony that starts inside (no Fiber source there) and for one
- *             that starts outside (little Ore or Crystal there): enough for the first minutes, then it has to branch out
+ *             that starts outside (no Ore or Crystal there at all): enough for the first minutes, then it has to branch out
  *             through the entrances; `bots` the extra Workers inside, which have no Agribot's crops to staff
  *   mouth     entrance half-widths (tiles to each side of the middle line): a narrow gate, a middle one and a wide mouth
  *   nests     Murmur nest sites on each half of the map (in twin pairs) by Size, only with the Murmur on
  *   ore, crystal, stone, oil, stalk  how many fields a thousand tiles of cave (ore, crystal, stone, oil) and of surface
- *             (stalk groves, fertile soil, a little Ore and Crystal) get: the caves hold the riches
+ *             (stalk groves, fertile soil; Ore and Crystal are 0 there on purpose) get: the caves hold all the Ore and Crystal
  */
 const CAVES = {
-  stock: { inside: { fiber: 100, fuel: 30, stone: 10, cement: 12 }, outside: { ore: 60, crystal: 25, alloy: 25, fiber: 20 } },
+  stock: { inside: { fiber: 140, fuel: 30, stone: 12, cement: 20 }, outside: { ore: 130, crystal: 60, alloy: 30, fiber: 30 } },
   mouth: [1, 2.5, 5], wall: 2,
   nests: [2, 3, 4, 5, 7, 9],
-  inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 1.3, crystal: 0.9, oil: 1 },
+  inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 0, crystal: 0, oil: 1 },
 };
 /** Does map type `shape` (or, with none given, the current game's) have the caves (Half underground)? */
 function cavesShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.caves); }

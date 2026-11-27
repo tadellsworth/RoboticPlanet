@@ -2848,7 +2848,7 @@ function ringMap(seed, W, H, cfg) {
  *     narrow middle gate with wide mouths to each side, a wide middle mouth with narrow gates to each side, or two middle-sized
  *     mouths only. Each opens into a funnel of open floor on both sides.
  *   - Inside: the Hollow's look; winding passages and pillars, no stalks or fertile soil, plenty of Ore and Crystal, Stone and oil.
- *     Outside: flat ground with crags, the standard colony's stalk groves, fertile soil, Stone and oil, and little Ore or Crystal.
+ *     Outside: flat ground with crags, the standard colony's stalk groves, fertile soil, Stone and oil, and NO Ore or Crystal (the caves hold it all).
  *   - Returns what generateMap does, plus `cave` (the S.cave tile mask) and `caves`: { south, seats: [{x, y, inside}],
  *     entrances: [{x, y, hw}], nests: [{x, y}] (twin pairs, inside), nestsOut: the same on the surface, wall: [y of the wall's middle at each column] }.
  */
@@ -2975,8 +2975,7 @@ function cavesMap(seed, W, H, cfg) {
   const KIT = {
     out: [[-6, 2, 2.6, R_STALK, 0.85], [-4, -4, 1.6, R_STALK, 0.8], [7, -3, 1.6, R_STALK, 0.8], [1, 8, 2.0, R_STALK, 0.8],
       [6, 0, 1.8, R_BOULDER, 0.8], [2, -4, 1.2, R_BOULDER, 0.7], [-8, -6, 1.4, R_BOULDER, 0.75],
-      [-1, 6.5, 2.2, 'fert', 0.85], [5, 7, 1.8, 'fert', 0.85], [-9, 5, 1.7, 'fert', 0.85],
-      [-4, 5, 1.0, R_ORE, 0.9], [4, 5, 1.0, R_CRYSTAL, 0.9], [9, -2, 0.9, R_ORE, 0.8], [-10, 1, 0.9, R_CRYSTAL, 0.8]],
+      [-1, 6.5, 2.2, 'fert', 0.85], [5, 7, 1.8, 'fert', 0.85], [-9, 5, 1.7, 'fert', 0.85]], // (no Ore or Crystal on the surface: it comes through the mouths)
     in: [[6, 0, 1.8, R_BOULDER, 0.8], [2, -4, 1.2, R_BOULDER, 0.7], [-8, -6, 1.4, R_BOULDER, 0.75], [-5, 7, 1.3, R_BOULDER, 0.7],
       [-4, 5, 1.9, R_ORE, 0.9], [9, 3.5, 1.9, R_ORE, 0.85], [-8, -4, 1.6, R_ORE, 0.85], [-1, 9, 1.8, R_ORE, 0.8],
       [4, 5, 1.7, R_CRYSTAL, 0.9], [-10, -1, 1.6, R_CRYSTAL, 0.85], [10, -4, 1.6, R_CRYSTAL, 0.8], [5, 10, 1.5, R_CRYSTAL, 0.8]],
