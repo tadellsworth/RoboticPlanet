@@ -202,6 +202,13 @@ function orbitalBridges(ctx, ox, oy, z, v0, v1) {
     if (B.x1 + 3 < v0.x || B.x0 - 3 > v1.x || B.y1 + 3 < v0.y || B.y0 - 3 > v1.y) continue;
     const vert = B.ax === 'v', L = orbLeaf(B), len = vert ? B.y1 - B.y0 + 1 : B.x1 - B.x0 + 1, wid = vert ? B.x1 - B.x0 + 1 : B.y1 - B.y0 + 1;
     const X = ox + B.x0 * z, Y = oy + B.y0 * z, w = (B.x1 - B.x0 + 1) * z, h = (B.y1 - B.y0 + 1) * z;
+    // The road laid on the strip is permanent (js/sim.js: orbFlip): while the strip is void it shows as a faint ghost where it lies.
+    if (L.p < 1) {
+      ctx.save(); ctx.globalAlpha = 0.22 * (1 - L.p); ctx.strokeStyle = '#f4c446'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.setLineDash([z * 0.3, z * 0.3]);
+      ctx.beginPath();
+      for (let n = 1; n < wid; n++) { if (vert) { ctx.moveTo(X + n * z, Y); ctx.lineTo(X + n * z, Y + h); } else { ctx.moveTo(X, Y + n * z); ctx.lineTo(X + w, Y + n * z); } }
+      ctx.stroke(); ctx.restore();
+    }
     ctx.save();
     // The leaf, hinged at the strip's low end (north or west), foreshortened as it rises, its far end lifted up the screen.
     if (L.p < 1) {
@@ -213,6 +220,13 @@ function orbitalBridges(ctx, ox, oy, z, v0, v1) {
       ctx.fillStyle = 'rgba(244,196,70,0.85)';
       if (vert) { ctx.fillRect(lx, ly + lh - z * 0.12, lw, z * 0.12); ctx.fillRect(lx, ly, z * 0.1, lh); ctx.fillRect(lx + lw - z * 0.1, ly, z * 0.1, lh); }
       else { ctx.fillRect(lx + lw - z * 0.12, ly, z * 0.12, lh); ctx.fillRect(lx, ly, lw, z * 0.1); ctx.fillRect(lx, ly + lh - z * 0.1, lw, z * 0.1); }
+      // (the road on it: lane dashes along its length, as on the lowered bridge)
+      ctx.fillStyle = 'rgba(244,196,70,0.4)';
+      const step = Math.max(1, (vert ? lh : lw) / len);
+      for (let n = 1; n < wid; n++) for (let k = 0; k < len; k++) {
+        if (vert) ctx.fillRect(lx + n * z - z * 0.04, ly + k * step + step * 0.25, z * 0.08, step * 0.5);
+        else ctx.fillRect(lx + k * step + step * 0.25, ly + n * z - z * 0.04, step * 0.5, z * 0.08);
+      }
       ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(lx, ly, vert ? lw : Math.min(lw, z * 0.18), vert ? Math.min(lh, z * 0.18) : lh);
     }
     ctx.restore();
@@ -242,7 +256,6 @@ function orbitalBridges(ctx, ox, oy, z, v0, v1) {
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(label, X + w / 2, Y + h / 2);
       ctx.fillStyle = '#ffd36a'; ctx.fillText(label, X + w / 2, Y + h / 2);
     }
-    void wid;
   }
 }
 

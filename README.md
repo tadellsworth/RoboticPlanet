@@ -532,8 +532,12 @@ side deck to each side of it, each over or under a home deck) and six bridges; L
 deck, and two side decks on each side) and eight bridges (`ORBITAL` in js/defs.js; `S.orb`: `plats`, `br`, `bx`, `ver`).
 **Bridges**: a strip of three tiles across a gap of `g` tiles (4 to 7, by map height). Down, its tiles are ground (walkable, pathable, plated with
 hazard edges); up, `T_CHASM`. The terrain is the truth for walking, so paths, zones and territory need nothing special: `orbFlip` changes the
-tiles, calls `terrainChanged` and drops the paths of bots that crossed it. Nothing is built, dropped or terraformed on a strip, and no road, rail
-or pipe goes on it (`orbTile`; `canRoad`, `canPlace`, `tfWhere`, `airdropBlocked`), or it would stay walkable when raised. Every bridge starts **down**.
+tiles, calls `terrainChanged` and drops the paths of bots that crossed it. Nothing is built, dropped or terraformed on a strip, and no rail or pipe goes on it, and no road is laid or taken up on it by a player
+(`orbTile`; `canRoad`, `canPlace`, `tfWhere`, `airdropBlocked`, `removeRoad`, `wreckRoad`). Every strip carries a **permanent road**, part of the map from the start: it
+stays when the bridge is raised (drawn as faint lane lines on the void and as lane dashes on the lifted leaf), costs nothing and is destroyed by nothing but
+the bridge itself. `S.road` mirrors it only while the strip is ground (`orbFlip` -> `setRoad`, which bumps `S.roadVer`, so `roadNet`, the path caches and
+territory follow): a road on a void tile would read as drivable to every `S.road` reader. A raised bridge therefore cuts road networks and
+haulers, a lowered one joins the two decks' roads. Every bridge starts **down**.
 **The order** `bridgeSet` (last in js/orders.js; `orbSet`): the colony holding either control box of the bridge, with the bridge idle and
 out of its rest, orders it up or down. **Raise**: a warning of `ORBITAL.warn` (4) s (the bridge is still walkable; lamps and the deck flash amber and the panel
 counts down), then the leaf swings up over `lift` (3) s and the tiles are void from that moment. A raise is **called off** if any robot on foot
@@ -552,8 +556,8 @@ planet far below with ocean, land, two layers of cloud and a cloud shadow, a low
 seams, rivets, kerb and railing, baked with the ground), `orbVoidPaint` (the hull under a deck's southern edge), `orbitalBridges` (the swinging
 leaves, corner lamps, the RAISING / LOWERING word) and `drawOrbBox`. **Economy**: as The Ring's: the standard colony's starter fields (Stalk, fertile
 soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`) with an
-oil seep or two each (`ORBITAL.oil`), Ore, Crystal, Stalk and Stone `ORBITAL.mul` (1.25) richer, each home deck topped up to `ORBITAL.stone` Stone. No
-road crosses a bridge, so goods between decks go by Workers on foot over a lowered bridge or by Viaduct (a Viaduct is a road, and spans a raised bridge).
+oil seep or two each (`ORBITAL.oil`), Ore, Crystal, Stalk and Stone `ORBITAL.mul` (1.25) richer, each home deck topped up to `ORBITAL.stone` Stone. A
+lowered bridge's road joins the two decks' road networks, so Haulers and trucks cross on it; raised, it is cut, and goods cross by Viaduct (which spans a raised bridge).
 **The rival** (`aiBridges`, `AI_BRIDGE`, js/ai.js): lowers a raised bridge of its own once 45 to 90 s have passed (by level) and the enemy
 warbots near it are fewer than 3, at once if its home deck is cut off from yours, and never shuts itself in; Medium and up raise a bridge
 of theirs (nothing on it) when three or more of your warbots stand on its far deck within 16 tiles and outnumber its own on the near deck, none of its own is out there,
