@@ -2652,9 +2652,10 @@ const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', mega: '
 /**
  * The Paths tools on Shift and a letter, from anywhere: Viaducts, Ropeways and Maglev lines (placed with two taps, see
  * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
- * build menu (Move, V and Y), V beside Ramps, and M for the Maglev. (Shift+F is the Bot Foundry's Order bots.)
+ * build menu (Move, V and Y), V beside Ramps, M for the Maglev, E beside Pave and C for Clear ground. (Shift+F is the Bot
+ * Foundry's Order bots.)
  */
-const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway', m: 'maglev', e: 'express' };
+const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway', m: 'maglev', e: 'express', c: 'clear' };
 /** The Paths tools placed with two taps like a building (R.mode 'place'): Viaducts, Ropeways and Maglev lines. */
 const CROSSING_TOOLS = ['viaduct', 'ropeway', 'maglev'];
 /** Is a Viaduct, Ropeway or Maglev line being placed (a Paths tool, though it's placed like a building: R.mode 'place')? */
@@ -2885,7 +2886,7 @@ const SHIFT_KEYS = {
   a: { group: 'army', label: 'Ally: command your computer teammate (team games)', run: () => openAllySheet(), when: () => myAiAllies().length > 0 }, // (else Shift+A pans, as A does)
   g: { group: 'panels', label: 'Greening: the land made ready, and what counts', run: () => { if (UI.sheetKind === 'green') closeSheet(); else openGreening(); } }, // (stage 5: js/terraform5.js)
   ...Object.fromEntries(Object.entries(PATHS_SHIFT_KEYS).map(([k, tool]) => [k, {
-    group: 'paths', label: { viaduct: 'Viaducts', ropeway: 'Ropeways', maglev: 'Maglev lines', express: 'Express' }[tool],
+    group: 'paths', label: { viaduct: 'Viaducts', ropeway: 'Ropeways', maglev: 'Maglev lines', express: 'Express', clear: 'Clear ground (Workers clear resources off it)' }[tool],
     run: () => openPaths(tool),
   }])),
 };
@@ -6817,6 +6818,20 @@ function onMapTap(i, j, wx, wy) {
       else showRoadBanner('Drag to lay Express lanes: a drag lays a pair, out and back; Shift and drag (or Single lane) lays one.', true);
       return;
     }
+    if (UI.roadMode === 'clear') {
+      // Clear ground: a tap marks a resource tile to clear, or drops it from the sketch; on ground already marked it
+      // calls the mark off (or puts it back).
+      const stroke = [], d = UI.draft;
+      if (d.clear.has(t)) draftOp(stroke, t, 'unclr');
+      else if (d.clearDel.has(t)) draftOp(stroke, t, 'unclrdel');
+      else if (S.clr && S.clr[t] === ME + 1) draftOp(stroke, t, 'clrdel');
+      else { const why = clearWhy(ME, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'clr'); }
+      d.strokes.push(stroke);
+      sfx('click');
+      showRoadBanner();
+      planInView(t);
+      return;
+    }
     if (routeOn()) { routeTap(i, j); return; }
     if (UI.roadMode === 'rail') {
       // Rail: a tap adds a tile of track or drops it; tapping laid track marks it to take up.
@@ -6996,8 +7011,8 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), pipe: new Set(), pipeDel: new Set(), express: new Map(), strokes: [] }; }
-function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size && !UI.draft.pipe.size && !UI.draft.pipeDel.size && !UI.draft.express.size); }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), pipe: new Set(), pipeDel: new Set(), express: new Map(), clear: new Set(), clearDel: new Set(), strokes: [] }; }
+function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size && !UI.draft.pipe.size && !UI.draft.pipeDel.size && !UI.draft.express.size && !UI.draft.clear.size && !UI.draft.clearDel.size); }
 
 /** A bridge sketched out past the border: water touching a tile already in the sketch. */
 function draftBridge(t) {
@@ -7035,6 +7050,10 @@ function draftOp(stroke, t, op) {
   else if (op === 'unpipe') { if (!d.pipe.has(t)) return; d.pipe.delete(t); }
   else if (op === 'pipedel') { if (d.pipeDel.has(t)) return; d.pipeDel.add(t); }
   else if (op === 'unpipedel') { if (!d.pipeDel.has(t)) return; d.pipeDel.delete(t); }
+  else if (op === 'clr') { if (d.clear.has(t)) return; d.clear.add(t); }
+  else if (op === 'unclr') { if (!d.clear.has(t)) return; d.clear.delete(t); }
+  else if (op === 'clrdel') { if (d.clearDel.has(t)) return; d.clearDel.add(t); }
+  else if (op === 'unclrdel') { if (!d.clearDel.has(t)) return; d.clearDel.delete(t); }
   else if (op === 'unxp') { if (!d.express.has(t)) return; stroke.push({ t, op, v: d.express.get(t) }); d.express.delete(t); return; }
   stroke.push({ t, op });
 }
@@ -7054,7 +7073,7 @@ function draftUndo() {
   let s;
   do s = d.strokes.pop(); while (s && !s.length); // skip drags that added nothing
   if (!s) return;
-  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel' };
+  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel', clr: 'unclr', unclr: 'clr', clrdel: 'unclrdel', unclrdel: 'clrdel' };
   for (let k = s.length - 1; k >= 0; k--) {
     if (s[k].op === 'setw') { if (s[k].from) d.walls.set(s[k].t, s[k].from); else d.walls.delete(s[k].t); continue; }
     if (s[k].op === 'xp') { if (s[k].from) d.express.set(s[k].t, s[k].from); else d.express.delete(s[k].t); continue; }
@@ -7103,7 +7122,9 @@ function draftSummary() {
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
   // Anything you can't pay for yet waits for the goods (settlePlans): the plan can always be built.
   for (const g in net) net[g] = Math.round(net[g] * 100) / 100;
-  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, pipe: d.pipe.size, pipeDel: d.pipeDel.size, express: d.express.size, over, cost, back, net, can: true,
+  // Clear ground: free, but what it destroys is counted (clearLoss).
+  const lost = clearLoss(d.clear);
+  return { lost, clearN: d.clear.size, clearDel: d.clearDel.size, add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, pipe: d.pipe.size, pipeDel: d.pipeDel.size, express: d.express.size, over, cost, back, net, can: true,
     short: Object.keys(net).filter((g) => net[g] > 0 && !canAffordRoad(ME, { [g]: net[g] })) };
 }
 
@@ -7134,7 +7155,7 @@ function commitDraft() {
   const d = UI.draft;
   // The whole plan goes as one order (ORDERS.paths): take up, then Ramps first (so the road or track planned over one
   // waits for it), Walls and Gates, road, track and pipe; it's paid for from storage as far as it goes, oldest plans first.
-  const plan = { del: [...d.del], railDel: [...d.railDel], ramps: [...d.ramps], walls: [...d.walls], add: [...d.add], rail: [...d.rail], pipeDel: [...d.pipeDel], pipe: [...d.pipe], express: [...d.express] };
+  const plan = { del: [...d.del], railDel: [...d.railDel], ramps: [...d.ramps], walls: [...d.walls], add: [...d.add], rail: [...d.rail], pipeDel: [...d.pipeDel], pipe: [...d.pipe], express: [...d.express], clearDel: [...d.clearDel], clear: [...d.clear] };
   draftReset();
   act('paths', [plan], (r) => draftDone(r));
 }
@@ -7147,13 +7168,19 @@ function draftDone(r) {
   if (!why && R.mode === 'road') setMode('normal');
   const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} planned: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
-  else { sfx('place'); haptic('order'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (lanes ? ` ${lanes} Express lane tile${lanes === 1 ? '' : 's'} marked: a Roadworks' Paver lays the surface (1 Asphalt and a quarter Alloy a tile).` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  else {
+    sfx('place'); haptic('order');
+    const said = ((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (lanes ? ` ${lanes} Express lane tile${lanes === 1 ? '' : 's'} marked: a Roadworks' Paver lays the surface (1 Asphalt and a quarter Alloy a tile).` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : '')).trim();
+    if (said) toast(said, 'info');
+  }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
   if (rampWhy) toast(`A Ramp couldn't be planned: ${rampWhy} The road or track there won't climb the cliff until one is.`, 'warn');
   if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
   if (pipes || pipesUp) toast(`${pipes ? `Laid ${pipes} tile${pipes === 1 ? '' : 's'} of pipe: Crude flows along it as soon as it's paid for.` : ''}${pipesUp ? ` Took up ${pipesUp} tile${pipesUp === 1 ? '' : 's'} of pipe.` : ''}`, 'info');
   if (owedN) toast(`Waiting for goods: ${costText(wp.owed)} more. It's paid from storage as the goods come in, oldest plans first, and built as it's paid for.`, 'info');
   if (railWhy) toast(`Some track couldn't go down: ${railWhy}`, 'warn');
+  if (r.cleared || r.unclear) toast(`${r.cleared ? `${r.cleared} tile${r.cleared === 1 ? '' : 's'} marked to clear: free Workers clear ${r.cleared === 1 ? 'it' : 'them'} (the resources are lost).` : ''}${r.unclear ? ` ${r.unclear} mark${r.unclear === 1 ? '' : 's'} called off.` : ''}`, 'info');
+  if (r.clearWhy) toast(`Some ground couldn't be marked to clear: ${r.clearWhy}`, 'warn');
   if (why) showRoadBanner();
 }
 
@@ -7204,12 +7231,69 @@ function onRoadPaint(i, j, first) {
   const line = tileLine(from.i, from.j, i, j);
   if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
   if (UI.roadMode === 'express') { expressDrag(i, j, first); return; }
+  if (UI.roadMode === 'clear') { clearDrag(i, j, first); return; }
   if (routeOn()) { routeDrag(i, j, first); return; }
   // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
   if (UI.roadMode === 'pave' && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   paintTiles(line);
   UI.lastPaint = { i, j };
   paintBanner();
+}
+
+/**
+ * The Clear tool's drag: the resource tiles along the drag are sketched to clear (open ground and roads are passed over);
+ * with Box on, or Shift held when it starts, every resource tile in the box from where it started to the finger. Tiles it
+ * can't clear (a rival's land, a Trade Post's ground, a building's) are skipped, and the banner says why.
+ */
+function clearDrag(i, j, first) {
+  if (first) { UI.clrFrom = inMap(i, j) ? { i, j } : null; UI.clrBoxDrag = !!UI.clrBox || !!(INPUT.gesture && INPUT.gesture.shift); UI.lastPaint = null; }
+  if (!UI.clrFrom || !inMap(i, j)) return;
+  UI.clrSkip = '';
+  if (UI.clrBoxDrag) {
+    strokeBack(UI.stroke); // (the box is sketched afresh as the finger moves)
+    const x0 = Math.min(UI.clrFrom.i, i), x1 = Math.max(UI.clrFrom.i, i), y0 = Math.min(UI.clrFrom.j, j), y1 = Math.max(UI.clrFrom.j, j);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) clearSketch(tIdx(x, y));
+  } else {
+    const from = UI.lastPaint || UI.clrFrom;
+    for (const [x, y] of tileLine(from.i, from.j, i, j)) if (inMap(x, y)) clearSketch(tIdx(x, y));
+  }
+  UI.lastPaint = { i, j };
+  showRoadBanner(UI.clrSkip ? `Skipped: ${UI.clrSkip}` : '', false);
+}
+/** Sketch tile t to clear in the current stroke, if it has resources this colony may clear (else note why for the banner). */
+function clearSketch(t) {
+  const d = UI.draft;
+  if (d.clear.has(t) || (S.clr && S.clr[t] === ME + 1) || !S.res[t]) return;
+  const why = clearWhy(ME, t);
+  if (why) { UI.clrSkip = UI.clrSkip || why; return; }
+  if (d.clear.size >= CLEAR.most) { UI.clrSkip = `at most ${CLEAR.most} tiles in one plan.`; return; }
+  draftOp(UI.stroke, t, 'clr');
+}
+
+/**
+ * What clearing `tiles` destroys: { goods: { good: amount }, precious: { good: amount } (Ore, Crystal, Crude, Uranium:
+ * clearPrecious), tiles: of those precious ones }.
+ */
+function clearLoss(tiles) {
+  const goods = {}, precious = {};
+  let n = 0;
+  for (const t of tiles || []) {
+    const r = S.res[t];
+    if (!r || !RES[r]) continue;
+    const g = RES[r].good, a = S.amt[t] || 0;
+    goods[g] = (goods[g] || 0) + a;
+    if (clearPrecious(r)) { precious[g] = (precious[g] || 0) + a; n++; }
+  }
+  return { goods, precious, tiles: n };
+}
+/** The banner's words for clearLoss: what's lost, with what's precious in red ("destroys 48 Ore"). */
+function clearLossText(L) {
+  const list = (o) => Object.keys(o).map((g) => `${Math.round(o[g])} ${GOOD[g] ? GOOD[g].name : g}`);
+  const plain = Object.keys(L.goods).filter((g) => !(g in L.precious));
+  const out = [];
+  if (plain.length) out.push(`loses ${list(Object.fromEntries(plain.map((g) => [g, L.goods[g]]))).join(', ')}`);
+  if (L.tiles) out.push(`<span class="err">destroys ${list(L.precious).join(', ')}</span>`);
+  return out.join('; ') || 'loses nothing';
 }
 
 /**
@@ -7468,7 +7552,7 @@ function routeOn() { return !!UI.route && (UI.roadMode === 'road' || UI.roadMode
 
 /** Take a stroke's ops back out of the plan (newest first) and empty it. */
 function strokeBack(stroke) {
-  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel' };
+  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel', clr: 'unclr', unclr: 'clr', clrdel: 'unclrdel', unclrdel: 'clrdel' };
   for (let k = stroke.length - 1; k >= 0; k--) draftOp([], stroke[k].t, back[stroke[k].op]);
   stroke.length = 0;
 }
@@ -7629,7 +7713,7 @@ function pipeAllPumps() {
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail', 'pipe', 'express'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail', 'pipe', 'express', 'clear'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(ME);
   let line, how;
@@ -7671,6 +7755,18 @@ function showRoadBanner(problem, info) {
     line = `<b>Drag</b> to lay a <b>pair of Express lanes</b>, one out (the way you drag) and one back beside it; ${INPUT.mouse ? '<kbd>Shift</kbd> and drag, or ' : ''}<b>Single lane</b>, lays one. Over your own roads it upgrades them in place; elsewhere the base is a road (${costText(roadCost())} a tile). <button class="btn${UI.xSingle ? ' on' : ''}" id="x-single">Single lane${UI.xSingle ? ': on' : ''}</button>` +
       (works ? '' : ' <span class="err">Build a Roadworks: its Paver lays the surface.</span>');
     how = expressHow();
+  } else if (mode === 'clear') {
+    const d = UI.draft, marked = S.clr && S.clrN > 0 ? clrTiles().filter((t) => S.clr[t] === ME + 1).length : 0;
+    const boxBtn = ` <button class="btn${UI.clrBox ? ' on' : ''}" id="clr-box">Box${UI.clrBox ? ': on' : ''}</button>`;
+    if (!d.clear.size && !d.clearDel.size) {
+      line = `<b>Drag over resources</b> to mark them to clear (${INPUT.mouse ? '<kbd>Shift</kbd> and drag, or ' : ''}<b>Box</b>, for every one in a box), or tap one. Free Workers clear each tile so a building or Wall can go there. <b>The resource is lost</b>: nothing comes back.${boxBtn}`;
+    } else {
+      const L = clearLoss(d.clear);
+      line = `Plan: ${d.clear.size ? `<b>${d.clear.size}</b> tile${d.clear.size === 1 ? '' : 's'} to clear: ${clearLossText(L)}` : ''}${d.clear.size && d.clearDel.size ? '; ' : ''}${d.clearDel.size ? `<b>${d.clearDel.size}</b> mark${d.clearDel.size === 1 ? '' : 's'} to call off` : ''}. Costs nothing.${boxBtn}`;
+    }
+    how = `Clear ground takes resources off tiles on your land or no-one's (never a rival's, a Trade Post's or a neutral site's): Stalk groves, boulders, Ore, Crystal, oil seeps, Uranium and Bloom veins. Free Workers walk out and clear each tile in ${CLEAR.time} seconds, after planned road, within your <b>Road crew</b>; on the Workforce panel it's the <b>Paving and clearing</b> row. ` +
+      `<b>Whatever was there is destroyed</b>: no Stone, Fiber or Ore comes back (mining it is always the better deal), and tiles over Ore, Crystal, oil or Uranium are outlined in red. Tap a marked tile here to call it off. A Bio Farm's crops and a Seed Mast's beds aren't cleared. ` +
+      `Ground no Worker can get to waits ${CLEAR.retry} seconds before they try again.${marked ? ` <b>${marked}</b> tile${marked === 1 ? '' : 's'} marked now.` : ''}`;
   } else if (mode === 'arrows') {
     line = 'Drag along a road to make it <b>one-way</b> the way you drag (a drag that starts off your roads moves the map). Tap a road to turn its arrow. <b>Undo</b> puts arrows back.';
     how = 'One-way traffic never meets head-on, so a loop of one-way roads (one lane out, one back) keeps busy routes flowing.';
@@ -7705,6 +7801,8 @@ function showRoadBanner(problem, info) {
       if (sm.pipe) parts.push(`<b>${sm.pipe}</b> tile${sm.pipe === 1 ? '' : 's'} of pipe`);
       if (sm.pipeDel) parts.push(`<b>${sm.pipeDel}</b> of pipe to take up`);
       if (sm.express) parts.push(`<b>${sm.express}</b> Express lane tile${sm.express === 1 ? '' : 's'} (${UI.xSingleDrag ? 'a single lane' : 'a pair'}; the surface, ${costText(PAVE[3].cost)} a tile, is laid by your Roadworks)`);
+      if (sm.clearN) parts.push(`<b>${sm.clearN}</b> tile${sm.clearN === 1 ? '' : 's'} to clear (${clearLossText(sm.lost)})`);
+      if (sm.clearDel) parts.push(`<b>${sm.clearDel}</b> clear mark${sm.clearDel === 1 ? '' : 's'} to call off`);
       if (sm.over) parts.push(`<b>${sm.over}</b> overpass${sm.over === 1 ? '' : 'es'} where a road crosses a lane`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (!sm.short.length ? '.' : `. <span class="ok">Short of ${sm.short.map((g) => GOOD[g].name).join(' and ')} for now: what you can't pay for waits and is paid from storage as the goods come in, oldest plans first.</span>`);
@@ -7722,7 +7820,7 @@ function showRoadBanner(problem, info) {
   // (The line is cut to three lines where the banner is docked across the bottom of a phone: what went wrong, or
   // what a tap just did, leads. How it works opens over the map there, and stays open while you read it.)
   const text = `<span class="rb-line">${problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : ''}${line}</span>` +
-    (mode === 'road' || mode === 'bridge' ? roadCrewRow() : '') +
+    (mode === 'road' || mode === 'bridge' || mode === 'clear' ? roadCrewRow() : '') +
     `<details class="how"${UI.howOpen === mode ? ' open' : ''}><summary>How it works</summary><div class="how-text">${how}</div></details>`;
   showBanner(text, null, 'Done');
   const det = $('banner-text').querySelector('details.how');
@@ -7743,12 +7841,15 @@ function showRoadBanner(problem, info) {
       : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}`
       : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : sm.pipe ? `Lay ${sm.pipe} pipe tile${sm.pipe === 1 ? '' : 's'}` : sm.express ? `Lay ${sm.express} lane tile${sm.express === 1 ? '' : 's'}` : 'Take up';
     if (sm.express && sm.add) $('banner-ok').textContent = `Lay ${sm.express} lane tile${sm.express === 1 ? '' : 's'}`;
+    const others = sm.add || sm.ramps || wl || sm.rail || sm.pipe || sm.express || sm.del || sm.railDel || sm.pipeDel;
+    if (!others && (sm.clearN || sm.clearDel)) $('banner-ok').textContent = sm.clearN ? `Clear ${sm.clearN} tile${sm.clearN === 1 ? '' : 's'}` : `Call off ${sm.clearDel}`;
     $('banner-ok').disabled = !sm.can;
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
   }
   $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
   if ($('pipe-all')) $('pipe-all').onclick = (e) => { e.stopPropagation(); pipeAllPumps(); };
   for (const btn of $('banner-text').querySelectorAll('#road-crew [data-v]')) btn.onclick = (e) => { e.stopPropagation(); setRoadCrew(+btn.dataset.v); };
+  if ($('clr-box')) $('clr-box').onclick = (e) => { e.stopPropagation(); UI.clrBox = !UI.clrBox; sfx('click'); showRoadBanner(); };
   if ($('x-single')) $('x-single').onclick = (e) => { e.stopPropagation(); UI.xSingle = !UI.xSingle; sfx('click'); showRoadBanner(); };
   const tb = $('banner-traffic');
   tb.hidden = false;
@@ -10077,7 +10178,7 @@ function workerViewKind(u) {
   if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) return 'charging';
   if (tt === 'haul') return 'carrying';
   if (tt === 'staff') return 'running';
-  if (tt === 'build' || tt === 'pave' || tt === 'fix') return 'building';
+  if (tt === 'build' || tt === 'pave' || tt === 'clear' || tt === 'fix') return 'building';
   if (tt === 'repair') return 'repairing';
   return 'free';
 }
@@ -10099,7 +10200,7 @@ function refreshPopSheet() {
     } else if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) add(u.type, 'charging');
     else if (tt === 'haul') add(u.type, 'carrying');
     else if (tt === 'staff') add(u.type, 'running');
-    else if (tt === 'build' || tt === 'pave' || tt === 'fix') add(u.type, 'building');
+    else if (tt === 'build' || tt === 'pave' || tt === 'clear' || tt === 'fix') add(u.type, 'building');
     else if (tt === 'repair') add(u.type, 'repairing');
     else add(u.type, 'free');
   }

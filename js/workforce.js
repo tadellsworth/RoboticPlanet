@@ -110,6 +110,7 @@ function wfWhat(u) {
   if (tt === 'dammend') return { k: 'building', s: 'Shoring up a dam', at: t.tile };
   if (tt === 'strip') return { k: 'building', s: 'Stripping a building in the Town', at: t.tile };
   if (tt === 'pave') return { k: 'paving', s: t.phase === 'go' ? 'Walking to lay road' : 'Laying road', at: t.tile };
+  if (tt === 'clear') { const r = RES[S.res[t.tile]]; return { k: 'paving', s: `${t.phase === 'go' ? 'Walking to clear' : 'Clearing'} ${r ? aOrAn(r.name.toLowerCase()) : 'ground'}`, at: t.tile }; }
   if (tt === 'haul') {
     const src = getE(t.src), dst = getE(t.dst), g = GOOD[t.good] ? GOOD[t.good].name : 'goods';
     return { k: 'carrying', s: `Carrying ${t.n || 1} ${g}${src ? ' from the ' + wfName(src) : ''}${dst ? ' to the ' + wfName(dst) : ''}`, at: t.phase === 'toSrc' ? src : dst };
@@ -207,7 +208,11 @@ function wfShown(k, mine) {
 function wfRowNote(k, auto, mine, manual) {
   if (k === 'sites') { const r = mine.filter((b) => !b.built && !b.builder && siteReady(b)).length, all = mine.filter((b) => !b.built).length; return all ? `${all} site${all === 1 ? '' : 's'}${r ? `, ${r} ready for a builder` : ''}` : 'no sites'; }
   if (k === 'repair') { const r = mine.filter((b) => b.built && b.fixLeft > 0).length; return r ? `${r} to repair` : 'nothing to repair'; }
-  if (k === 'pave') { const n = planList(ME).length; return n ? `${n} tile${n === 1 ? '' : 's'} of road planned` : 'no road planned'; }
+  if (k === 'pave') {
+    const n = planList(ME).length, c = S.clr && S.clrN > 0 ? clrTiles().filter((t) => S.clr[t] === ME + 1).length : 0;
+    const bits = [n ? `${n} tile${n === 1 ? '' : 's'} of road planned` : '', c ? `${c} to clear` : ''].filter(Boolean);
+    return bits.length ? bits.join(', ') : 'no road planned';
+  }
   const bs = mine.filter((b) => b.built && wfRowOf(b.type) === k);
   const wait = bs.filter((b) => wantsStaff(b) && !stallWhy(b)).length, stuck = bs.filter((b) => b.staff && stallWhy(b)).length;
   const bits = [];

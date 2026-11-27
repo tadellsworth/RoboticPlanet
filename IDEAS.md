@@ -3,6 +3,22 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Clear ground (built Nov 27 2026: calls made, open questions for the owner)
+
+The owner asked for a small tool to have a Worker clear a resource, instead of laying a road over it and taking the
+road up. Built as Paths → **Clear ground** (Shift+C). Calls made:
+
+- **Where:** Paths, beside Ramps, not the Terraform tab: Workers do the job, not Graders. Every plain letter is taken
+  (W A S D pan), so it's Shift+C, as the other late Paths tools are Shift and a letter.
+- **Nothing comes back**, not even a boulder's Stone (a Worker never gathers; clearing must not beat mining). Open
+  question: should a boulder drop its last Stone as a crate?
+- **Not cleared:** a Bio Farm's crops and a Seed Mast's beds (they're meant to be there), and decor (trees, rocks), which
+  never blocked building. Open question: should Clear also pull up crops?
+- **Who:** free Workers, after planned road, inside the Road crew limit (the Workforce row is now "Paving and clearing").
+  Open question: a crew limit of its own?
+- **Free**, and no warning beyond the red tint and the "destroys N Ore" note. Open question: confirm before destroying
+  a rich Ore or Crystal field?
+
 ## Terraforming stage 5: big projects and greening (built Nov 27 2026: calls made, open questions for the owner)
 
 Built from the owner's picks on the stage 5 canvas (https://claude.ai/artifact/VHV4A3euU7amL1QHzfrif1): the Reservoir

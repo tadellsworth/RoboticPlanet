@@ -5966,7 +5966,7 @@ function drawBot(ctx, u, sx, sy, s) {
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const tanker = u.type === 'tanker', truck = u.type === 'truck' || tanker;
   const art = own || (!isArmy(u) && !truck ? artFor('worker', u.owner) : null);
-  const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && (S.road[u.task.node] || harvestKind(u))));
+  const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || u.task.type === 'clear' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && (S.road[u.task.node] || harvestKind(u))));
   const bob = u.busy && !acting ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
   if (truck) {
     if (tanker && !own) drawTanker(ctx, u, sx, sy, s, color);
@@ -6116,6 +6116,8 @@ function workPose(u) {
   const t = u.task;
   if (!t) { HARV_SPOTS.delete(u.id); return null; }
   if (t.type === 'staff') { const h = harvestPose(u, t); if (h) return h; } // (gathering: see harvestPose)
+  // Clearing ground (Paths → Clear): it works the resource as a gatherer would (scythe, drill, hammer, beam) and takes nothing.
+  if (t.type === 'clear') return harvestPose(u, { clear: true, phase: t.phase === 'go' ? 'toNode' : 'work', node: t.tile, timer: CLEAR.time - (t.prog || 0) });
   if (!u.busy) return null;
   if (t.type === 'build' && t.phase === 'work') {
     const a = R.time * 0.7 + u.id * 1.7, r = 0.33;
@@ -6272,6 +6274,11 @@ function harvestKind(u) {
   return r === R_STALK ? 'cut' : r === R_VEIN ? 'vein' : r === R_ORE ? 'drill' : r === R_URANIUM ? 'drillU' : r === R_CRYSTAL ? 'laser' : r === R_BOULDER ? 'break' : null;
 }
 
+/** How a Worker clearing resource r off the ground works it (as harvestKind; an oil seep is capped with the hammer). */
+function clearKind(r) {
+  return r === R_STALK ? 'cut' : r === R_VEIN ? 'vein' : r === R_ORE ? 'drill' : r === R_URANIUM ? 'drillU' : r === R_CRYSTAL ? 'laser' : r ? 'break' : null;
+}
+
 /** How long that job takes, as js/sim.js times it (the staff task going from 'toNode' to 'work'). */
 function harvestTime(b, t) {
   const def = BDEFS[b.type];
@@ -6305,9 +6312,9 @@ function harvestPose(u, t) {
     if (d >= HARV_STAND) return d >= HARV_STAND + 0.5 ? null : { kind: 'walk', dx: 0, dy: 0, jit: (d - HARV_STAND) / 0.5 };
     return { kind: 'walk', dx: -r.ax * (HARV_STAND - d), dy: -r.ay * (HARV_STAND - d), jit: 0 };
   }
-  const hk = t.phase === 'work' ? harvestKind(u) : null;
+  const hk = t.phase === 'work' ? (t.clear ? clearKind(S.res[t.node]) : harvestKind(u)) : null;
   if (hk) {
-    const b = getE(t.bld), T = harvestTime(b, t), prog = clamp(1 - t.timer / T, 0, 1);
+    const T = t.clear ? CLEAR.time : harvestTime(getE(t.bld), t), prog = clamp(1 - t.timer / T, 0, 1);
     const cx = (t.node % S.W) + 0.5, cy = ((t.node / S.W) | 0) + 0.5;
     let r = rec && rec.node === t.node ? rec : null;
     if (!r) { r = { node: t.node, ax: Math.cos(u.face || 0), ay: Math.sin(u.face || 0) }; HARV_SPOTS.set(u.id, r); }
@@ -8084,12 +8091,45 @@ function drawSpaceRingfall(ctx, ox, oy, z, E, now) {
   ctx.restore();
 }
 
+/** Is resource r one whose loss the Clear tool warns about in red (Ore, Crystal, an oil seep, Uranium)? */
+function clearPrecious(r) { return r === R_ORE || r === R_CRYSTAL || r === R_OIL || r === R_URANIUM; }
+
+/**
+ * Ground marked to clear (Paths → Clear), waiting for a Worker: a dashed outline with a small cross in the corner (amber
+ * for yours, red over Ore, Crystal, oil or Uranium; a rival's faint), and a bar filling up while a Worker clears it.
+ */
+function drawClearMarks(ctx, ox, oy, z, inView) {
+  if (!S.clr || !(S.clrN > 0)) return;
+  let working = null;
+  for (const t of clrTiles()) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const p = S.clr[t] - 1, mine = p === ME, red = mine && clearPrecious(S.res[t]);
+    if (!mine && !(typeof allies === 'function' && allies(ME, p))) continue;
+    const x = ox + i * z, y = oy + j * z, m = z * 0.1;
+    ctx.lineWidth = Math.max(1, z * 0.04);
+    ctx.setLineDash([z * 0.12, z * 0.09]);
+    ctx.strokeStyle = !mine ? 'rgba(255,190,90,0.4)' : red ? 'rgba(255,90,100,0.95)' : 'rgba(255,190,90,0.95)';
+    ctx.strokeRect(x + m, y + m, z - 2 * m, z - 2 * m);
+    ctx.setLineDash([]);
+    const c = z * 0.18, cx = x + z - m - c * 0.9, cy = y + m + c * 0.9;
+    ctx.beginPath(); ctx.moveTo(cx - c / 2, cy - c / 2); ctx.lineTo(cx + c / 2, cy + c / 2); ctx.moveTo(cx + c / 2, cy - c / 2); ctx.lineTo(cx - c / 2, cy + c / 2); ctx.stroke();
+    if (!working) { working = new Map(); for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'clear' && u.task.phase === 'work') working.set(u.task.tile, u.task.prog); }
+    const pr = working.get(t);
+    if (pr !== undefined) {
+      ctx.fillStyle = red ? 'rgba(255,110,110,0.95)' : 'rgba(255,200,110,0.95)';
+      ctx.fillRect(x + m, y + z - m - z * 0.1, (z - 2 * m) * clamp(pr / CLEAR.time, 0, 1), z * 0.1);
+    }
+  }
+}
+
 /**
  * Planned roads waiting for workers: a faint road with a dashed outline (amber for yours), and a
  * bar filling up while a worker paves it. Tiles still waiting for their goods have a sparser
  * orange outline; planned track waiting to go down, pale sleepers with a dashed outline.
  */
 function drawPlans(ctx, ox, oy, z, inView) {
+  drawClearMarks(ctx, ox, oy, z, inView);
   for (let p = 0; p < S.players.length; p++) {
     const list = planAll(p);
     if (!list.length) continue;
@@ -8247,7 +8287,30 @@ function drawRouteGhost(ctx, ox, oy, z) {
  */
 function drawDraft(ctx, ox, oy, z, inView) {
   const d = typeof UI !== 'undefined' && UI.draft;
-  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size) && !(d.pipe && d.pipe.size) && !(d.pipeDel && d.pipeDel.size) && !(d.express && d.express.size))) return;
+  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size) && !(d.pipe && d.pipe.size) && !(d.pipeDel && d.pipeDel.size) && !(d.express && d.express.size) && !(d.clear && d.clear.size) && !(d.clearDel && d.clearDel.size))) return;
+  // Ground sketched to clear (Paths → Clear): a dashed amber square with a cross; red where it destroys Ore, Crystal, oil
+  // or Uranium (clearPrecious). Marks to call off: a green ring (the ground is left as it is).
+  if (d.clear && d.clear.size) {
+    ctx.lineWidth = Math.max(1.5, z * 0.05);
+    for (const t of d.clear) {
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (!inView(i, j, 1)) continue;
+      const x = ox + i * z, y = oy + j * z, red = clearPrecious(S.res[t]);
+      ctx.fillStyle = red ? 'rgba(255,70,80,0.34)' : 'rgba(255,190,90,0.26)';
+      ctx.fillRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+      ctx.strokeStyle = red ? '#ff5a6e' : '#ffbe5a';
+      ctx.setLineDash([z * 0.1, z * 0.07]);
+      ctx.strokeRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x + z * 0.3, y + z * 0.3); ctx.lineTo(x + z * 0.7, y + z * 0.7); ctx.moveTo(x + z * 0.7, y + z * 0.3); ctx.lineTo(x + z * 0.3, y + z * 0.7); ctx.stroke();
+    }
+  }
+  if (d.clearDel) for (const t of d.clearDel) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    ctx.strokeStyle = '#7dffa0'; ctx.lineWidth = Math.max(1.5, z * 0.06);
+    ctx.beginPath(); ctx.arc(ox + (i + 0.5) * z, oy + (j + 0.5) * z, z * 0.36, 0, Math.PI * 2); ctx.stroke();
+  }
   // Sketched Express lanes: an arrow the way each lane runs (a road upgraded in place gets a blue-white outline too).
   if (d.express && d.express.size) {
     ctx.lineWidth = Math.max(1.5, z * 0.05);

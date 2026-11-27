@@ -2853,8 +2853,35 @@ function dispatch(p) {
   //    don't count (see doStaff). (stepPave, below: also where Paving's row comes on a Manual Workforce ladder, and for
   //    its minimum, at most `most` Workers.)
   stepPave(Infinity);
+  // (Paving's row lays planned road, then clears the ground marked with Paths → Clear: stepClear, within what's left of
+  // `most` and of the road crew.)
   function stepPave(most) {
-    if (!planList(p).length) return;
+    const laid = planList(p).length ? stepRoads(most) : 0;
+    if (S.clrN > 0 && laid < most) stepClear(most - laid);
+  }
+  function stepClear(most) {
+    const lim = roadCrew(p), tiles = clrJobs(p);
+    let on = lim ? roadCrewOn(p) : 0, sent = 0;
+    while (tiles.length && sent < most && (!lim || on < lim) && !(W && W.full('pave'))) {
+      const crew = idle.filter((u) => BOTS[u.type].build && !(u.failUntil > S.time));
+      if (!crew.length) return;
+      // The tile nearest any free Worker on its ground, then the free Worker nearest it.
+      let bt = -1, bd = Infinity, bu = null;
+      for (const u of crew) {
+        const z = botZone(u);
+        for (const t of tiles) {
+          if (S.zone[t] !== z) continue;
+          const d = Math.abs((t % S.W) + 0.5 - u.x) + Math.abs(((t / S.W) | 0) + 0.5 - u.y);
+          if (d < bd) { bd = d; bt = t; bu = u; }
+        }
+      }
+      if (bt < 0) return; // (no free Worker on the ground of any of them)
+      tiles.splice(tiles.indexOf(bt), 1);
+      idle.splice(idle.indexOf(bu), 1);
+      if (assignClear(bu, bt)) { on++; sent++; if (W) W.add('pave'); } else idle.push(bu);
+    }
+  }
+  function stepRoads(most) {
     const none = []; // areas with nothing (left) to pave
     const crew = idle.filter((u) => BOTS[u.type].build && !(u.failUntil > S.time)); // (one that just found no way somewhere sits this round out)
     const lim = roadCrew(p);
@@ -2876,6 +2903,7 @@ function dispatch(p) {
       if (v.task && v.task.type === 'pave') { on++; laid++; if (W) W.add('pave'); }
       if (w <= k) k--; // (u's turn again next, unless it took the tile itself: the list closed up)
     }
+    return laid;
   }
   collectCrates(true, true);
   // 7) Haulers with nothing else to do salvage scrap near a road on the colony's land (War scars: see salvageRun).
@@ -3361,6 +3389,111 @@ function layRoad(t) {
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory(); // a bridge's landing claims a little ground
 }
 
+/* ------------------------------------------------------------------ clearing ground (Paths → Clear) */
+/*
+ * A colony marks resource tiles to clear (ORDERS.paths' `clear`; CLEAR): S.clr, a sparse layer kept in saves, holds the
+ * owner + 1 of each marked tile, S.clrN how many there are. A free Worker walks onto the tile and clears it in CLEAR.time
+ * s (u.task { type 'clear', tile, phase 'go' | 'work', prog }): the resource is gone, nothing comes back. Dispatch hands
+ * the jobs out after planned road (stepClear: Paving's row, within the road crew limit). A tile no Worker could find a way
+ * to is left for CLEAR.retry s (P.clrSkip). A mark whose resource went another way (mined out, a road over it, a rival's
+ * land now) is dropped. Rivals never mark any: their games never make S.clr.
+ */
+
+/** Why player p can't have tile t cleared ('' if it can): only resources, on its land or no-one's, off neutral sites. */
+function clearWhy(p, t) {
+  if (!(Number.isInteger(t) && t >= 0 && t < S.W * S.H)) return 'Outside the map.';
+  const r = S.res[t], i = t % S.W, j = (t / S.W) | 0;
+  if (!r) return 'Nothing to clear here: Clear takes resources off the ground.';
+  if (r === R_CROP) return 'A Bio Farm\'s crop: the farm harvests and replants it.';
+  if (S.sbed && S.sbed[t]) return 'A Seed Mast\'s Crystal bed: it is tended, not cleared.';
+  if (S.owner[t] >= 0 && S.owner[t] !== p) return 'A rival holds that ground: clear your own land or no-one\'s.';
+  if (postAt(t) || calmAt(i + 0.5, j + 0.5)) return 'A Trade Post\'s ground: it stays as it is.';
+  if (uplinkAt(t) || orbTile(t) || (S.landmarks && typeof lmWhy === 'function' && lmWhy(t)) || (S.dam && typeof damAt === 'function' && damAt(t)) ||
+    (S.town && typeof townRuinAt === 'function' && townRuinAt(t)) || (S.walker && typeof walkerYard === 'function' && walkerYard(i, j))) return 'Neutral ground: it stays as it is.';
+  if (S.bAt[t]) return 'A building stands on it.';
+  if (S.road[t] || S.plan[t] || (S.rail && (S.rail[t] || S.railPlan[t]))) return 'A road or track runs over it.';
+  if (!buildZones(p).has(S.zone[t])) return 'Your Workers can\'t reach there yet.';
+  return '';
+}
+
+// The marked tiles in tile order (rebuilt from S.clr when it changes: after a mark, a clear, or a load).
+let _clrList = null, _clrOf = null;
+function clrTiles() {
+  if (_clrOf !== S.clr || !_clrList) {
+    _clrOf = S.clr; _clrList = [];
+    if (S.clr && S.clrN > 0) for (let t = 0; t < S.clr.length; t++) if (S.clr[t]) _clrList.push(t);
+  }
+  return _clrList;
+}
+/** Mark tile t for owner p to clear (p < 0: drop its mark). */
+function setClr(t, p) {
+  if (p >= 0 && !S.clr) S.clr = new Uint8Array(S.W * S.H);
+  if (!S.clr) return;
+  const was = !!S.clr[t];
+  S.clr[t] = p >= 0 ? p + 1 : 0;
+  S.clrN = (S.clrN || 0) + (p >= 0 ? 1 : 0) - (was ? 1 : 0);
+  _clrList = null;
+  markDirty(t % S.W, (t / S.W) | 0);
+}
+
+/** Player p's marked tiles a free Worker could start on now (marks gone stale are dropped). */
+function clrJobs(p) {
+  const P = S.players[p], skip = P.clrSkip, out = [], stale = [];
+  const taken = new Set();
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'clear') taken.add(u.task.tile);
+  for (const t of clrTiles()) {
+    if (S.clr[t] !== p + 1 || taken.has(t)) continue;
+    const why = clearWhy(p, t);
+    if (why) { if (!/reach/.test(why)) stale.push(t); continue; } // (out of reach for now: it stays marked)
+    if ((skip && skip[t] > S.time) || hotFor(p, t) || radTile(t) || (P.danger && dangerAt(p, t % S.W, (t / S.W) | 0))) continue;
+    out.push(t);
+  }
+  for (const t of stale) setClr(t, -1);
+  if (skip) for (const k in skip) if (!(skip[k] > S.time)) delete skip[k];
+  return out;
+}
+
+/** Send Worker u to clear tile t. False (and the tile left a while) if it finds no way there. */
+function assignClear(u, t) {
+  cancelTask(u);
+  u.task = { type: 'clear', tile: t, phase: 'go', prog: 0 };
+  if (goTo(u, t % S.W, (t / S.W) | 0)) return true;
+  cancelTask(u);
+  const P = S.players[u.owner];
+  (P.clrSkip = P.clrSkip || {})[t] = S.time + CLEAR.retry;
+  return false;
+}
+
+/** A Worker clearing a tile: there, it works CLEAR.time s, then the resource is gone; on to the next marked tile close by. */
+function doClear(u, t, dt) {
+  const tile = t.tile;
+  if (!S.clr || S.clr[tile] !== u.owner + 1 || !S.res[tile]) { cancelTask(u); return; } // (called off, or gone another way)
+  if (t.phase === 'go') { if (moveAlong(u, dt)) t.phase = 'work'; return; }
+  if (mustRecharge(u)) { cancelTask(u); return; }
+  u.busy = 1;
+  t.prog += dt * S.players[u.owner].mult * batFactor(u);
+  if (t.prog < CLEAR.time) return;
+  clearTile(tile, u.owner);
+  cancelTask(u);
+  u.idleT = 0;
+  let next = -1, nd = 4.5;
+  for (const v of clrJobs(u.owner)) {
+    const d = Math.abs((v % S.W) + 0.5 - u.x) + Math.abs(((v / S.W) | 0) + 0.5 - u.y);
+    if (d < nd && S.zone[v] === botZone(u)) { nd = d; next = v; }
+  }
+  if (next >= 0) assignClear(u, next);
+}
+
+/** Tile t is cleared for player p: its resource destroyed (nothing comes back), its mark gone. */
+function clearTile(t, p) {
+  S.res[t] = R_NONE; S.amt[t] = 0;
+  if (S.grow) S.grow[t] = 1;
+  setClr(t, -1);
+  const P = S.players[p];
+  if (P) P.stats.cleared = (P.stats.cleared || 0) + 1;
+  addFx('dust', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 0.5 });
+}
+
 /** Call off a planned road tile and refund its Cement. */
 function cancelPlan(t) {
   const owner = S.plan[t] - 1;
@@ -3609,7 +3742,7 @@ function roadCrew(p) { const v = S.players[p] && S.players[p].roadCrew; return R
 /** How many of player p's Workers are laying planned road now (on their way to a tile, or at work on one). */
 function roadCrewOn(p) {
   let n = 0;
-  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build) n++;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.task && (u.task.type === 'pave' || u.task.type === 'clear') && BOTS[u.type].build) n++; // (clearing ground counts too)
   return n;
 }
 
@@ -3625,7 +3758,7 @@ function roadToSites(p, blds) {
     if (b.built || b.builder || !(siteReady(b)) || (P.danger && dangerAt(p, b.x, b.y))) continue;
     if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
     if (!crew) {
-      crew = S.bots.filter((u) => !u.dead && u.owner === p && u.task && u.task.type === 'pave' && BOTS[u.type].build && !u.carry);
+      crew = S.bots.filter((u) => !u.dead && u.owner === p && u.task && (u.task.type === 'pave' || u.task.type === 'clear') && BOTS[u.type].build && !u.carry);
       if (!crew.length) return;
     }
     const at = siteWorkAt(b), cx = at.x + 0.5, cy = at.y + 0.5, z = S.zone[tIdx(at.x, at.y)], ramp = !!BDEFS[b.type].ramp;
@@ -3798,6 +3931,7 @@ function updateWorker(u, dt) {
   else if (t.type === 'dammend') damDoMend(u, t, dt); // (The Dam: shoring one up)
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
+  else if (t.type === 'clear') doClear(u, t, dt); // (Paths → Clear: clearing a resource off the ground)
   else if (t.type === 'fix') doFix(u, t, dt);
   else if (t.type === 'magfix') doMagFix(u, t, dt);
   else if (t.type === 'mend') doMend(u, t, dt);
@@ -13450,7 +13584,7 @@ function wfJob(u) {
   if (tt === 'staff') { const b = getE(t.bld); return b ? wfRowOf(b.type) : ''; }
   if (tt === 'build') return 'sites';
   if (tt === 'fix' || tt === 'magfix' || tt === 'mend' || tt === 'capshaft' || tt === 'dammend') return 'repair';
-  if (tt === 'pave') return 'pave';
+  if (tt === 'pave' || tt === 'clear') return 'pave';
   return '';
 }
 
@@ -23278,6 +23412,7 @@ function hashState() {
   // The Sundering Ray's ripples, the cracked roads and track, the stunned robots and the sealed ground.
   for (const w of S.sunders || []) { int(w.id); int(w.o); str(w.m); num(w.x1); num(w.y1); num(w.at); num(w.f); int(w.done); }
   if (S.crk) { int(S.crkN || 0); for (let t = 0; t < S.crk.length; t++) if (S.crk[t]) int(t); }
+  if (S.clr) { int(S.clrN || 0); for (const t of clrTiles()) { int(t); int(S.clr[t]); } } // (ground marked to clear: Paths → Clear)
   for (const u of S.bots) if (u.stunT) { int(u.id); num(u.stunT); }
   for (const e of (S.mur && S.mur.seal) || []) { num(e.x); num(e.y); num(e.r); int(e.n); }
   for (const z of S.rads || []) { int(z.id); num(z.x); num(z.y); num(z.r); num(z.cr); num(z.t0); num(z.life); int(z.k); } // (radiation zones: radAdd)

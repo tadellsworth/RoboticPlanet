@@ -485,6 +485,14 @@ const ROAD_CLEAR = 3;
 const PAVE_TIME = 1.5;
 const PAVE_CLEAR_TIME = 3;
 /**
+ * Clear ground (Paths → Clear, Shift+C): resource tiles a colony marks on its own land or no-one's (Stalk groves,
+ * boulders, Ore, Crystal, oil seeps, Uranium, Bloom veins; not a Bio Farm's crops or a Seed Mast's beds) are cleared by
+ * free Workers, `time` s a tile, so a building or Wall can go there. The resource is destroyed and nothing comes back
+ * (clearing is never quicker than mining it). A job of the Workforce's Paving row, within the road crew limit. A tile no
+ * Worker can get to is left for `retry` s (as crates are, CRATE_RETRY). At most `most` tiles in one plan.
+ */
+const CLEAR = { time: 3, retry: 15, most: 600 };
+/**
  * Road crews. At most a colony's road crew limit of Workers (P.roadCrew: one of ROAD_CREWS, set on the Roads tool in
  * Paths; ROAD_CREW unless set, 0 = no limit) lay planned road at once, so a long highway doesn't take every Worker
  * off building. A Roadworks' Pavers lay planned road too, PAVER_LAY times as fast as a Worker, and don't count toward
@@ -2821,7 +2829,7 @@ const WF_ROWS = [
   { k: 'war', name: 'Ammo and Missiles', types: ['armory', 'munitions', 'reactor'] },
   { k: 'lab', name: 'Research Labs', types: ['lab'] },
   { k: 'other', name: 'Other buildings' },
-  { k: 'pave', name: 'Paving', one: 'road' },
+  { k: 'pave', name: 'Paving and clearing', one: 'road' },
 ];
 const WF_KEYS = WF_ROWS.map((r) => r.k);
 const WF_ROW = Object.fromEntries(WF_ROWS.map((r) => [r.k, r]));

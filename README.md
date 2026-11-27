@@ -856,7 +856,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   and why not, goods short (`goodsWanted`) with their makers; and the **priority ladder** of job types (`WF_ROWS` in
   defs.js: Building sites, Repairs (mend, magfix, capshaft, dammend too), Bot Foundries, Crystal Taps, Ore Mines,
   Harvesters, Quarries, Smelters, Chip Fabs, Cement Works, Oil and Fuel, Asphalt Plants, Ammo and Missiles, Research
-  Labs, Other buildings, Paving). While it's open `drawWorkerView` draws each Worker's line to its job in its
+  Labs, Other buildings, Paving and clearing). While it's open `drawWorkerView` draws each Worker's line to its job in its
   activity's colour and `wfDrawWants` a slashed worker over each building wanting one. Settings live in
   `P.wf = { order?, rows?: { row: { min?, cap?, pin? } } }` (saved, checked by `checkSave`, in `hashState` only when set)
   and change only by orders: `wfOrder` (a list: Manual; null: Back to Auto), `wfPreset` (`WF_PRESETS`: economy, war,
@@ -1294,6 +1294,28 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   (`aiRoadCrew`): every road a rival plans is to a site waiting on it, and building-beats-roads still takes its Workers
   to sites first. Held to 3 (or 5 while it had Workers to spare), a rival's planned road on Long haul stood two to five
   times as long (an average 15 tiles waiting against 6) and Hollow games that used to end ran to 75 minutes.
+- **Clear ground** (`CLEAR`, `clearWhy`, `setClr`, `clrJobs`, `assignClear`, `doClear`, `clearTile` in `js/defs.js` and
+  `js/sim.js`; Nov 2026): Paths → **Clear ground** (**Shift+C**, beside Ramps; every plain letter was taken) marks resource tiles
+  for free Workers to clear, so a Wall or a building can go where Fiber stalks, a boulder, Ore, Crystal, an oil seep,
+  Uranium or a Bloom vein lay (before, the only way was to plan a road over it, then take the road up). Drag to mark
+  the resource tiles along the drag; **Box** on the banner (or Shift held as the drag starts) marks every one in a box;
+  a tap marks one, or on ground already marked calls it off. The banner previews what it costs (nothing) and what it
+  destroys, good by good, with Ore, Crystal, Crude and Uranium in red (*destroys 48 Ore*), and the sketched tiles are
+  tinted (red over those four, `clearPrecious`). Only on the colony's land or no-one's: never a rival's, a Trade Post's
+  ground or a neutral site (an Uplink, a landmark, the dam, Passenger Town, the Walking Factory's yard, a drawbridge),
+  never under a building, road or track, and not a Bio Farm's crops or a Seed Mast's beds. The plan goes with the rest
+  of Paths in the lockstep order `paths` (`clear`, `clearDel`: at most `CLEAR.most`, 600, tiles a plan). Marked tiles
+  (`S.clr`, owner + 1, a sparse layer in saves; `S.clrN` of them; both in `hashState`, the marks in tile order) show
+  as a dashed amber outline with a small cross, and a bar while a Worker works one. Dispatch hands the jobs out after
+  planned road (`stepClear`, inside `stepPave`): the Workforce row is **Paving and clearing**, within the Road crew
+  (`roadCrewOn` counts clearing), and building beats clearing as it beats roads (`roadToSites`). A Worker walks onto
+  the tile and works it as a gatherer would (scythe, drill, hammer or cutting beam: `clearKind`, `harvestPose`) for
+  `CLEAR.time` (3) s, then the resource is gone and it carries on to the next marked tile within 4. **Nothing comes
+  back**, not even a boulder's Stone: a Worker doesn't gather, and clearing must never be quicker than mining. A tile
+  no Worker finds a way to is left for `CLEAR.retry` (15) s (`P.clrSkip`), as crates are (`CRATE_RETRY`); a mark whose
+  resource went another way (mined out, a road over it, a rival's land now) is dropped. Clearing a tile marks only that
+  tile dirty: no full-map rebuild, and the list of marks is rebuilt from the layer only when it changes. Rivals never
+  clear (their games never make `S.clr`), so seeded AI-vs-AI games are unchanged. Tests: `node tools/clear-test.js`.
   **Paving order** (`paveMap`, `nextPaveTile`): a planned road grows out from the network its workers belong to (home's,
   the roads joined to a Command Base on their ground; or, for workers posted on a foothold, the roads joined to its
   stores and garrisons), one joined tile after another, so each stretch is usable as soon as it's down. A tile joins
