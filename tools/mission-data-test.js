@@ -72,9 +72,9 @@ for (const mission of missions) {
 }
 assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear in one block');
 assert.deepEqual(chapters, [
-  'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'First Contact', 'War',
+  'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'Into the Void', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks greening deepground madeready bughunt groundwar hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks greening deepground madeready spacefall bughunt groundwar hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 
@@ -107,8 +107,12 @@ const controls = [
   ['deepground', 3, ['Seed Mast (G)', 'Crystal Tap'], [".bcard[data-t='seedmast']", ".bcard[data-t='tap']"]],
   ['deepground', 4, ['Thermal Plant (T)'], [".bcard[data-t='thermal']"]],
   ['standing', 4, ['Retreat when weak', '50%', 'Stance', 'Aggressive', 'Hold fire'], []],
+  ['spacefall', 1, ['Move (3)', 'Launch Pad (L)', 'Lay road (R)'], [".bcard[data-t='launchpad']", '#sh-layroad']],
+  ['spacefall', 2, ['Yard', 'Shuttles +1', 'Supply by air', 'On'], ["#sh-yard .order-row[data-k='shuttle'] [data-d='1']", "#sh-airsup [data-v='1']"]],
+  ['spacefall', 3, ['Dropships +1', 'Land 6 Workers'], ["#sh-yard .order-row[data-k='dropship'] [data-d='1']", '#sh-sp-sq-k']],
+  ['spacefall', 4, ['Defend (4)', 'Outpost (O)'], [".bcard[data-t='outpost']"]],
 ];
-const uiSource = read('js/ui.js') + read('index.html') + read('js/terraform5.js'); // (stage 5's panel buttons are made there)
+const uiSource = read('js/ui.js') + read('index.html') + read('js/terraform5.js') + read('js/space-ui.js'); // (stage 5's panel buttons are made there; a spacecraft's, in js/space-ui.js)
 // (Standing Orders' Raid and behaviour goals: the panel makes those buttons from lists, so their ids are checked here.)
 for (const id of ['ag-order-raid', 'ag-ret-50', 'ag-st-agg', 'ag-st-hold']) assert.ok(/ag-order-\$\{k\}|ag-ret-\$\{v\}|ag-st-\$\{v\}/.test(uiSource), `the group panel makes ${id}`);
 {

@@ -232,6 +232,16 @@ const ART_MANIFEST = {
   // Mast (renderer/b/mast.js v=c, the armoured pylon: one tile, its mooring cup at [0.5, 0.08]).
   'airship@0': 'bots/airship@0.webp', 'airship@1': 'bots/airship@1.webp', 'airship-shadow': 'bots/airship-shadow.webp',
   'mast@0': B3D('buildings/mast@0.webp'), 'mast@1': B3D('buildings/mast@1.webp'),
+  // Space (renderer/b/ships.js, launchpad.js, pdturret.js, drift.js, module.js; tools/render_space.sh, tools/install_space.py):
+  // the Shuttle (Frame Tug), Dropship (Clamshell, its ramp in two frames) and Gunship (Lancet), straight down, nose east,
+  // flying and parked; the Launch Pad (Cradle Ring, over its 2 by 2 tiles) and the Point-Defence Turret (Twin Rotary, its
+  // guns at 8 headings: pdturret-K, K x 45 degrees clockwise from east; pdturret@T is heading 7 for the menus); the drifting
+  // asteroids (and two in a tow harness) and the derelict modules (no team derelict, a team's captured). js/space.js draws them.
+  ...Object.fromEntries(['shuttle', 'shuttle-park', 'dropship', 'dropship-park', 'dropship-ramp1', 'dropship-ramp2', 'gunship', 'gunship-park'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
+  'launchpad@0': B3D('buildings/launchpad@0.webp'), 'launchpad@1': B3D('buildings/launchpad@1.webp'),
+  ...Object.fromEntries([0, 1].flatMap((t) => [[`pdturret@${t}`, B3D(`buildings/pdturret-7@${t}.webp`, 1.3)], ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`pdturret-${k}@${t}`, B3D(`buildings/pdturret-${k}@${t}.webp`, 1.3)])])),
+  ...Object.fromEntries(['rock-plain', 'rock-ore', 'rock-crystal', 'rock-ore-tow', 'rock-crystal-tow', 'mod-solar', 'mod-dock', 'mod-hulk'].map((k) => [k, `space/${k}.webp`])),
+  ...Object.fromEntries(['solar', 'dock', 'hulk'].flatMap((c) => [0, 1].map((t) => [`mod-${c}@${t}`, `space/mod-${c}@${t}.webp`]))),
   // The Maglev line (renderer/b/maglev.js v=a, Accord Phase 2, installed by tools/install_maglev.py): the Terminal (as big
   // as the Rail Station, its dock MAGLEV.head tiles up the screen), the pylon (no pad, its head MAGLEV.deck tiles up) and
   // the pylon shot down, the pod loaded and empty (top-down, facing +x, one tile) and one tile of guideway running east,

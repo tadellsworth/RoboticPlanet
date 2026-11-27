@@ -105,6 +105,7 @@ function simStep(dt) {
   if (S.dam && S.tick % 3 === 2) damTick(3 * dt); // (The Dam: robots at the dams, Workers mending, the floods)
   if (S.fld || S.tremors) t4Tick(); // (Terraforming stage 4: a Sluice's flood, the tremors felt)
   if (S.orb) orbTick(); // (Orbital platforms: the bridges' warnings and leaves, the control boxes)
+  if (S.space) spaceTick(); // (space: towed asteroids, the drifting rocks mined in passing, the derelict modules' holds)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -325,8 +326,8 @@ function needsOf(b) {
     if (e) e[1] = Math.max(e[1], n); else out.push(['fuel', n, true]);
   }
   // An Airfield keeps Fuel for its planes, and what the places it supplies by air are short of.
-  if (def.airfield && b.built) {
-    for (const [g, k] of Object.entries(airKeep(b))) {
+  if ((def.airfield || def.pad) && b.built) { // (a Launch Pad: padKeep, its craft's Fuel and what its Shuttles fly out)
+    for (const [g, k] of Object.entries(def.pad ? padKeep(b) : airKeep(b))) {
       const n = k - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g);
       if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]);
     }
@@ -364,7 +365,7 @@ function yardHeld(b, g) {
 /** What b can spare of g to fill another Depot's supply order: never dipping into its own order (or its warbots' Ammo, or a yard's parts: supplyOf). */
 function keepSupply(b, g) {
   const k = keepOf(b);
-  return Math.max(0, supplyOf(b, g) - Math.max((k && k[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0, g === 'fuel' && BDEFS[b.type].mast ? mastFuelKeep(b) : 0, ammoHeld(b, g)));
+  return Math.max(0, supplyOf(b, g) - Math.max((k && k[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : BDEFS[b.type].pad ? padKeep(b)[g] || 0 : 0, g === 'fuel' && BDEFS[b.type].mast ? mastFuelKeep(b) : 0, ammoHeld(b, g)));
 }
 
 /**
@@ -1211,7 +1212,7 @@ function playerGoods(p) {
 function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land, accepts) {
   let best = null, bd = range * range, bestWar = null, bwd = range * range;
   for (const u of S.bots) {
-    if (u.dead || !foes(u.owner, owner) || u.inside || u.dropping || u.under || BOTS[u.type].air) continue; // nothing shoots aircraft yet (nor a Sapper underground)
+    if (u.dead || !foes(u.owner, owner) || u.inside || u.dropping || u.under || BOTS[u.type].air || (BOTS[u.type].craft && (u.alt || 0) > 0.3)) continue; // nothing shoots aircraft yet (nor a Sapper underground; spacecraft in flight: Point-Defence and Gunships, craftNear)
     if (land && BOTS[u.type].sea) continue; // warbots can't go after ships (guns on the shore can)
     if (ownLand && !isArmy(u) && foes(S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))], owner)) continue;
     const br = BOTS[u.type].behemoth ? HARROW.r : 0, d = br ? sq(Math.max(0, Math.sqrt(dist2(u.x, u.y, x, y)) - br)) : dist2(u.x, u.y, x, y); // (the Harrow: in reach of its body, not its middle)
@@ -3734,6 +3735,7 @@ function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
   if (BOTS[u.type].airship) { updateAirship(u, dt); return; }
+  if (BOTS[u.type].craft) { updateCraft(u, dt); return; } // (a spacecraft: Shuttle, Dropship, Gunship)
   if (BOTS[u.type].magpod) { if (recycling(u)) stopRecycle(u); updatePod(u, dt); return; }
   if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
@@ -5956,7 +5958,8 @@ function doStaff(u, t, dt) {
           if (node < 0) { b.status = 'Digging Stone out of the ground (slow; it never runs out)'; t.phase = 'dig'; t.timer = def.bedrock.dig; return; }
           t.face = true;
           b.status = 'Cutting Stone from the rock face (it never runs out)';
-        } else if (node < 0) { b.status = gatherRes(b.type) === R_VEIN && countResIn(b.x, b.y, def.radius, R_VEIN) ? 'The Bloom veins in reach are growing back' : `No ${RES[gatherRes(b.type)].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
+        } else if (node < 0 && S.space && driftReach(b)) { b.status = b.drT > S.time - 2 ? 'Mining an asteroid drifting past' : 'Waiting for an asteroid to drift into reach'; t.wait = 1; return; }
+        else if (node < 0) { b.status = gatherRes(b.type) === R_VEIN && countResIn(b.x, b.y, def.radius, R_VEIN) ? 'The Bloom veins in reach are growing back' : `No ${RES[gatherRes(b.type)].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
         else b.status = 'Gathering ' + GOOD[RES[t.gtype].good].name;
       } else if (def.farm) {
         // Harvest ripe crops first, then plant any empty fertile soil.
@@ -6797,6 +6800,7 @@ function updateBuilding(b, dt) {
   if (def.magterm && b.built) updateMagTerm(b, dt);
   if (def.mdriver || def.catcher) updateMassDriver(b, dt);
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots` + (b.hold ? ', holding inside' : '');
+  else if (def.pad) { if (!b.status || S.tick % 15 === b.id % 15) b.status = padStatus(b); } // (space: a Launch Pad)
   else if (def.store && !def.magterm && !def.mdriver && !def.catcher) b.status = def.station && !def.terminal && !railPlatforms(b.x, b.y).length ? 'No track beside it yet: drag rail out to it in Paths (Rail), to another station' : 'Storing goods';
   else if (def.gate) b.status = 'Open to your bots; enemies have to break it down';
   else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
@@ -6826,6 +6830,7 @@ function updateBuilding(b, dt) {
   else if (def.disrupt) updateDisruptor(b, def, dt);
   else if (def.mortar) updateMortar(b, def, dt);
   else if (def.flak) updateFlak(b, def, dt);
+  else if (def.pd) updatePD(b, def, dt); // (space: the Point-Defence Turret)
   else if (def.minigun) updateMinigun(b, def, dt);
   else if (def.ammo && !def.dome) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
@@ -6882,7 +6887,7 @@ function updateBuilding(b, dt) {
 function updateDepleted(b, def) {
   if (def.bedrock) { b.depleted = false; return false; } // a Quarry always has Stone to cut or dig
   if (S.tick % 60 === b.id % 60) {
-    b.depleted = def.gather ? gatherReach(b.x, b.y, b.type) === 0
+    b.depleted = def.gather ? gatherReach(b.x, b.y, b.type) === 0 && !(S.space && driftReach(b)) // (space: an asteroid lane in reach keeps it going)
       : fertileIn(b.x, b.y, def.radius) === 0 && reachableRes(b.x, b.y, def.radius, R_CROP) === 0;
     if (b.depleted && !b.dryMsg && S.time - b.born > 20) {
       b.dryMsg = 1;
@@ -7034,7 +7039,7 @@ function foundryParts(b, kind) {
  * The Foundry's build order: the bot types in the order its owner arranged them (b.order), every type
  * once (types it doesn't list follow in the usual order). Without one, BOT_ORDER.
  */
-const FOUNDRY_ORDER = BOT_ORDER.filter((k) => !BOTS[k].magpod);
+const FOUNDRY_ORDER = BOT_ORDER.filter((k) => !BOTS[k].magpod && !BOTS[k].craft); // (spacecraft come only from a Launch Pad's yard)
 function foundryList(b) {
   if (!Array.isArray(b.order) || !b.order.length) return FOUNDRY_ORDER;
   const list = b.order.filter((k, i) => FOUNDRY_ORDER.includes(k) && b.order.indexOf(k) === i);
@@ -7354,7 +7359,9 @@ function boostRival(p, kind) {
 }
 
 /** Is player p barred from making bots of `kind` (switched off for everyone, BOTS_OFF; or a rival, with that type stopped in the hidden menu)? */
-function botBanned(p, kind) { return BOTS_OFF.has(kind) || (p !== 0 && !!(S.ban && S.ban[kind])); }
+function botBanned(p, kind) { return BOTS_OFF.has(kind) || (p !== 0 && !!(S.ban && S.ban[kind])) || spaceBotOff(kind); }
+/** Is robot type `kind` out on this map for space's sake: out in space (spaceMap) every aircraft (Cargo Plane, Vulcan Bomber, Airship), anywhere else every spacecraft (BOTS craft)? */
+function spaceBotOff(kind) { const bt = BOTS[kind]; return !!bt && (spaceMap() ? !!bt.air : !!bt.craft); }
 
 /**
  * Unit types switched off for now (BOTS_OFF): any already in this game (a save from before) are taken out quietly,
@@ -7513,7 +7520,7 @@ function updateTurret(b, def, dt) {
  * do BDEFS.mortar.mortar.bld to it). A Disruptor Tower pulses at everything in reach, so it has no aim.
  */
 /** Can a building of this kind be aimed (ORDERS.focus)? */
-function canFocus(def) { return !!(def && (def.gun || def.minigun || def.mortar || def.flak || def.bunker)); }
+function canFocus(def) { return !!(def && (def.gun || def.minigun || def.mortar || def.flak || def.pd || def.bunker)); }
 /** How far aimed defence b reaches: { max, min } tiles from its middle (a Keep: its roof cannon or its gun slots, the further). */
 function focusReach(b) {
   const def = BDEFS[b.type];
@@ -8520,7 +8527,7 @@ function formPlace(u, lead, gx, gy, dl, key) {
 }
 
 /** Is bot u up in the air (a plane in flight, a robot on its parachute), out of reach of anything on the ground? */
-function aloft(u) { return !!(u.dropping || u.under || u.sapT || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)); } // (u.under: a Sapper underground, out of reach too)
+function aloft(u) { return !!(u.dropping || u.under || u.sapT || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3) || (BOTS[u.type].craft && (u.alt || 0) > 0.3)); } // (u.under: a Sapper underground, out of reach too)
 
 /** Bot u takes `dmg` (from (sx, sy), for a Bulwark's shield). Nothing hurts it on a Trade Post's ground (calmAt) but the planet itself (`nat`: Ringfall, the ground giving way). `small`: small arms (a quarter of it to the Harrow). */
 function damageBot(u, dmg, sx, sy, nat, small) {
@@ -11406,7 +11413,7 @@ function orderable(owner, ids) {
 }
 /** Selected units: warbots and Howitzers. */
 function selectable(owner, ids) {
-  return ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && (isArmy(u) || BOTS[u.type].siege));
+  return ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && (isArmy(u) || BOTS[u.type].siege || BOTS[u.type].craft)); // (and spacecraft: spaceCommand)
 }
 /** Selected Howitzers sent to (i, j): they drive there and wait (firing at anything that comes in reach). */
 function orderPark(owner, ids, i, j) {
@@ -18714,7 +18721,7 @@ function nextYardKind(b) {
   let full = null;
   for (const k of BDEFS[b.type].yard) {
     if (!(b.yard && b.yard[k] > 0) || botBanned(b.owner, k)) continue;
-    if (!BDEFS[b.type].airfield || airfieldRoom(b, { type: k, owner: b.owner })) return k;
+    if (!BDEFS[b.type].airfield || airfieldRoom(b, { type: k, owner: b.owner })) return k; // (a Launch Pad: yardOpen)
     full = full || k;
   }
   return full;
@@ -18730,6 +18737,7 @@ function orderAtYard(b, kind, n) {
 /** Can yard b launch what it builds: a Port needs open water at its docks, a Rail Station track beside it. */
 function yardOpen(b, kind) {
   if (BDEFS[b.type].airfield) return airfieldRoom(b, { type: kind, owner: b.owner });
+  if (BDEFS[b.type].pad) return padRoom(b, { type: kind, owner: b.owner }); // (space: SPACE.holds craft to a pad)
   if (BDEFS[b.type].magterm) return magPodRoom(b); // (a line, with room on it)
   return BDEFS[b.type].port ? portDocks(b.x, b.y).length > 0 : railPlatforms(b.x, b.y).length > 0;
 }
@@ -18751,7 +18759,7 @@ function updateYard(b, def, dt) {
   if (!kind) { b.yardStatus = ''; return; }
   const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
   if (BOTS[kind].war && !warOn()) { b.yardStatus = ''; return; }
-  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The network has its ${magPodCap(b)} pods already (${MAGLEV.perLine} a line)` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
+  if (!yardOpen(b, kind)) { b.yardStatus = def.pad ? `The pad is full: it is home to ${SPACE.holds} spacecraft` : def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The network has its ${magPodCap(b)} pods already (${MAGLEV.perLine} a line)` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
   if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
   const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0), rd = BOTS[kind].round || { alloy: 1, chip: 1 }; // (a round of parts: 1 Alloy, 1 Chip; a Maglev Pod's 2 Alloy, 1 Chip)
   if (free('alloy') < rd.alloy || free('chip') < rd.chip) { b.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${free('alloy') < rd.alloy ? (free('chip') < rd.chip ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
@@ -18781,9 +18789,11 @@ function launchFromYard(b, kind) {
   if (BOTS[kind].air) { u.home = BOTS[kind].airship ? 0 : b.id; u.bat = 100; } // (an Airship's home is a Mast of its line: see shipFindLine)
   if (BOTS[kind].airship) { airChanged(); shipFindLine(u); }
   if (BOTS[kind].magpod) { u.home = b.id; u.atT = S.time; }
+  if (BOTS[kind].craft) { u.bat = 100; parkCraft(u, b); } // (space: it is based on the pad it was built at)
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 1.8 });
   if (BOTS[kind].airship) postMsg(b.owner, shipLine(u) ? 'An Airship rolled out of the hangar: it flies to its line.' : 'An Airship rolled out of the hangar. Link two Mooring Masts (a Mast\'s panel: Link) and it flies to the line.', b.x, b.y, 'good');
   else if (BOTS[kind].magpod) postMsg(b.owner, 'A Maglev Pod is on the line.', b.x, b.y, 'good');
+  else if (BOTS[kind].craft) postMsg(b.owner, `A ${BOTS[kind].name} stands ready on the Launch Pad.`, b.x, b.y, 'good');
   else postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : BOTS[kind].air ? `A ${BOTS[kind].name} rolled out of the hangar.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
   if (isMe(b.owner)) sfx('complete');
 }
@@ -20426,8 +20436,8 @@ let AIRW = null; // per tick: what each Airfield should keep for the places it s
 function airBaseNear(owner, x, y) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || !b.built || b.owner !== owner || !BDEFS[b.type].airfield) continue;
-    if (!S.bots.some((u) => !u.dead && u.owner === owner && u.home === b.id && u.type === 'cargoplane')) continue;
+    if (b.dead || !b.built || b.owner !== owner || !(BDEFS[b.type].airfield || BDEFS[b.type].pad)) continue; // (space: a Launch Pad with a Shuttle)
+    if (!S.bots.some((u) => !u.dead && u.owner === owner && u.home === b.id && (u.type === 'cargoplane' || u.type === 'shuttle'))) continue;
     const d = dist2(b.x, b.y, x, y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -20495,7 +20505,7 @@ function airNeeds(c) {
  */
 function airSuppliable(b) {
   const def = b && BDEFS[b.type];
-  if (!def || b.dead || def.airfield || def.wild || b.type === 'lander') return false;
+  if (!def || b.dead || def.airfield || def.pad || def.wild || b.type === 'lander') return false;
   if (caveTile(tIdx(b.x, b.y))) return false; // (Half underground: no plane flies into the caves)
   if (!b.built) return !storeFunded(b);
   return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
@@ -20758,7 +20768,7 @@ function orderAirdrop(owner, u, kind, i, j, n) {
 /** Off to an Airfield (or a Port) to board a plane (or a Ferry on a beach landing): it waits there to be taken aboard. */
 function doBoard(u, t, dt) {
   const port = getE(t.port), f = getE(t.ferry);
-  const open = f && !f.dead && (BOTS[f.type].air ? f.mission && f.mission.phase === 'load' : f.landing && f.landing.phase === 'gather');
+  const open = f && !f.dead && (BOTS[f.type].air || BOTS[f.type].craft ? f.mission && f.mission.phase === 'load' : f.landing && f.landing.phase === 'gather');
   if (!port || port.dead || port.owner !== u.owner || !open) { u.task = null; return; }
   const r = travel(u, port.x, port.y, dt);
   if (r) { u.task = null; u.ferryWait = { at: port.id, to: 0, landing: f.id, since: S.time, ferry: 0 }; u.inside = port.id; u.x = port.x + 0.5; u.y = port.y + 0.5; u.path = null; }
@@ -22302,7 +22312,7 @@ function magLineCut(b) { return magPartners(b).some((o) => magPairCut(b, o)); }
  */
 function magPowered(b) {
   if (!b || b.dead || !b.built || murmurCutOn(b)) return false;
-  if (thermalNear(b)) return true;
+  if (thermalNear(b) || solarNear(b)) return true; // (or a Solar Array its owner holds: space)
   const G = BDEFS.generator.burner, r2 = G.radius * G.radius;
   for (const g of S.buildings) {
     if (g.dead || g.owner !== b.owner || !g.built || g.type !== 'generator' || g.paused || murmurCutOn(g)) continue;
@@ -23189,6 +23199,12 @@ function hashState() {
     if (b.rsvT || b.rsvFuel || b.rsvS) { int(b.id); num(b.rsvT || 0); num(b.rsvFuel || 0); num(b.rsvS || 0); for (const g of b.rsvGens || []) int(g); }
     if (b.lvAim !== undefined || b.lvN || b.lvFuel || b.lvDone) { int(b.id); int(b.lvAim ?? -1); int((b.lvTs || []).length); num(b.lvAcc || 0); int(b.lvN || 0); num(b.lvFuel || 0); int(b.lvDone || 0); for (const g of b.lvGens || []) int(g); }
     if (b.rgTs || b.rgDone) { int(b.id); int(b.rgPaid || 0); int(b.rgWait || 0); int(b.rgDone || 0); for (const t of b.rgLine || []) int(t); for (let k = 0; k < (b.rgTs || []).length; k++) { int(b.rgTs[k]); int(b.rgTo[k]); } } // (a ridge: its second mode)
+  }
+  if (S.space) { // (space: the drifting asteroids, the derelict modules, the craft in flight)
+    for (const r of S.space.rocks) { int(r.id); num(r.amt); int(r.tow); num(r.gone); num(r.t0); num(r.ph); if (r.tow) { num(r.x); num(r.y); } }
+    for (const m of S.space.mods) { int(m.id); int(m.owner); int(m.jam); int(m.done); }
+    for (const u of S.bots) if (!u.dead && BOTS[u.type].craft) { int(u.id); num(u.alt); num(u.vel); num(u.ramp); str(u.sf && u.sf.ph); num(u.sf && u.sf.tx); num(u.sf && u.sf.ty); str(u.mission && u.mission.kind); str(u.mission && u.mission.phase); num(u.cd); int(u.home || 0); for (const id of u.aboard || []) int(id); }
+    for (const b of S.buildings) if (!b.dead && BDEFS[b.type].pd) { num(b.aim); num(b.spin); int(b.rounds || 0); int(b.tgt || 0); }
   }
   for (const k of T4_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (earthworks, floods, caved tunnels: stage 4)
   for (const b of S.buildings) { // (a Sluice's flood, a Sap Head's sap, what a flood knocked out: stage 4)
@@ -27362,4 +27378,997 @@ function hordeMawDown(b, by) {
   if (H && S.winner < 0) { H.won = 'maw'; H.q.length = 0; delete H.over; S.winner = by >= 0 && hordeCols().includes(by) ? by : H.p; S.endHow = 'horde'; }
   if (H) hordeSay('The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good'); else postMsg(by, 'The Maw is wrecked! Its mouths cave in, and the waves are over.', b.x, b.y, 'good');
   if (isMe(by)) sfx('capture');
+}
+
+/* ------------------------------------------------------------------ space: spacecraft, Launch Pads, Point-Defence, drifting asteroids, derelicts */
+
+/*
+ * Space, phase 1 (the owner's design, Nov 2026): SPACE, GUNSHIP, PDT, DRIFT and DERELICT in js/defs.js; the look in
+ * js/space.js. Only on the maps out in space (spaceMap: The Ring, Orbital platforms), where nothing flies on wings
+ * (spaceOff, spaceBotOff).
+ *
+ * A spacecraft (BOTS craft) is based at a Launch Pad (u.home) and parked on it (u.inside) between flights. In flight it
+ * has u.sf: { ph, tx, ty, land } with ph 'up' (lifting straight off the ground, u.alt 0 to 1), 'go' (flying straight to
+ * (tx, ty), turning on the spot first), 'hold' (hovering there), 'down' (coming straight down onto it, u.alt 1 to 0) and
+ * 'ground' (landed away from its pad: a Dropship letting its squad out, a Shuttle unloading). u.vel is its speed, u.face
+ * its heading. A Shuttle or Dropship flies one job at a time (u.mission, as a Cargo Plane does: 'supply', 'tow', or a
+ * squad: 'warbot', 'worker', 'squad'); a Gunship takes army orders in u.task ('attack' a building, 'hunt' a robot or a
+ * craft, 'hold' a spot) and flies home without one.
+ */
+
+/** Is b a Launch Pad (built or not)? */
+function isPad(b) { return !!b && !b.dead && !!BDEFS[b.type] && !!BDEFS[b.type].pad; }
+/** The Launch Pad craft u is based at, if it still stands. */
+function craftPad(u) { const b = getE(u.home); return b && !b.dead && b.built && b.owner === u.owner && BDEFS[b.type].pad ? b : null; }
+/** The craft based at pad b. */
+function padCraft(b) { const out = []; for (const v of S.bots) if (!v.dead && v.home === b.id && BOTS[v.type].craft) out.push(v); return out; }
+/** Does pad b have room for craft u (SPACE.holds a pad)? */
+function padRoom(b, u) { let n = 0; for (const v of S.bots) if (v !== u && !v.dead && v.home === b.id && BOTS[v.type].craft) n++; return n < SPACE.holds; }
+/** Owner's nearest built Launch Pad with room for craft u, or null. */
+function freePad(u) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].pad || !padRoom(b, u)) continue;
+    const d = dist2(b.x + 1, b.y + 1, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+/** Where craft u parks on pad b: the cradle's middle, a second craft a little to one side. */
+function padSpot(b, u) {
+  const parked = padCraft(b).filter((v) => v.inside === b.id || v === u).sort((a, c) => a.id - c.id), k = Math.max(0, parked.indexOf(u));
+  return { x: b.x + 1 + (k ? 0.55 : 0), y: b.y + 1 + (k ? 0.35 : 0) };
+}
+/** Craft u settles onto pad b: parked (inside it), at its spot, nose east. */
+function parkCraft(u, b) {
+  exitBuilding(u);
+  enterBuilding(u, b);
+  const p = padSpot(b, u);
+  u.x = p.x; u.y = p.y; u.alt = 0; u.vel = 0; u.sf = null; u.face = 0; u.home = b.id;
+}
+
+/** How fast craft u flies now: its speed, slowed in a dust storm or with an empty tank, a Shuttle faster with a Docking Ring and slower with a rock in tow. */
+function craftSpeed(u) {
+  const bt = BOTS[u.type];
+  let v = bt.speed * evSpeed() * ((u.bat ?? 100) > 0.5 ? 1 : BATTERY.slow);
+  if (u.type === 'shuttle' && dockHeld(u.owner)) v *= SPACE.dock;
+  if (u.mission && u.mission.kind === 'tow' && u.mission.phase === 'tow') v *= SPACE.tow;
+  return v;
+}
+
+/** Can a craft come down on tile t: flat, free ground (no building, slope, drawbridge, derelict or deposit in the way) where no craft has landed? */
+function craftLandable(t, self) {
+  if (t < 0 || S.terrain[t] !== T_GROUND || !walkable(t) || S.bAt[t] || S.ramp[t] || orbTile(t) || S.res[t] || spaceModAt(t)) return false;
+  if (S.tidal && S.tidal[t]) return false;
+  const D = craftDownAt(t);
+  return !D.some((v) => v !== self);
+}
+/** The craft down (or coming down) on tile t, from a list made once a tick (a rival scans many tiles for a landing). */
+let _craftDown = { tick: -1, S: null, m: null };
+function craftDownAt(t) {
+  if (_craftDown.tick !== S.tick || _craftDown.S !== S) {
+    const m = new Map();
+    for (const v of S.bots) if (!v.dead && BOTS[v.type].craft && v.sf && (v.sf.ph === 'ground' || v.sf.ph === 'down')) { const k = tIdx(Math.floor(v.sf.tx), Math.floor(v.sf.ty)); (m.get(k) || m.set(k, []).get(k)).push(v); }
+    _craftDown = { tick: S.tick, S, m };
+  }
+  return _craftDown.m.get(t) || [];
+}
+/**
+ * Where craft u lands for (i, j): that tile if it can, else the nearest one it can within `r` tiles (on the same ground
+ * as (i, j) when that is ground), with a walkable neighbour for a Dropship's ramp. A tile index, or -1.
+ */
+function craftLandSpot(u, i, j, r) {
+  const z = inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND ? S.zone[tIdx(i, j)] : -1;
+  let best = -1, bd = Infinity;
+  for (let y = j - r; y <= j + r; y++) for (let x = i - r; x <= i + r; x++) {
+    if (!inMap(x, y)) continue;
+    const t = tIdx(x, y);
+    if (!craftLandable(t, u) || (z >= 0 && S.zone[t] !== z)) continue;
+    if (BOTS[u.type].seats && rampTile(t) < 0) continue;
+    const d = dist2(x, y, i, j);
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+/** The tile a Dropship landed on tile t lets its squad out onto (behind it: the first walkable, free neighbour, west first), or -1. */
+function rampTile(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  for (const [di, dj] of [[-1, 0], [0, 1], [0, -1], [1, 0]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (walkable(u) && !S.bAt[u] && canStep(t, u)) return u;
+  }
+  return -1;
+}
+
+/** Craft u (parked, or landed) lifts off for (tx, ty): `land` to come down there, else to hover. */
+function craftLaunch(u, tx, ty, land) {
+  const b = u.inside ? getE(u.inside) : null;
+  exitBuilding(u);
+  if (b && BDEFS[b.type] && BDEFS[b.type].pad) { const p = padSpot(b, u); u.x = p.x; u.y = p.y; }
+  u.sf = { ph: 'up', tx, ty, land: !!land };
+  u.vel = 0; u.alt = u.alt || 0;
+  u.path = null;
+  if (isMe(u.owner)) sfx('takeoff');
+}
+/** Craft u in the air (or landed in the field) turns for its pad (or another with room), to land on it; with none left it comes down where it is. */
+function craftHome(u) {
+  const b = craftPad(u) || freePad(u);
+  if (b) u.home = b.id;
+  const p = b ? { x: b.x + 1, y: b.y + 1 } : null;
+  if (!u.sf) u.sf = { ph: 'up', tx: u.x, ty: u.y, land: true };
+  if (p) { u.sf.tx = p.x; u.sf.ty = p.y; u.sf.land = true; u.sf.pad = b.id; if (u.sf.ph === 'hold' || u.sf.ph === 'ground') u.sf.ph = u.sf.ph === 'ground' ? 'up' : 'go'; }
+  else { u.sf.tx = u.x; u.sf.ty = u.y; u.sf.land = true; u.sf.pad = 0; if (u.sf.ph !== 'ground') u.sf.ph = 'down'; }
+}
+
+/**
+ * One step of craft u's flight. Returns 'over' on reaching (tx, ty) at flying height (it hovers there unless it is to
+ * land), 'down' on touching down, or null.
+ */
+function craftFly(u, dt) {
+  const F = u.sf, bt = BOTS[u.type];
+  if (F.ph === 'ground') { u.vel = 0; u.alt = 0; return null; }
+  u.bat = Math.max(0, (u.bat ?? 100) - SPACE.burn * dt * drainMul(u));
+  if (F.ph === 'up') {
+    u.alt = Math.min(1, (u.alt || 0) + dt / SPACE.climb);
+    if (u.alt >= 1) F.ph = 'go';
+    return null;
+  }
+  if (F.ph === 'down') {
+    u.vel = 0;
+    u.alt = Math.max(0, (u.alt || 0) - dt / SPACE.climb);
+    if (u.alt <= 0) return 'down';
+    return null;
+  }
+  const tx = clamp(F.tx, 0.5, S.W - 0.5), ty = clamp(F.ty, 0.5, S.H - 0.5), dx = tx - u.x, dy = ty - u.y, d = dhypot(dx, dy);
+  if (F.ph === 'hold') {
+    u.vel = 0;
+    if (d > 0.3) F.ph = 'go';
+    return null;
+  }
+  // 'go': turn toward it on the spot, then fly straight, braking to stop over it.
+  if (d < 0.08) { u.x = tx; u.y = ty; u.vel = 0; F.ph = F.land ? 'down' : 'hold'; return 'over'; }
+  const want = datan2(dy, dx), err = wrapAngle(want - (u.face || 0)), w = SPACE.turn;
+  u.face = wrapAngle((u.face || 0) + clamp(err, -w * dt, w * dt));
+  const vmax = craftSpeed(u), stop = Math.sqrt(2 * bt.brake * d);
+  const aligned = Math.abs(err) < 0.35;
+  u.vel = aligned ? Math.min(vmax, stop, (u.vel || 0) + bt.accel * dt) : Math.max(0, (u.vel || 0) - bt.brake * dt);
+  const step = Math.min(d, u.vel * dt);
+  if (step > 0) { u.x += dcos(u.face) * step; u.y += dsin(u.face) * step; u.moved = 1; u.odo = ((u.odo || 0) + step) % 1000; }
+  if (d - step < 0.08) { u.x = tx; u.y = ty; u.vel = 0; F.ph = F.land ? 'down' : 'hold'; return 'over'; }
+  return null;
+}
+
+/** Craft u brushing past a drifting asteroid takes SPACE.bump (once a pass): checked every few ticks. */
+function craftBumps(u) {
+  if (!S.space || (u.alt || 0) < 0.5 || S.tick % 3 !== u.id % 3 || S.time - (u.bumpT ?? -99) < SPACE.bumpGap) return;
+  for (const r of S.space.rocks) {
+    if (r.gone || (u.mission && u.mission.rock === r.id && u.mission.phase === 'tow')) continue;
+    const p = rockPos(r);
+    if (dist2(p.x, p.y, u.x, u.y) > sq(DRIFT.r[r.k] + 0.35)) continue;
+    u.bumpT = S.time;
+    addFx('spark', u.x, u.y, { life: 0.4, color: '#ffd9a0' });
+    craftHit(u, SPACE.bump, -1);
+    if (!u.dead && isMe(u.owner)) postMsg(u.owner, `Your ${BOTS[u.type].name} clipped a drifting asteroid.`, Math.floor(u.x), Math.floor(u.y), 'warn');
+    return;
+  }
+}
+
+/** Craft u is hit (by Point-Defence, a Gunship's laser, an asteroid: by -1): it breaks up and falls when it has no hit points left. */
+function craftHit(u, dmg, by) {
+  if (u.dead) return;
+  if (!(u.alt > 0.3)) { damageBot(u, dmg); return; } // (on the ground it is hit like anything there)
+  u.hp -= dmg;
+  u.hurtT = S.time;
+  if (u.hp > 0) return;
+  blastFx(u.x, u.y, 0.7, { small: true });
+  addFx('smoke', u.x, u.y, { r: 0.6, life: 1.6 });
+  sfx('planefall', u.x, u.y, 1.2);
+  postMsg(u.owner, `Your ${BOTS[u.type].name} was shot down!`, Math.floor(u.x), Math.floor(u.y), 'bad');
+  if (by >= 0 && foes(by, u.owner)) postMsg(by, `You shot down an enemy ${BOTS[u.type].name}.`, Math.floor(u.x), Math.floor(u.y), 'good');
+  if (isMe(u.owner)) sfx('alert');
+  killBot(u, true);
+}
+
+/** Craft u is gone (shot down, or killed on the ground): what it promised is no longer coming, and a rock it towed drifts free. (From killBot.) */
+function craftLost(u) {
+  const M = u.mission;
+  if (M && M.kind === 'supply') { const c = getE(M.to), load = u.cargo || M.load; if (c && load && M.phase !== 'back') for (const g in load) bump(c.inc, g, -load[g]); }
+  if (M && M.kind === 'tow') { const r = rockById(M.rock); if (r && r.tow === u.id) rockFree(r); }
+  for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id) v.task = null;
+  u.cargo = null; u.mission = null;
+}
+
+/** Each tick, for a spacecraft (from updateWorker). */
+function updateCraft(u, dt) {
+  if (u.bat === undefined) u.bat = 100;
+  u.moved = 0;
+  if (BOTS[u.type].gunship) { updateGunship(u, dt); return; }
+  const M = u.mission;
+  if (u.sf) {
+    if (M && M.kind === 'tow' && (M.phase === 'out' || M.phase === 'hook')) { const r = rockById(M.rock); if (!r || r.gone || (r.tow && r.tow !== u.id)) { u.mission = null; craftHome(u); } else { const p = rockPos(r); u.sf.tx = p.x; u.sf.ty = p.y; } }
+    const ev = craftFly(u, dt);
+    craftBumps(u);
+    if (u.dead) return;
+    if (ev === 'over') craftOver(u);
+    else if (ev === 'down') craftDown(u);
+    else if (u.sf && u.sf.ph === 'ground') craftGround(u, dt);
+    return;
+  }
+  const base = craftPad(u);
+  if (!base || u.inside !== base.id) {
+    // Just built, or its pad was lost: off to the nearest pad with room (and wait for one).
+    if (S.tick % 30 === u.id % 30) {
+      const b = freePad(u);
+      if (b) { u.home = b.id; if (u.inside && getE(u.inside) && BDEFS[getE(u.inside).type].pad && getE(u.inside).owner === u.owner) parkCraft(u, b); else { u.sf = { ph: (u.alt || 0) > 0 ? 'go' : 'up', tx: b.x + 1, ty: b.y + 1, land: true, pad: b.id }; exitBuilding(u); } }
+    }
+    return;
+  }
+  // Parked: mended, and its tank topped up from the pad's Fuel.
+  if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + SPACE.mend * dt);
+  if (u.bat < 100 - SPACE.fill + 1 && S.tick % 15 === u.id % 15) fuelCraft(u, base, 100 - SPACE.fill + 1);
+  if (!M) {
+    if (u.type !== 'shuttle' || S.tick % 30 !== u.id % 30) return;
+    const run = airSupplyRun(u, base);
+    if (!run) return;
+    for (const g in run.load) { bump(base.stock, g, -run.load[g]); bump(run.c.inc, g, run.load[g]); }
+    run.c.airAt = S.time;
+    u.cargo = run.load;
+    u.mission = { kind: 'supply', to: run.c.id, x: run.c.x, y: run.c.y, phase: 'load', since: S.time, load: run.load };
+    return;
+  }
+  if (M.phase !== 'load') return;
+  if (M.kind === 'warbot' || M.kind === 'worker' || M.kind === 'squad') {
+    for (const v of S.bots) {
+      const w = v.ferryWait;
+      if (!v.dead && w && w.landing === u.id && !w.ferry && w.at === base.id && ferryAboard(u).length < BOTS[u.type].seats) { w.ferry = u.id; u.aboard.push(v.id); }
+    }
+    const aboard = ferryAboard(u).length;
+    const coming = S.bots.some((v) => !v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id);
+    if (!aboard) { if (!coming && S.time - M.since > 3) { u.mission = null; postMsg(u.owner, 'Nobody came aboard the Dropship: the landing is called off.', base.x, base.y, 'warn'); } return; }
+    if (coming && aboard < BOTS[u.type].seats && S.time - M.since < SPACE.gather) return;
+    for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id) v.task = null; // too late: they stay behind
+  } else if (S.time - M.since < SPACE.load) return;
+  // Off: to the place it supplies, the rock it tows, or the spot the squad lands on.
+  let tx = M.x + 0.5, ty = M.y + 0.5, land = true;
+  if (M.kind === 'supply') { const c = getE(M.to); if (!c || c.dead) { craftAbort(u); return; } const t = craftLandSpot(u, c.x, c.y, 2); if (t >= 0) { tx = (t % S.W) + 0.5; ty = ((t / S.W) | 0) + 0.5; } else { tx = c.x + 0.5; ty = c.y + 0.5; land = false; } }
+  else if (M.kind === 'tow') { const r = rockById(M.rock); if (!r || r.gone || r.tow) { u.mission = null; return; } const p = rockPos(r); tx = p.x; ty = p.y; land = false; }
+  else { const t = craftLandSpot(u, M.x, M.y, 3); if (t < 0) { craftAbort(u, 'There is nowhere flat and free to land there any more: the landing is called off.'); return; } tx = (t % S.W) + 0.5; ty = ((t / S.W) | 0) + 0.5; }
+  M.phase = 'out';
+  craftLaunch(u, tx, ty, land);
+}
+
+/** A job called off before take-off: the goods go back into the pad, the squad climbs out. */
+function craftAbort(u, why) {
+  const M = u.mission, b = craftPad(u);
+  if (M && M.kind === 'supply') { const c = getE(M.to); for (const g in u.cargo || {}) { if (c) bump(c.inc, g, -u.cargo[g]); if (b) bump(b.stock, g, u.cargo[g]); } u.cargo = null; }
+  for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; if (b) { v.x = b.x + 0.5; v.y = b.y + 0.5; } }
+  u.aboard = [];
+  u.mission = null;
+  if (why && b) postMsg(u.owner, why, b.x, b.y, 'warn');
+}
+
+/** Fill craft u's tank from pad b's Fuel, one Fuel (SPACE.fill) at a time, to at least `want`. */
+function fuelCraft(u, b, want) {
+  while (u.bat < want - 1e-6 && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1) {
+    bump(b.stock, 'fuel', -1);
+    usedGood(u.owner, 'fuel', 1);
+    u.bat = Math.min(100, u.bat + SPACE.fill);
+  }
+}
+
+/** Craft u is over its spot at flying height. */
+function craftOver(u) {
+  const M = u.mission;
+  if (!M || M.phase !== 'out') return;
+  if (M.kind === 'supply' && !u.sf.land) { craftUnload(u); craftHome(u); return; } // (nowhere to land beside it: the goods are lowered on the winch)
+  if (M.kind === 'tow') {
+    const r = rockById(M.rock);
+    if (!r || r.gone || r.tow) { u.mission = null; craftHome(u); return; }
+    r.tow = u.id; r.x = u.x; r.y = u.y;
+    M.phase = 'tow';
+    const b = craftPad(u) || freePad(u);
+    if (!b) { rockFree(r); u.mission = null; craftHome(u); return; }
+    u.sf.tx = b.x + 1; u.sf.ty = b.y + 1; u.sf.land = false; u.sf.ph = 'go';
+    addFx('ring', u.x, u.y, { color: '#d9c8ff', r: 1 });
+    return;
+  }
+}
+
+/** Craft u touches down (on its pad, or in the field). */
+function craftDown(u) {
+  const M = u.mission, F = u.sf, b = F.pad ? getE(F.pad) : null;
+  addFx('dust', u.x, u.y, { life: 0.8, seed: S.tick });
+  if (b && !b.dead && b.built && b.owner === u.owner && BDEFS[b.type].pad && dist2(u.x, u.y, b.x + 1, b.y + 1) < 1.5) {
+    parkCraft(u, b);
+    // Anything it still carries goes into the pad (goods it could not deliver).
+    if (u.cargo) { for (const g in u.cargo) bump(b.stock, g, u.cargo[g]); u.cargo = null; }
+    if (M) { for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; v.x = b.x + 0.5; v.y = b.y + 0.5; } u.aboard = []; u.mission = null; }
+    return;
+  }
+  if (!F.pad && !(M && M.phase === 'out')) { // nowhere to go: it waits on the ground for a pad
+    F.ph = 'ground'; F.wait = 1;
+    return;
+  }
+  F.ph = 'ground'; F.t0 = S.time;
+  u.ramp = 0;
+}
+
+/** Craft u on the ground in the field: a Shuttle unloads, a Dropship lowers its ramp and lets its squad out, then they lift off for home. */
+function craftGround(u, dt) {
+  const M = u.mission, F = u.sf;
+  if (F.wait) { if (S.tick % 30 === u.id % 30 && freePad(u)) { F.wait = 0; craftHome(u); } return; }
+  if (!M) { u.ramp = Math.max(0, (u.ramp || 0) - dt / SPACE.ramp); if (!u.ramp) craftHome(u); return; }
+  if (M.kind === 'supply') {
+    if (S.time - F.t0 < SPACE.load) return;
+    craftUnload(u);
+    craftHome(u);
+    return;
+  }
+  // A squad: the ramp comes down, they walk out one by one, the ramp goes up.
+  if ((u.ramp || 0) < 1) { u.ramp = Math.min(1, (u.ramp || 0) + dt / SPACE.ramp); if (u.ramp >= 1) F.outT = S.time; return; }
+  if (S.time - (F.outT || 0) < SPACE.out) return;
+  F.outT = S.time;
+  const v = ferryAboard(u)[0];
+  if (v) { squadOut(u, v); return; }
+  if (!M.told) {
+    M.told = 1;
+    const n = M.n || 0;
+    if (n) postMsg(u.owner, `The Dropship landed ${n} robot${n === 1 ? '' : 's'}.`, Math.floor(u.x), Math.floor(u.y), 'good');
+    const foe = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
+    if (foe >= 0 && foes(foe, u.owner) && M.kind !== 'worker') { postMsg(foe, 'An enemy Dropship landed warbots in your land!', Math.floor(u.x), Math.floor(u.y), 'bad'); if (isMe(foe)) sfx('alert'); }
+    computeZones();
+  }
+  u.mission = null; // (the ramp goes up as it lifts: craftGround with no mission)
+}
+
+/** Robot v walks out of Dropship u down its ramp: warbots hold the spot under a flag (as a parachute drop's do), Workers go about their work. */
+function squadOut(u, v) {
+  const t0 = tIdx(Math.floor(u.x), Math.floor(u.y)), rt = rampTile(t0), t = rt >= 0 ? rt : t0;
+  u.aboard = u.aboard.filter((id) => id !== v.id);
+  v.ferryWait = null; v.inside = 0; v.path = null; v.task = null; v.vel = 0;
+  v.x = (t % S.W) + 0.5 + (hash2(v.id, S.tick, 5) - 0.5) * 0.3; v.y = ((t / S.W) | 0) + 0.5 + (hash2(S.tick, v.id, 7) - 0.5) * 0.3;
+  addFx('dust', v.x, v.y, { life: 0.5, seed: v.id });
+  if (!isArmy(v)) { cancelTask(v); return; }
+  const M = u.mission;
+  let r = M && M.flag ? rallyById(M.flag) : null;
+  if (!r) {
+    // (the flag on the spot it was sent to, when that is ground they can walk to from here, else at the foot of the ramp)
+    const to = M && inMap(M.x, M.y) ? tIdx(M.x, M.y) : -1, fx = to >= 0 && walkable(to) && S.zone[to] === S.zone[t] ? M.x + 0.5 : (t % S.W) + 0.5, fy = to >= 0 && walkable(to) && S.zone[to] === S.zone[t] ? M.y + 0.5 : ((t / S.W) | 0) + 0.5;
+    r = S.rallies.find((q) => q.owner === v.owner && !q.grp && Math.abs(q.x - fx) < 1.5 && Math.abs(q.y - fy) < 1.5);
+    if (!r) { r = { id: S.nextId++, owner: v.owner, x: fx, y: fy }; S.rallies.push(r); }
+    if (M) M.flag = r.id;
+  }
+  // (posted with the nearest garrison of ours on that ground, as a parachute drop's are)
+  if (usesPosts(v.owner)) {
+    let near = null, nd = 6 * 6;
+    for (const g of S.buildings) {
+      if (g.dead || g.owner !== v.owner || !g.built || !BDEFS[g.type].garrison || g.type === 'lander' || S.zone[tIdx(g.x, g.y)] !== S.zone[t]) continue;
+      const dd = dist2(g.x, g.y, v.x, v.y);
+      if (dd <= nd) { nd = dd; near = g; }
+    }
+    if (near) v.post = near.id;
+  }
+  v.task = { type: 'hold', rally: r.id, slot: rallyMembers(r.id).length };
+}
+
+/** Shuttle u hands its load over: into the place it supplies (what was promised arrives). */
+function craftUnload(u) {
+  const M = u.mission, c = M ? getE(M.to) : null;
+  if (u.cargo && c && !c.dead && c.owner === u.owner) {
+    for (const g in u.cargo) { bump(c.inc, g, -u.cargo[g]); bump(c.stock, g, u.cargo[g]); }
+    addFx('ring', c.x + 0.5, c.y + 0.5, { color: '#d9c8ff', r: 0.9 });
+    c.airIn = S.time; // (supplied by air: as a Cargo Plane's crates landing)
+    u.cargo = null;
+  } else if (u.cargo && c) { for (const g in u.cargo) bump(c.inc, g, -u.cargo[g]); }
+  if (M) M.phase = 'back';
+  u.mission = u.cargo ? M : null; // (goods it could not hand over fly back to the pad)
+}
+
+/**
+ * Order Shuttle u (parked on its pad) to tow drifting asteroid `rid` (an Ore or Crystal one, on its lane) home: '' or why not.
+ */
+function orderTow(owner, u, rid) {
+  if (!u || u.dead || u.owner !== owner || u.type !== 'shuttle') return 'Pick one of your Shuttles.';
+  const b = craftPad(u);
+  if (!b || u.inside !== b.id) return 'The Shuttle must be parked on its Launch Pad.';
+  if (u.mission) return 'That Shuttle is already on a job.';
+  const r = rockById(rid);
+  if (!r || r.gone) return 'That asteroid is gone.';
+  if (r.k === 'plain') return 'A plain rock holds nothing worth towing: pick an Ore or Crystal one.';
+  if (r.tow || S.bots.some((v) => !v.dead && v.mission && v.mission.kind === 'tow' && v.mission.rock === r.id)) return 'Another Shuttle is already after that asteroid.';
+  u.mission = { kind: 'tow', rock: r.id, phase: 'load', since: S.time - SPACE.load + 0.5 };
+  return '';
+}
+
+/** Why owner's Dropship u can't land a squad at (i, j) ('' if it can). */
+function squadBlocked(owner, u, i, j) {
+  if (!u || u.dead || u.owner !== owner || u.type !== 'dropship') return 'Pick one of your Dropships.';
+  const b = craftPad(u);
+  if (!b || u.inside !== b.id) return 'The Dropship must be parked on its Launch Pad.';
+  if (u.mission) return 'That Dropship is already on a flight.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  if (craftLandSpot(u, i, j, 3) < 0) return 'Nowhere flat and free to land there: pick open ground (no building, slope, bridge or deposit).';
+  return '';
+}
+
+/**
+ * Order Dropship u to land a squad at (i, j): the robots `ids` (your pick, any that walk: warbots and Workers, as many as
+ * it seats), or, with no ids, up to `n` robots of `kind` ('warbot': spare warbots from the garrisons, as for a march;
+ * 'worker': idle Workers). They walk to its pad and board. Returns '' or why not.
+ */
+function orderSquad(owner, u, i, j, ids, kind, n) {
+  const why = squadBlocked(owner, u, i, j);
+  if (why) return why;
+  const base = craftPad(u), seats = BOTS[u.type].seats, zone = S.zone[tIdx(base.x, base.y)];
+  const board = (v) => { cancelTask(v); exitBuilding(v); v.path = null; v.march = 0; v.task = { type: 'board', port: base.id, ferry: u.id }; };
+  let sent = 0, mk = kind || 'squad';
+  u.aboard = [];
+  if (Array.isArray(ids) && ids.length) {
+    const vs = ids.map(getE).filter((v) => v && !v.dead && v.owner === owner && !BOTS[v.type].craft && !BOTS[v.type].air && !BOTS[v.type].sea && !BOTS[v.type].rail && !BOTS[v.type].magpod && !BOTS[v.type].crawler && !BOTS[v.type].truck && !BOTS[v.type].siege && !v.ferryWait && !v.dropping && (v.inside ? S.zone[tIdx(getE(v.inside).x, getE(v.inside).y)] : botZone(v)) === zone);
+    vs.sort((a, c) => dist2(a.x, a.y, base.x, base.y) - dist2(c.x, c.y, base.x, base.y));
+    for (const v of vs.slice(0, seats)) { board(v); sent++; }
+    if (!sent) return 'None of those robots can walk to the Dropship\'s pad.';
+    mk = vs.every((v) => isArmy(v)) ? 'warbot' : vs.every((v) => !isArmy(v)) ? 'worker' : 'squad';
+  } else if (kind === 'warbot') {
+    n = clamp(n || seats, 1, seats);
+    const rear = !usesPosts(owner);
+    for (const posted of usesPosts(owner) ? [false, true] : [false]) {
+      for (const g of rallySources(owner, base.x, base.y, rear, posted)) {
+        while (spareFrom(g, rear, posted) > 0 && sent < n) {
+          const v = takeArmed(g, posted);
+          if (!v) break;
+          v.inside = 0; v.path = null;
+          v.task = { type: 'board', port: base.id, ferry: u.id };
+          sent++;
+        }
+      }
+    }
+    if (!sent) return 'No armed warbots to spare that can get to this Launch Pad.';
+  } else {
+    n = clamp(n || seats, 1, seats);
+    const cands = S.bots.filter((v) => !v.dead && v.owner === owner && v.type === 'worker' && !v.carry && !v.ferryWait && (!v.task || v.task.type === 'home') && botZone(v) === zone);
+    cands.sort((a, c) => dist2(a.x, a.y, base.x, base.y) - dist2(c.x, c.y, base.x, base.y));
+    for (const v of cands.slice(0, n)) { board(v); sent++; }
+    if (!sent) return 'No idle Workers that can get to this Launch Pad.';
+  }
+  u.mission = { kind: mk, x: i, y: j, phase: 'load', since: S.time, n: sent };
+  return '';
+}
+
+/** Call craft u back to its pad (a Gunship off its orders, a Shuttle or Dropship before it takes off). */
+function recallCraft(u) {
+  if (BOTS[u.type].gunship) { u.task = null; if (u.sf) craftHome(u); return true; }
+  if (u.mission && u.mission.phase === 'load') { craftAbort(u); return true; }
+  return false;
+}
+
+/* -- the Gunship */
+
+/** The building or robot Gunship u's order is about, if it is still there and an enemy's. */
+function gunshipGoal(u) {
+  const t = u.task;
+  if (!t || (t.type !== 'attack' && t.type !== 'hunt')) return null;
+  const e = getE(t.target);
+  if (!e || e.dead || !foes(e.owner, u.owner) || e.owner < 0) return null;
+  if (e.ent === 'u' && (e.inside || e.dropping || e.under)) return null;
+  return e;
+}
+
+/** What Gunship u shoots at now (within GUNSHIP.range): enemy spacecraft, then armed robots, then other robots, then its goal, then any enemy building. */
+function gunshipTarget(u, goal) {
+  const r2 = GUNSHIP.range * GUNSHIP.range;
+  let best = null, bs = Infinity;
+  for (const v of S.bots) {
+    if (v.dead || !foes(v.owner, u.owner) || v.inside || v.dropping || v.under || BOTS[v.type].air || calmAt(v.x, v.y)) continue;
+    const d = dist2(v.x, v.y, u.x, u.y);
+    if (d > r2) continue;
+    const s = d + (BOTS[v.type].craft ? 0 : armedThreat(v) ? 100 : 200) - (v === goal ? 150 : 0);
+    if (s < bs) { bs = s; best = v; }
+  }
+  if (best) return best;
+  if (goal && goal.ent === 'b' && footDist(goal, u.x, u.y) <= GUNSHIP.range) return goal;
+  let bb = null, bd = r2;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner < 0 || !foes(b.owner, u.owner) || BDEFS[b.type].wild || calmB(b)) continue;
+    const d = sq(footDist(b, u.x, u.y));
+    if (d <= bd) { bd = d; bb = b; }
+  }
+  return bb;
+}
+
+/** Each tick, for a Gunship: off on its order, back to its pad to refuel and mend, or parked (taking off at enemies near its pad). */
+function updateGunship(u, dt) {
+  u.cd = (u.cd || 0) - dt;
+  const base = craftPad(u), t = u.task;
+  if (!u.sf) {
+    if (!base || u.inside !== base.id) {
+      if (S.tick % 30 === u.id % 30) { const b = freePad(u); if (b) { u.home = b.id; if (u.inside === b.id) parkCraft(u, b); else { exitBuilding(u); u.sf = { ph: (u.alt || 0) > 0 ? 'go' : 'up', tx: b.x + 1, ty: b.y + 1, land: true, pad: b.id }; } } }
+      return;
+    }
+    if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + SPACE.mend * dt);
+    if (u.bat < 100 - SPACE.fill + 1 && S.tick % 15 === u.id % 15) fuelCraft(u, base, 100 - SPACE.fill + 1);
+    const ready = u.bat >= SPACE.low + 20 && u.hp >= u.maxHp * Math.min(1, SPACE.hurt + 0.3);
+    // On guard: an enemy craft or armed robot near its pad, and it goes up after it (and comes back after).
+    if (!t && ready && warOn() && S.tick % 15 === u.id % 15) {
+      const c = base.x + 1, d = base.y + 1;
+      let foe = null, fd = SPACE.guard * SPACE.guard;
+      for (const v of S.bots) {
+        if (v.dead || !foes(v.owner, u.owner) || v.inside || v.dropping || v.under || BOTS[v.type].air || BOTS[v.type].wild || !(BOTS[v.type].craft || armedThreat(v))) continue;
+        const dd = dist2(v.x, v.y, c, d);
+        if (dd < fd) { fd = dd; foe = v; }
+      }
+      if (foe) u.task = { type: 'hunt', target: foe.id, guard: 1 };
+    }
+    if (u.task && ready) craftLaunch(u, u.x, u.y, false);
+    return;
+  }
+  // In the air (or come down somewhere with no pad).
+  if (u.sf.ph === 'ground') { if (S.tick % 30 === u.id % 30 && freePad(u)) craftHome(u); return; }
+  const low = u.bat < SPACE.low || u.hp < u.maxHp * SPACE.hurt;
+  if (low && t) { u.task = null; if (isMe(u.owner) && S.time - (u.lowMsg ?? -99) > 30) { u.lowMsg = S.time; postMsg(u.owner, `A Gunship is flying home to ${u.bat < SPACE.low ? 'refuel' : 'mend'}.`, Math.floor(u.x), Math.floor(u.y), 'info'); } }
+  let goal = gunshipGoal(u);
+  if (u.task && (u.task.type === 'attack' || u.task.type === 'hunt') && !goal) {
+    // Its target is gone: the next enemy building close by, else it holds where it is (or a guard goes home).
+    const was = u.task;
+    let nb = null, nd = 36;
+    if (!was.guard) for (const b of S.buildings) { if (b.dead || b.owner < 0 || !foes(b.owner, u.owner) || BDEFS[b.type].wild || calmB(b)) continue; const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y); if (d < nd) { nd = d; nb = b; } }
+    u.task = nb ? { type: 'attack', target: nb.id } : was.guard ? null : { type: 'hold', x: u.x, y: u.y };
+    goal = gunshipGoal(u);
+  }
+  const T = u.task;
+  if (!T) { if (!u.sf.land || !u.sf.pad) craftHome(u); }
+  else if (T.type === 'hold') { u.sf.tx = T.x; u.sf.ty = T.y; u.sf.land = false; u.sf.pad = 0; if (u.sf.ph === 'down') u.sf.ph = 'up'; }
+  else if (goal) {
+    // Close to within GUNSHIP.hold of it, on the side it is coming from.
+    const gx = goal.ent === 'b' ? bCentre(goal).x : goal.x, gy = goal.ent === 'b' ? bCentre(goal).y : goal.y;
+    const d = dist(u.x, u.y, gx, gy), keep = GUNSHIP.hold;
+    if (d > keep + 0.4 || d < keep - 1.2) { const k = d > 0.01 ? (d - keep) / d : 0; u.sf.tx = u.x + (gx - u.x) * k; u.sf.ty = u.y + (gy - u.y) * k; if (u.sf.ph === 'hold') u.sf.ph = 'go'; }
+    u.sf.land = false; u.sf.pad = 0;
+    if (u.sf.ph === 'down') u.sf.ph = 'up';
+  }
+  const ev = craftFly(u, dt);
+  craftBumps(u);
+  if (u.dead) return;
+  if (ev === 'down') { const b = u.sf.pad ? getE(u.sf.pad) : null; if (b && !b.dead && b.owner === u.owner && BDEFS[b.type].pad) parkCraft(u, b); else u.sf.ph = 'ground'; return; }
+  // Fire: at what's in reach, turning its nose toward it when it hovers.
+  if ((u.alt || 0) < 0.9 || !warOn()) return;
+  const tg = gunshipTarget(u, goal);
+  if (!tg) return;
+  const tx = tg.ent === 'b' ? bCentre(tg).x : tg.x, ty = tg.ent === 'b' ? bCentre(tg).y : tg.y;
+  if (u.sf.ph === 'hold') u.face = wrapAngle((u.face || 0) + clamp(wrapAngle(datan2(ty - u.y, tx - u.x) - (u.face || 0)), -SPACE.turn * dt, SPACE.turn * dt));
+  if (u.cd > 0) return;
+  u.cd = GUNSHIP.reload;
+  u.fireN = ((u.fireN || 0) + 1) % 2;
+  const side = u.fireN ? 1 : -1, mx = u.x + dcos(u.face) * 0.55 - dsin(u.face) * 0.16 * side, my = u.y + dsin(u.face) * 0.55 + dcos(u.face) * 0.16 * side;
+  addFx('laser', mx, my, { x2: tx, y2: ty, life: 0.26, side });
+  if (tg.ent === 'b') laserHit(tg, GUNSHIP.bld, u.owner);
+  else if (BOTS[tg.type].craft && (tg.alt || 0) > 0.3) craftHit(tg, GUNSHIP.craft, u.owner);
+  else damageBot(tg, GUNSHIP.bot, u.x, u.y);
+  if (isMe(u.owner) || isMe(tg.owner)) sfx('laser', u.x, u.y);
+}
+
+/** A Gunship's laser bolt hits building b: as a bomb does (a Command Base or Keep held at its floor, anything else wrecked at 0). */
+function laserHit(b, dmg, by) {
+  const def = BDEFS[b.type];
+  if (calmB(b)) return;
+  b.armor -= keepShield(b, dmg);
+  b.lastHit = S.time;
+  hitByNow(b.owner, by);
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } return; }
+  if (b.armor <= 0) {
+    postMsg(by, `Your Gunships wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
+    postMsg(b.owner, `Enemy Gunships wrecked your ${def.name}!`, b.x, b.y, 'lost');
+    fortTaken(b, by);
+    destroyBuilding(b, true);
+    return;
+  }
+  if (S.time - (b.lastAlert || -99) > 12) { b.lastAlert = S.time; postMsg(b.owner, `Enemy Gunships are firing on your ${def.name}!`, b.x, b.y, 'bad'); }
+}
+
+/** Order owner's Gunships `ids`: 'attack' building `tid`, 'hunt' robot or craft `tid`, 'hold' at (x, y), 'home'. How many took it. */
+function orderGunships(owner, ids, kind, tid, x, y) {
+  let n = 0;
+  for (const id of ids) {
+    const u = getE(id);
+    if (!u || u.dead || u.owner !== owner || !BOTS[u.type].gunship) continue;
+    if (kind === 'home') { u.task = null; if (u.sf) craftHome(u); n++; continue; }
+    u.task = kind === 'hold' ? { type: 'hold', x: clamp(x, 0.5, S.W - 0.5), y: clamp(y, 0.5, S.H - 0.5) } : { type: kind, target: tid };
+    n++;
+  }
+  return n;
+}
+
+/**
+ * The craft in a selection, given an order from a tap (ORDERS.command): Gunships attack the enemy (building or robot)
+ * tapped, hold the spot tapped (open space too) or, its pad tapped, go home; a Dropship picked with robots lands them
+ * where you tap (ground). Returns a result for the command, or null with no craft in the selection.
+ */
+function spaceCommand(p, ids, s) {
+  const us = ids.map(getE).filter((u) => u && !u.dead && u.owner === p);
+  const guns = us.filter((u) => BOTS[u.type].gunship), drops = us.filter((u) => u.type === 'dropship'), rest = us.filter((u) => !BOTS[u.type].craft);
+  if (!guns.length && !drops.length) return null;
+  const out = { kind: 'craft', n: 0, guns: 0, squad: 0 };
+  const b = s.b ? getE(s.b) : null, foe = !b && s.foe ? getE(s.foe) : null;
+  if (guns.length) {
+    const gids = guns.map((u) => u.id);
+    if (b && !b.dead && foes(b.owner, p) && b.owner >= 0) out.guns = orderGunships(p, gids, 'attack', b.id);
+    else if (foe && !foe.dead && foes(foe.owner, p)) out.guns = orderGunships(p, gids, 'hunt', foe.id);
+    else if (b && !b.dead && b.owner === p && BDEFS[b.type].pad) out.guns = orderGunships(p, gids, 'home');
+    else if (inMap(s.i, s.j)) out.guns = orderGunships(p, gids, 'hold', 0, s.i + 0.5, s.j + 0.5);
+    else if (b) out.guns = orderGunships(p, gids, 'hold', 0, b.x + 0.5, b.y + 0.5);
+  }
+  if (drops.length && rest.length) {
+    const i = b ? b.x : s.i, j = b ? b.y : s.j, d = drops.find((u) => !squadBlocked(p, u, i, j));
+    const why = d ? orderSquad(p, d, i, j, rest.map((u) => u.id)) : squadBlocked(p, drops[0], i, j);
+    if (why) out.why = why; else out.squad = d.mission.n;
+  }
+  out.n = out.guns + out.squad;
+  if (!out.n && !out.why) out.why = drops.length && !rest.length ? 'Pick robots with the Dropship (Shift-click or a box), then tap where to land them.' : 'Tap an enemy, open ground or space for the Gunships, or their Launch Pad to send them home.';
+  return out;
+}
+
+/* -- the Point-Defence Turret */
+
+/** Enemy spacecraft in the air within `range` of (x, y), Gunships first, then nearest. */
+function craftNear(owner, x, y, range) {
+  let best = null, bs = Infinity;
+  for (const u of S.bots) {
+    if (u.dead || !foes(u.owner, owner) || !BOTS[u.type].craft || !((u.alt || 0) > 0.3) || calmAt(u.x, u.y)) continue;
+    const d = dist2(u.x, u.y, x, y);
+    if (d > range * range) continue;
+    const s = d - (BOTS[u.type].gunship ? 1000 : 0);
+    if (s < bs) { bs = s; best = u; }
+  }
+  return best;
+}
+
+/** A Point-Defence Turret, each tick: enemy craft in reach first (Gunships first), else enemy robots close by, tracer bursts at them. */
+function updatePD(b, def, dt) {
+  if (shorted(b)) { b.status = 'Shorted out by a Spitter: back in a moment'; return; }
+  const cx = b.x + 0.5, cy = b.y + 0.5, range = def.range + auraRange(b);
+  b.scanT = (b.scanT || 0) - dt;
+  let tg = focusTarget(b, range) || (b.tgt ? getE(b.tgt) : null);
+  const ok = (v) => v && !v.dead && v.ent === 'u' && foes(v.owner, b.owner) && !v.inside && !v.dropping && !v.under && !calmAt(v.x, v.y) &&
+    (BOTS[v.type].craft && (v.alt || 0) > 0.3 ? dist2(v.x, v.y, cx, cy) <= range * range : !BOTS[v.type].air && dist2(v.x, v.y, cx, cy) <= sq(PDT.ground + auraRange(b)));
+  if (!ok(tg)) tg = null;
+  if ((!tg || !BOTS[tg.type].craft) && b.scanT <= 0) { b.scanT = 0.25; tg = craftNear(b.owner, cx, cy, range) || tg || nearestEnemyBot(b.owner, cx, cy, PDT.ground + auraRange(b), true); }
+  b.tgt = tg ? tg.id : 0;
+  b.skyTgt = tg && BOTS[tg.type].craft ? tg.id : 0;
+  const ammo = (b.rounds || 0) + (b.stock.ammo || 0) * PDT.rounds;
+  b.spin = clamp((b.spin || 0) + ((tg && ammo > 0 ? 1 : -1) * dt) / PDT.spin, 0, 1);
+  if (!tg) { b.status = ammo > 0 ? `Watching the sky (${def.range} tiles out; ${ammo} bursts)` : 'No Ammo: haulers bring it from storage'; return; }
+  const want = datan2(tg.y - cy, tg.x - cx), diff = wrapAngle(want - (b.aim ?? want));
+  b.aim = wrapAngle((b.aim ?? want) + clamp(diff, -PDT.turn * dt, PDT.turn * dt));
+  b.working = true;
+  if (ammo <= 0) { b.status = 'Out of Ammo!'; return; }
+  if (Math.abs(diff) > 0.3 || b.spin < 1) { b.status = 'Tracking'; return; }
+  b.cd = (b.cd || 0) - dt;
+  if (b.cd > 0) return;
+  b.cd = PDT.reload * auraRate(b);
+  if (!(b.rounds > 0)) { bump(b.stock, 'ammo', -1); usedGood(b.owner, 'ammo', 1); b.rounds = PDT.rounds; }
+  b.rounds--;
+  const air = BOTS[tg.type].craft && (tg.alt || 0) > 0.3;
+  b.status = air ? `Firing at an enemy ${BOTS[tg.type].name}` : 'Firing at enemy robots';
+  b.flash = S.time;
+  if (air) craftHit(tg, PDT.craft, b.owner); else damageBot(tg, PDT.bot, cx, cy, false, true);
+  // (the look: a pair of tracers from the twin guns, the muzzles' flash)
+  const busy = S.fx.length > FX_MAX;
+  for (const s of [-1, 1]) {
+    const mx = cx + dcos(b.aim) * 0.38 - dsin(b.aim) * 0.14 * s, my = cy - 0.42 + dsin(b.aim) * 0.24 + dcos(b.aim) * 0.1 * s;
+    const h = hash2(b.id, S.tick, 51 + s), tx = tg.x + (h - 0.5) * 0.4, ty = tg.y + (hash2(S.tick, b.id, 53 + s) - 0.5) * 0.35 - (air ? 0.5 : 0);
+    if (!busy || s > 0) addFx('pdtracer', mx, my, { x2: tx, y2: ty, life: Math.max(0.08, dist(mx, my, tx, ty) / 24) });
+  }
+  if (S.time - (b.mzT || -9) > 0.08) { b.mzT = S.time; addFx('muzzle', cx + dcos(b.aim) * 0.4, cy - 0.42 + dsin(b.aim) * 0.25, { a: b.aim, color: '#ffe0fb', life: 0.07 }); }
+  if ((isMe(b.owner) || isMe(tg.owner)) && S.time - (b.sfxT || -9) > 0.3) { b.sfxT = S.time; sfx('minigun'); }
+}
+
+/* -- the Launch Pad */
+
+/** What Launch Pad b holds on to: Fuel for its craft, and what the places its Shuttles supply are short of. */
+function padKeep(b) {
+  const w = Object.assign({}, airWant(b) || {});
+  if (S.bots.some((u) => !u.dead && u.home === b.id && BOTS[u.type].craft)) w.fuel = (w.fuel || 0) + SPACE.padFuel;
+  return w;
+}
+
+/** A Launch Pad's status line (its yard's own, when building). */
+function padStatus(b) {
+  const cs = padCraft(b), here = cs.filter((u) => u.inside === b.id).length;
+  return cs.length ? `Home to ${cs.length} spacecraft (${here} parked); ${b.stock.fuel || 0} Fuel for them` : 'No spacecraft yet: order one on its panel';
+}
+
+/* -- drifting asteroids */
+
+/** Drifting asteroid with id `id`, or null. */
+function rockById(id) { return S.space ? S.space.rocks.find((r) => r.id === id) || null : null; }
+
+/**
+ * Where asteroid r is now: on its lane, swinging from end to end and back (easing at each end), from the time it came in;
+ * or with the Shuttle towing it, trailing behind.
+ */
+function rockPos(r) {
+  if (r.tow) return { x: r.x, y: r.y };
+  const L = S.space.lanes[r.lane], len = L.len || 1, w = (Math.PI * DRIFT.speed) / len;
+  const a = (S.time - r.t0) * w + r.ph, k = 0.5 - 0.5 * dcos(a);
+  return { x: L.x0 + (L.x1 - L.x0) * k, y: L.y0 + (L.y1 - L.y0) * k };
+}
+
+/** Asteroid r slips its tow (the Shuttle lost): it drifts away and a new one comes in on its lane in time. */
+function rockFree(r) { r.tow = 0; r.gone = S.time; r.amt = 0; }
+
+/** The asteroid on lane `lane` comes in (again): `amt` of its good, swinging from the lane's start in step with its twin. */
+function rockIn(r) {
+  r.gone = 0; r.tow = 0; r.amt = DRIFT.amt[r.k] || 0;
+  r.t0 = S.time; r.ph = 0;
+  const tw = S.space.rocks.find((q) => q.id === r.tw);
+  if (tw && !tw.gone && !tw.tow) { r.t0 = tw.t0; r.ph = tw.ph; } // (back in step with its twin where it can be)
+}
+
+/** Shuttle u has towed asteroid r over pad b: the rock is broken up into a field of deposit tiles beside the pad. */
+function rockToField(r, b, u) {
+  const res = r.k === 'ore' ? R_ORE : R_CRYSTAL, c = bCentre(b), cand = [];
+  for (let j = b.y - 4; j <= b.y + 5; j++) for (let i = b.x - 4; i <= b.x + 5; i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || orbTile(t) || (S.rail && S.rail[t]) || spaceModAt(t) || postAt(t) || uplinkAt(t) || calmAt(i + 0.5, j + 0.5)) continue;
+    if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue;
+    cand.push([dist2(i + 0.5, j + 0.5, c.x, c.y) + hash2(i, j, r.id) * 0.5, t]);
+  }
+  cand.sort((a, d) => a[0] - d[0]);
+  const ts = cand.slice(0, DRIFT.tiles).map((e) => e[1]);
+  const amt = Math.max(0, Math.floor(r.amt));
+  if (ts.length && amt > 0) {
+    const each = Math.max(1, Math.floor(amt / ts.length));
+    let left = amt;
+    ts.forEach((t, k) => { const n = k === ts.length - 1 ? left : Math.min(left, each); if (n <= 0) return; S.res[t] = res; S.amt[t] = n; left -= n; S.decor[t] = 0; markDirty(t % S.W, (t / S.W) | 0); });
+    blastFx(c.x, c.y, 0.5, { small: true });
+    postMsg(u.owner, `A Shuttle brought in a ${r.k === 'ore' ? 'Ore' : 'Crystal'}-bearing asteroid: it is broken up beside the Launch Pad, ${amt} ${r.k === 'ore' ? 'Ore' : 'Crystal'} to mine (build a ${r.k === 'ore' ? 'Mine' : 'Crystal Tap'} by it).`, b.x, b.y, 'good');
+  } else if (amt > 0) {
+    bump(b.stock, r.k, amt); madeGood(b.owner, r.k, amt);
+    postMsg(u.owner, `A Shuttle brought in an asteroid: no room beside the pad to break it up, so its ${amt} ${r.k === 'ore' ? 'Ore' : 'Crystal'} went into the pad.`, b.x, b.y, 'good');
+  }
+  r.tow = 0; r.gone = S.time; r.amt = 0;
+}
+
+/** Does a lane carrying Ore or Crystal (as Mine or Crystal Tap b gathers) pass within DRIFT.reach of b? (A gatherer by the void is never "dry" while one does.) */
+function driftReach(b) {
+  if (!S.space) return false;
+  const g = RES[BDEFS[b.type].gather] && RES[BDEFS[b.type].gather].good, cx = b.x + 0.5, cy = b.y + 0.5;
+  return S.space.rocks.some((r) => r.k === g && segDist(S.space.lanes[r.lane], cx, cy) <= DRIFT.reach);
+}
+/** Distance from (x, y) to lane L. */
+function segDist(L, x, y) {
+  const dx = L.x1 - L.x0, dy = L.y1 - L.y0, l2 = dx * dx + dy * dy || 1, k = clamp(((x - L.x0) * dx + (y - L.y0) * dy) / l2, 0, 1);
+  return dist(x, y, L.x0 + dx * k, L.y0 + dy * k);
+}
+
+/** Once a second: Mines and Crystal Taps mine the asteroids drifting past them; mined-out and towed-away rocks come back in. */
+function rockTick() {
+  const SP = S.space;
+  for (const r of SP.rocks) {
+    if (r.gone) { if (S.time - r.gone >= DRIFT.respawn) rockIn(r); continue; }
+    if (r.tow || r.k === 'plain' || !(r.amt > 0)) continue;
+    const p = rockPos(r), R2 = DRIFT.reach * DRIFT.reach;
+    for (const b of S.buildings) {
+      const def = BDEFS[b.type];
+      if (b.dead || !b.built || !def.gather || b.paused || RES[def.gather].good !== r.k || dist2(b.x + 0.5, b.y + 0.5, p.x, p.y) > R2) continue;
+      const op = getE(b.staff);
+      if (!op || op.dead || (b.stock[r.k] || 0) >= def.out[r.k]) continue;
+      b.drAcc = (b.drAcc || 0) + DRIFT.mine;
+      while (b.drAcc >= 1 && r.amt >= 1 && (b.stock[r.k] || 0) < def.out[r.k]) {
+        b.drAcc -= 1; r.amt -= 1;
+        bump(b.stock, r.k, 1); madeGood(b.owner, r.k, 1);
+        b.drT = S.time; b.drRock = r.id;
+      }
+      if (r.amt < 1) { r.gone = S.time; r.amt = 0; postMsg(b.owner, `An asteroid drifting past your ${def.name} is mined out.`, b.x, b.y, 'info'); break; }
+    }
+  }
+}
+
+/* -- derelict modules */
+
+/** The derelict module whose 2 by 2 square covers tile t, or null. */
+function spaceModAt(t) {
+  if (!S.space || !S.space.mods) return null;
+  const i = t % S.W, j = (t / S.W) | 0;
+  for (const m of S.space.mods) if (i >= m.x && i <= m.x + 1 && j >= m.y && j <= m.y + 1) return m;
+  return null;
+}
+/** Who holds derelict m now: the colony whose land takes in the deck it is moored off (m.st, its shore tile: the void itself is no one's), unless another colony's armed robots jam it (-1: no one). */
+function modHolder(m) { return m.owner >= 0 && !m.jam ? m.owner : -1; }
+/** The ground tile a module adrift with its corner at (i, j) is moored off: the nearest deck or rock tile to its middle (or its middle's own tile, with none in reach). */
+function modShore(i, j) {
+  let best = tIdx(i, j), bd = Infinity;
+  for (let c = j - 3; c <= j + 4; c++) for (let a = i - 3; a <= i + 4; a++) {
+    if (!inMap(a, c) || S.terrain[tIdx(a, c)] !== T_GROUND || orbTile(tIdx(a, c))) continue;
+    const d = dist2(a + 0.5, c + 0.5, i + 1, j + 1);
+    if (d < bd) { bd = d; best = tIdx(a, c); }
+  }
+  return best;
+}
+/** Does colony p hold a Docking Ring? */
+function dockHeld(p) { return !!(S.space && S.space.mods && S.space.mods.some((m) => m.k === 'dock' && modHolder(m) === p)); }
+/** A Solar Array colony b.owner holds within reach of building b, or null (free power there, as a Generator's: see modTick). */
+function solarNear(b) {
+  if (!S.space || !S.space.mods) return null;
+  const R = DERELICT.solar.reach;
+  for (const m of S.space.mods) if (m.k === 'solar' && modHolder(m) === b.owner && dist2(m.x + 1, m.y + 1, b.x + 0.5, b.y + 0.5) <= R * R) return m;
+  return null;
+}
+const MOD_NAMES = { solar: 'Solar Array', dock: 'Docking Ring', hulk: 'Salvage Hulk' };
+
+/** Once a second: who holds each derelict module, the Salvage Hulks' haul, the Solar Arrays' power. */
+function modTick() {
+  const J = (DERELICT.jam + 1) * (DERELICT.jam + 1);
+  for (const m of S.space.mods) {
+    const cx = m.x + 1, cy = m.y + 1, o = S.owner[m.st], was = modHolder(m);
+    m.owner = o >= 0 && S.players[o] && !S.players[o].out && !S.players[o].absent ? o : -1;
+    let jam = 0;
+    if (m.owner >= 0) for (const v of S.bots) {
+      if (v.dead || v.inside || !isArmy(v) || !foes(v.owner, m.owner) || v.owner < 0 || isWild(v.owner) || !botArmed(v)) continue;
+      if (dist2(v.x, v.y, cx, cy) <= J) { jam = v.owner + 1; break; }
+    }
+    m.jam = jam;
+    const now = modHolder(m), name = MOD_NAMES[m.k];
+    if (now !== was) {
+      if (now >= 0) postMsg(now, `The derelict ${name} is yours: it stands in your land.` + (m.k === 'solar' ? ` Free power within ${DERELICT.solar.reach} tiles.` : m.k === 'dock' ? ' Your Shuttles fly faster.' : ''), m.x, m.y, 'good');
+      if (was >= 0) postMsg(was, now >= 0 ? `${playerName(now)} took the derelict ${name}!` : jam ? `Enemy warbots are jamming your ${name}: drive them off!` : `You lost the derelict ${name}.`, m.x, m.y, 'bad');
+    }
+    if (m.k === 'hulk' && !m.done && now >= 0) {
+      m.done = 1; m.by = now;
+      const L = getE(S.players[now].lander), H = DERELICT.hulk.haul;
+      if (L && !L.dead) for (const g in H) { bump(L.stock, g, H[g]); madeGood(now, g, H[g]); }
+      postMsg(now, `Salvage from the Hulk: ${costText(H)} brought into your Command Base.`, m.x, m.y, 'good');
+      addFx('ring', cx, cy, { color: PLAYER_COLORS[now], r: 1.6 });
+    }
+    if (m.k === 'solar' && now >= 0) {
+      const R2 = DERELICT.solar.reach * DERELICT.solar.reach;
+      for (const c of S.buildings) {
+        if (c.dead || c.owner !== now || !c.built || !(BDEFS[c.type].work || BDEFS[c.type].t3pow)) continue;
+        if (dist2(c.x + 0.5, c.y + 0.5, cx, cy) <= R2) c.boostUntil = S.time + 30 * SIM_STEP + 0.15;
+      }
+    }
+  }
+}
+
+/** Each tick on a space map: towed rocks follow their Shuttles; once a second the rocks' mining and the modules' holds. */
+function spaceTick() {
+  const SP = S.space;
+  for (const r of SP.rocks) {
+    if (!r.tow) continue;
+    const u = getE(r.tow);
+    if (!u || u.dead || !u.mission || u.mission.kind !== 'tow' || u.mission.rock !== r.id) { rockFree(r); continue; }
+    // (on its cable, 1.3 tiles behind the Shuttle)
+    r.x = u.x - dcos(u.face || 0) * 1.3; r.y = u.y - dsin(u.face || 0) * 1.3;
+    const b = craftPad(u);
+    if (b && u.mission.phase === 'tow' && dist2(u.x, u.y, b.x + 1, b.y + 1) < 0.5) { rockToField(r, b, u); u.mission = null; craftHome(u); }
+  }
+  if (S.tick % 30 === 23) { rockTick(); modTick(); }
+}
+
+/* -- setting it up (newGame) */
+
+/**
+ * The drifting asteroids' lanes and the derelict modules, laid out once when a space map is made (from its seed; see
+ * DRIFT, DERELICT). Everything in pairs, each the other's twin by the map's half turn, laid out on colony 0's side and
+ * turned onto colony 1's. S.space = { lanes, rocks, mods }.
+ */
+function spaceSetup(seed) {
+  const W = S.W, H = S.H, N = W * H, rng = makeRng((seed ^ 0x5bace0d) >>> 0);
+  const L0 = getE(S.players[0] && S.players[0].lander), L1 = getE(S.players[1] && S.players[1].lander);
+  S.space = { lanes: [], rocks: [], mods: [] };
+  if (!L0) return;
+  // Clearance: Chebyshev steps from the nearest ground (a deck, a rock, a drawbridge's strip) or the map's edge.
+  const D = new Int16Array(N).fill(-1), q = [];
+  for (let t = 0; t < N; t++) {
+    const i = t % W, j = (t / W) | 0;
+    if (!voidTile(t) || orbTile(t) || i === 0 || j === 0 || i === W - 1 || j === H - 1) { D[t] = 0; q.push(t); }
+  }
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], i = t % W, j = (t / W) | 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const x = i + di, y = j + dj;
+      if (!inMap(x, y)) continue;
+      const u = y * W + x;
+      if (D[u] < 0) { D[u] = D[t] + 1; q.push(u); }
+    }
+  }
+  const clear = Math.ceil(DRIFT.clear), at = (x, y) => (inMap(Math.floor(x), Math.floor(y)) ? D[tIdx(Math.floor(x), Math.floor(y))] : 0);
+  const mx = (x) => W - x, my = (y) => H - y; // (the half turn, in world units)
+  const b0 = { x: L0.x + 0.5, y: L0.y + 0.5 }, b1 = L1 ? { x: L1.x + 0.5, y: L1.y + 0.5 } : { x: W - b0.x, y: H - b0.y }; // (one colony, a mission's: its twin's place stands in)
+  const kinds = DRIFT.kinds[S.orb ? 'orbital' : 'asteroids'];
+  const lanes = [];
+  for (const k of kinds) {
+    let best = null, bs = -Infinity;
+    for (let n = 0; n < 1500; n++) {
+      const px = 1 + rng() * (W - 2), py = 1 + rng() * (H - 2);
+      if (at(px, py) < clear) continue;
+      // (through a point on colony 0's side of the map, as far each way as the void runs clear, up to the longest)
+      if (dist2(px, py, b0.x, b0.y) >= dist2(px, py, b1.x, b1.y)) continue;
+      const a = rng() * Math.PI * 2, ca = dcos(a), sa = dsin(a);
+      let f = 0, bk = 0;
+      while (f + bk < DRIFT.len[1] && at(px + ca * (f + 0.5), py + sa * (f + 0.5)) >= clear) f += 0.5;
+      while (f + bk < DRIFT.len[1] && at(px - ca * (bk + 0.5), py - sa * (bk + 0.5)) >= clear) bk += 0.5;
+      const len = f + bk;
+      if (len < DRIFT.len[0]) continue;
+      const x0 = px - ca * bk, y0 = py - sa * bk, x1 = px + ca * f, y1 = py + sa * f, cxm = (x0 + x1) / 2, cym = (y0 + y1) / 2;
+      const L = { x0: Math.round(x0 * 4) / 4, y0: Math.round(y0 * 4) / 4, x1: Math.round(x1 * 4) / 4, y1: Math.round(y1 * 4) / 4, len: 0, k };
+      L.len = Math.round(dist(L.x0, L.y0, L.x1, L.y1) * 100) / 100;
+      let ok = true; // (the lane as rounded: clear all along it, a sample every quarter tile)
+      for (let q = 0, nq = Math.ceil(L.len * 4); q <= nq && ok; q++) if (at(L.x0 + ((L.x1 - L.x0) * q) / nq, L.y0 + ((L.y1 - L.y0) * q) / nq) < clear) ok = false;
+      if (!ok) continue;
+      const twin = { x0: mx(L.x0), y0: my(L.y0), x1: mx(L.x1), y1: my(L.y1) };
+      // Apart from its own twin and the other lanes (each rock its own room), the twin on clear void too.
+      if ([[twin.x0, twin.y0], [twin.x1, twin.y1], [(twin.x0 + twin.x1) / 2, (twin.y0 + twin.y1) / 2]].some(([x, y]) => at(x, y) < clear)) continue;
+      const sep = Math.min(segSeg(L, twin), ...lanes.map((o) => segSeg(L, o)));
+      if (sep < 4) continue;
+      // Close enough to the colony's ground to be of use (Ore and Crystal ones: in a Mine's reach of some ground),
+      // not too close to its Command Base, a little randomness.
+      const home = dist(cxm, cym, b0.x, b0.y);
+      let near = Infinity;
+      for (let q = 0; q <= len; q += 1) { const x = x0 + ca * q, y = y0 + sa * q, i = Math.floor(x), j = Math.floor(y); if (i > 0 && j > 0 && i < W - 1 && j < H - 1) near = Math.min(near, at(x, y)); }
+      if (k !== 'plain' && near > DRIFT.reach - 2) continue; // (an Ore or Crystal rock passes in a Mine's reach of some ground)
+      const s = len * 0.35 - Math.abs(home - (k === 'plain' ? 26 : 20)) * 0.6 + Math.min(sep, 12) * 0.3 + rng() * 3;
+      if (s > bs) { bs = s; best = L; }
+    }
+    if (!best) continue;
+    const tw = { x0: mx(best.x0), y0: my(best.y0), x1: mx(best.x1), y1: my(best.y1), len: best.len, k };
+    lanes.push(best, tw);
+  }
+  S.space.lanes = lanes;
+  // A rock on each lane, twins in step (each pair starts at a different point of its swing).
+  for (let n = 0; n < lanes.length; n += 2) {
+    const ph = Math.round(rng() * 6283) / 1000;
+    for (const m of [0, 1]) S.space.rocks.push({ id: n + m + 1, k: lanes[n].k, lane: n + m, tw: n + (1 - m) + 1, t0: 0, ph, amt: DRIFT.amt[lanes[n].k] || 0, tow: 0, gone: 0, x: 0, y: 0 });
+  }
+  // The derelict modules: a pair of each kind adrift in the void, moored right off a deck or rock (2 by 2 tiles of open
+  // space with ground within two tiles: the colony whose land reaches out over it holds it), off the asteroids' lanes,
+  // apart from the bases, the Trade Posts and Uplinks and each other. The Solar Array nearest home (power for the
+  // industry on the deck beside it), the Hulk furthest out.
+  const want = { solar: 18, dock: 23, hulk: 30 }, mods = [];
+  const ground = (t) => S.terrain[t] === T_GROUND && !orbTile(t);
+  const free = (i, j) => {
+    if (i < 1 || j < 1 || i + 2 >= W || j + 2 >= H) return false;
+    for (const [a, c] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) { const t = tIdx(a, c); if (!voidTile(t) || orbTile(t)) return false; }
+    let shore = false;
+    for (let c = j - 2; c <= j + 3 && !shore; c++) for (let a = i - 2; a <= i + 3; a++) if (inMap(a, c) && ground(tIdx(a, c))) { shore = true; break; }
+    return shore && lanes.every((L) => segDist(L, i + 1, j + 1) >= DRIFT.r.ore + 2);
+  };
+  const keepOff = [...(S.posts || []), ...(S.uplinks || [])];
+  for (const k of DERELICT.kinds) {
+    let best = null, bs = -Infinity;
+    for (let j = 1; j < H - 2; j++) for (let i = 1; i < W - 2; i++) {
+      const cx = i + 1, cy = j + 1, d0 = dist(cx, cy, b0.x, b0.y), d1 = dist(cx, cy, b1.x, b1.y);
+      if (d0 >= d1 - 4 || d0 < DERELICT.base || d1 < DERELICT.base) continue;
+      const ti = W - 2 - i, tj = H - 2 - j;
+      if (dist(cx, cy, ti + 1, tj + 1) < DERELICT.apart) continue;
+      if (keepOff.some((p) => dist(cx, cy, p.x + 0.5, p.y + 0.5) < DERELICT.apart * 0.7 || dist(ti + 1, tj + 1, p.x + 0.5, p.y + 0.5) < DERELICT.apart * 0.7)) continue;
+      if (mods.some((m) => dist(cx, cy, m.x + 1, m.y + 1) < DERELICT.apart)) continue;
+      if (!free(i, j) || !free(ti, tj)) continue;
+      if ([[i, j], [i + 1, j + 1], [ti, tj], [ti + 1, tj + 1]].some(([x, y]) => S.owner[tIdx(x, y)] >= 0)) continue; // (out past every colony's starting land: held by building out to it)
+      const s = -Math.abs(d0 - want[k]) - (d1 - d0 < 10 ? 2 : 0) + hash2(i, j, (seed ^ 0x77d1) >>> 0) * 1.5;
+      if (s > bs) { bs = s; best = { i, j }; }
+    }
+    if (!best) continue;
+    const id = mods.length + 1;
+    const st = modShore(best.i, best.j);
+    mods.push({ id, k, x: best.i, y: best.j, st, owner: -1, jam: 0, done: 0, tw: id + 1 }, { id: id + 1, k, x: W - 2 - best.i, y: H - 2 - best.j, st: N - 1 - st, owner: -1, jam: 0, done: 0, tw: id });
+  }
+  S.space.mods = mods;
+}
+/** The least distance between segments a and b (lanes), sampled. */
+function segSeg(a, b) {
+  let m = Infinity;
+  for (let k = 0; k <= 8; k++) { const f = k / 8; m = Math.min(m, segDist(b, a.x0 + (a.x1 - a.x0) * f, a.y0 + (a.y1 - a.y0) * f), segDist(a, b.x0 + (b.x1 - b.x0) * f, b.y0 + (b.y1 - b.y0) * f)); }
+  return m;
+}
+
+/** A save's S.space (checkSave): lanes, rocks and modules of plain numbers on the map. */
+function spaceCheckSave(o, bad) {
+  const P = o.space, obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v), num = Number.isFinite, int = Number.isInteger;
+  if (!obj(P) || !Array.isArray(P.lanes) || !Array.isArray(P.rocks) || !Array.isArray(P.mods) || P.lanes.length > 32 || P.rocks.length > 32 || P.mods.length > 16) bad();
+  if (!P.lanes.every((L) => obj(L) && ['x0', 'y0', 'x1', 'y1', 'len'].every((k) => num(L[k])) && L.x0 >= 0 && L.x1 >= 0 && L.y0 >= 0 && L.y1 >= 0 && L.x0 <= o.W && L.x1 <= o.W && L.y0 <= o.H && L.y1 <= o.H && ['plain', 'ore', 'crystal'].includes(L.k))) bad();
+  if (!P.rocks.every((r) => obj(r) && int(r.id) && int(r.lane) && r.lane >= 0 && r.lane < P.lanes.length && ['plain', 'ore', 'crystal'].includes(r.k) && ['t0', 'ph', 'amt', 'x', 'y', 'gone'].every((k) => num(r[k])) && int(r.tow) && int(r.tw))) bad();
+  if (!P.mods.every((m) => obj(m) && int(m.id) && DERELICT.kinds.includes(m.k) && int(m.x) && int(m.y) && m.x >= 0 && m.y >= 0 && m.x < o.W - 1 && m.y < o.H - 1 && int(m.owner) && m.owner >= -1 && m.owner < o.players.length && int(m.jam) && (m.done === 0 || m.done === 1) && int(m.st) && m.st >= 0 && m.st < o.W * o.H)) bad();
 }

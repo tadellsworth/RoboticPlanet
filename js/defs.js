@@ -209,6 +209,14 @@ const BOTS = {
   // The Airship (see AIRSHIP): built in an Airfield's hangar, it lives on a line between two Mooring Masts, not at the Airfield.
   airship: { name: 'Airship', plural: 'Airships', speed: WORKER_SPEED * 1.875, hp: 40, air: true, airship: true, carry: 24, seats: 6, parts: 9, accel: 0.35, brake: 0.45,
     desc: 'An armoured freight airship that shuttles between two Mooring Masts, both ways, over anything (water, cliffs, rock), at half a Cargo Plane\'s speed. It carries up to 24 goods a trip, several kinds at once (each side sends what the buildings round the other side need, and the far side\'s spare goods come home), and six Workers or Warbots who ride it like a ferry. Built in an Airfield\'s hangar, it flies to its line and lives at its Masts. It burns Fuel in the air and fills up at either Mast. Unarmed, and Flak brings it down.' },
+  // Spacecraft (space maps only: The Ring and Orbital platforms, spaceMap; see SPACE): built at a Launch Pad and based there,
+  // they lift off straight up, fly straight over the void and come straight down on any flat, free ground. No runway.
+  shuttle: { name: 'Shuttle', plural: 'Shuttles', speed: WORKER_SPEED * 3.2, hp: 18, craft: true, carry: 10, parts: 4, accel: 1.6, brake: 2.2,
+    desc: 'A frame tug with a tow claw, based at a Launch Pad: the space Cargo Plane. It keeps the places you switch to Supply by air stocked, 10 goods a flight, landing beside them on any deck or rock, bridged or not, and it tows a drifting Ore or Crystal asteroid back to its pad, where the rock is broken up into a field to mine. It burns Fuel in flight and fills up at its pad. A Docking Ring you hold makes your Shuttles faster.' },
+  dropship: { name: 'Dropship', plural: 'Dropships', speed: WORKER_SPEED * 2.6, hp: 28, craft: true, seats: 6, parts: 5, accel: 1.2, brake: 1.8,
+    desc: 'A clamshell troop lander, based at a Launch Pad. Pick up to 6 robots, then where to land: they board at its pad, it flies straight over the void, lands on any flat, free ground (a deck behind a raised drawbridge, a rock no bridge reaches, the enemy\'s land) and they walk out down its stern ramp. Then it flies home. Unarmed: Point-Defence brings it down.' },
+  gunship: { name: 'Gunship', plural: 'Gunships', speed: WORKER_SPEED * 3.6, hp: 14, craft: true, war: true, gunship: true, parts: 6, round: { alloy: 2, chip: 2 }, accel: 2.2, brake: 2.8,
+    desc: 'A Lancet dart with twin nose cannons, based at a Launch Pad. It hovers and shoots purple lasers at enemy robots, buildings and other spacecraft. Select it and give it orders like a warbot: tap an enemy to attack it, open space or ground to hold there, its pad to come home. Fragile and dear: a Point-Defence Turret shreds it. It flies home to refuel and mend when its tank or its hull runs low.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Fuel Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -248,7 +256,7 @@ const BOTS = {
   harrow:   { name: 'Harrow', plural: 'Harrows', speed: WORKER_SPEED * 0.45, hp: 240, wild: true, bite: 10, behemoth: true,
     desc: 'The biggest of the Murmur: a badger-mole the size of a hill, its back a mantle of crystal plate. It walks straight at a colony and the ground breaks under it: the roads, track and pipes it walks over are torn up, and every few seconds it rears and slams the ground, stunning every robot within 3 tiles and breaking the Walls, guns and buildings there. Small arms (warbots, Bulwarks, Skirmishers, turrets, Minigun Nests, Bunkers) do a quarter of their damage to it; Railgunners, Howitzers, Mortars, Rockets, Torches, bombs and Missiles do it all. Scuttlers ride on its back and drop off when it slams, and a pack comes with it. Only a real army brings it down: meet it in the open, spread out, before it reaches your walls.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'magpod', 'crawler', 'agribot', 'paver', 'grader', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'shuttle', 'dropship', 'gunship', 'magpod', 'crawler', 'agribot', 'paver', 'grader', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -792,6 +800,62 @@ const AIR_CRASH = {
 };
 const WRECK_MAX = 32, CRASH_STEPS = 24; // (crashPath works the fall out in this many even steps)
 /*
+ * Space (space expansion, phase 1: the owner's design, Nov 2026). On the two maps out in space, The Ring and Orbital
+ * platforms (spaceMap), nothing flies on wings: no Airfield, Cargo Plane, Vulcan Bomber, Airship or Mooring Mast, and no
+ * Flak Gun (the Point-Defence Turret takes its place). Missiles and nukes still fly. Spacecraft (BOTS craft) are built at
+ * a Launch Pad (BDEFS.launchpad) and based there, `holds` to a pad. A craft lifts straight up off the ground over `climb`
+ * s, flies straight at flying height (it turns on the spot, `turn` radians a second) and comes straight down over `climb`
+ * s on its pad or on any flat, free ground. Its tank (0-100) drains `burn` a second in the air; parked on its pad it
+ * fills up, `fill` of the tank a Fuel, from the `padFuel` the pad keeps, and mends `mend` hit points a second. On a job
+ * it turns for home below `low` (a Gunship also below `hurt` of its hit points). A craft that clips a drifting asteroid
+ * takes `bump` damage (once a pass, `bumpGap` s apart).
+ *   load     s a Shuttle or Dropship takes to load at its pad; a Dropship waits up to `gather` s for its squad
+ *   ramp     s the Dropship's stern ramp takes to come down (and go up again); `out` s between robots walking out
+ *   guard    a Gunship parked on its pad takes off at an enemy craft or armed robot this many tiles from the pad
+ *   dock     how much faster its holder's Shuttles fly with a Docking Ring held (DERELICT)
+ *   tow      a Shuttle towing an asteroid flies at this share of its speed
+ */
+const SPACE = { climb: 1.6, turn: 5, burn: 1.1, fill: 25, padFuel: 8, holds: 2, mend: 0.5, low: 30, hurt: 0.4, bump: 2, bumpGap: 3,
+  load: 3, gather: 40, ramp: 1.2, out: 0.45, guard: 8, dock: 1.35, tow: 0.45 };
+/**
+ * The Gunship (BOTS.gunship): it hovers within `hold` tiles of its target and fires a purple laser bolt every `reload` s
+ * at anything of an enemy's within `range` tiles: `craft` off a spacecraft (enemy spacecraft first, then armed robots,
+ * then other robots, then the building it was sent at, then any building), `bot` off a robot, `bld` off a building.
+ */
+const GUNSHIP = { range: 4.5, hold: 3, reload: 0.7, craft: 3, bot: 2.2, bld: 3 };
+/**
+ * The Point-Defence Turret (BDEFS.pdturret): it tracks the nearest enemy spacecraft within its range (Gunships first) and,
+ * failing one, the nearest enemy robot on the ground within `ground` tiles, spins up (`spin` s) and fires a burst of
+ * tracers every `reload` s: `craft` off a spacecraft, `bot` off a robot. An Ammo is `rounds` bursts. It turns at `turn`
+ * radians a second.
+ */
+const PDT = { ground: 3, reload: 0.2, craft: 1.5, bot: 0.8, rounds: 30, spin: 0.5, turn: 6 };
+/**
+ * Drifting asteroids (space maps: S.space.rocks; spaceSetup and spaceTick in js/sim.js). Rocks drift through the void on
+ * set lanes, never over a deck or a rock: each lane is a straight run of void at least `clear` tiles from any ground (and
+ * the map's edge), `len` tiles long ([least, most]); a rock swings along it and back, easing at each end, at about `speed`
+ * tiles a second. Lanes and rocks come in pairs, each the other's twin by the map's half turn, so both colonies meet the
+ * same. Kinds: plain (a hazard: a craft that clips one takes SPACE.bump), Ore-bearing and Crystal-bearing (`amt` of their
+ * good). A Mine or a Crystal Tap within `reach` tiles of a passing Ore or Crystal rock mines it as it goes, `mine` goods a
+ * second (staffed, and with room in its store). A Shuttle tows an Ore or Crystal rock to its pad, where it is broken up
+ * into a field of up to `tiles` deposit tiles beside the pad. A rock towed away or mined out drifts back in on its lane
+ * `respawn` s later. `r`: each kind's size (tiles from its middle). `kinds`: the lane pairs on each map.
+ */
+const DRIFT = { speed: 0.22, clear: 2, len: [8, 26], reach: 5, mine: 0.5, respawn: 240, tiles: 6, amt: { ore: 36, crystal: 28 },
+  r: { plain: 0.7, ore: 0.85, crystal: 0.8 }, kinds: { asteroids: ['ore', 'crystal', 'plain', 'plain'], orbital: ['ore', 'crystal', 'plain'] } };
+/**
+ * Derelict modules (space maps: S.space.mods): old Accord station modules adrift on the decks and rocks, neutral until a
+ * colony holds them. One is held, as an Uplink is, by the colony whose land its middle stands in, unless an armed robot
+ * of another colony stands within `jam` tiles of it. One pair of each kind, each the other's twin by the map's half turn.
+ *   solar  a Solar Array: free power within `reach` tiles for its holder, a Generator's with no Fuel (every factory, Bot
+ *          Foundry, Oil Pump and Refinery there works a third faster; a Maglev Terminal or Mass Driver there has power)
+ *   dock   a Docking Ring: its holder's Shuttles fly SPACE.dock times as fast
+ *   hulk   a Salvage Hulk: the first colony to hold it gets its haul once (`haul`: Alloy and Chips, into its Command
+ *          Base); then it is stripped
+ * `apart`: the fewest tiles between modules (and from a Trade Post or Uplink); `base`: the fewest from any Command Base.
+ */
+const DERELICT = { jam: 3, solar: { reach: 6 }, hulk: { haul: { alloy: 18, chip: 10 } }, apart: 9, base: 14, kinds: ['solar', 'dock', 'hulk'] };
+/*
  * War scars (the owner's design, Nov 19 2026; see the War scars section of js/sim.js): a long war slowly turns the green
  * land between the colonies into a battlefield of craters, ash, charred stumps, scrap and bones. The setting is the
  * device's own (Settings: Off, Light or Full; Full by default) and is fixed into a game's settings when it starts
@@ -818,7 +882,7 @@ function airCrash(type) { return Object.prototype.hasOwnProperty.call(AIR_CRASH,
  * unless you take the land back.
  */
 const CIV_CLAIM = 2, BUILD_REACH = 10, CUT_CRUMBLE = 90;
-const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome', 'sunder']);
+const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'pdturret', 'keep', 'wall', 'gate', 'silo', 'nukesilo', 'lance', 'dome', 'sunder']);
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
@@ -954,6 +1018,8 @@ const SHAPE_PRESETS = [
 ];
 /** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
 function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && (P.asteroids || P.orbital)); } // (Orbital platforms lie in open space too: the void between its decks)
+/** Is this game (or map type `shape`) out in space, The Ring or Orbital platforms? There spacecraft fly and nothing flies on wings (see SPACE). */
+function spaceMap(shape) { return ringShape(shape); }
 /** Is tile t space on The Ring: empty void that nothing can cross or build on (T_CHASM there, never a Sky bridge)? */
 function voidTile(t) { return S.terrain[t] === T_CHASM && ringShape(); }
 /**
@@ -2093,18 +2159,28 @@ const BDEFS = {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front. Far from your Command Base, with a Road Train that can drive to it, it stocks itself with what the buildings round it need, and the Road Train keeps it supplied.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
   },
+  // Space maps only (spaceMap): the Launch Pad (2 by 2, a Cradle Ring) builds and services spacecraft, and the Point-Defence
+  // Turret (a Twin Rotary) takes the Flak Gun's place. See SPACE, PDT.
+  launchpad: {
+    name: 'Launch Pad', short: 'Pad', desc: 'A 2 by 2 cradle ring for spacecraft (space maps only). Its yard builds Shuttles, Dropships and Gunships from Alloy and Chips (order them on its panel), and it is their home: two to a pad. They lift straight off it, fly straight over the void and land on any flat, free ground. Parked here they refuel (it keeps 8 Fuel: Tankers bring it) and mend. It is storage too, like a Depot: the goods a Shuttle flies out are loaded here.',
+    cost: { cement: 8, alloy: 4, chip: 2 }, store: true, pad: true, foot: 2, armor: 16, buildTime: 14, yard: ['shuttle', 'dropship', 'gunship'], space: true,
+  },
+  pdturret: {
+    name: 'Point-Defence Turret', short: 'Point-Defence', desc: 'A twin rotary gun for space maps, in the Flak Gun\'s place. It hoses enemy spacecraft out to 7 tiles with tracer fire, Gunships first, and anything on the ground within 3 tiles. The main answer to Gunships: one shreds a Gunship in a few seconds. Fires Ammo (30 bursts each).',
+    cost: { cement: 4, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 7, armor: 18, buildTime: 10, war: true, pd: true, space: true,
+  },
 };
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'reservoir', 'leveller', 'depot', 'grower', 'lab', 'terminal',
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'launchpad', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'pdturret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'reservoir', 'leveller', 'depot', 'grower', 'lab', 'terminal',
   'composter', 'nursery', 'wpump', 'seamdrill', 'seedmast', 'thermal', 'sluice', 'saphead']; // (the last eight on the Terraform tab, with its tools: js/terraform2.js, js/terraform3.js, js/terraform4.js)
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'launchpad', 'terminal'], roads: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'pdturret', 'repair', 'silo', 'nukesilo'], walls: true },
   // The megastructures (megaOn): their own tab, key 5 (then Terraform, 6: js/terraform.js).
   { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'reservoir', 'leveller'] },
 ];

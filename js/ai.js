@@ -543,7 +543,7 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
-      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield' || b.type === 'mdriver' || b.type === 'catcher') && S.time - b.born < 420) continue; // saved up for: give it time
+      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield' || b.type === 'launchpad' || b.type === 'mdriver' || b.type === 'catcher') && S.time - b.born < 420) continue; // saved up for: give it time
       if (BDEFS[b.type].mega) continue; // (a megastructure is saved up for as long as it takes: see aiMega)
       const cost = siteCost(b);
       let stuck = false;
@@ -581,12 +581,18 @@ function aiThink(p) {
   // flies its warbots across (aiAir).
   const airN = aiAirFields(p, me);
   if (airN && (counts.airfield || 0) < airN) plan = [['airfield', airN]].concat(plan.filter(([t]) => t !== 'airfield'));
-  if (counts.airfield && !P.airFuel) {
+  // Out in space: Launch Pads for its craft, and Point-Defence against Gunships (aiSpace).
+  if (S.space) {
+    const padN = aiPads(p, me, counts), pdN = aiPDs(p);
+    if (padN && (counts.launchpad || 0) < padN) plan = [['launchpad', padN]].concat(plan.filter(([t]) => t !== 'launchpad'));
+    if (pdN && (counts.pdturret || 0) < pdN) plan = [['pdturret', pdN]].concat(plan.filter(([t]) => t !== 'pdturret'));
+  }
+  if ((counts.airfield || counts.launchpad) && !P.airFuel) {
     const pumps = me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length;
     const type = pumps > (counts.refinery || 0) ? 'refinery' : aiFindSpot(p, 'farm', lander) ? 'farm' : pumps || aiFindSpot(p, 'pump', lander) ? 'refinery' : 'farm';
     P.airFuel = { type, n: (counts[type] || 0) + 1 };
   }
-  const airFuel = P.airFuel && counts.airfield && (counts[P.airFuel.type] || 0) < P.airFuel.n ? P.airFuel : null;
+  const airFuel = P.airFuel && (counts.airfield || counts.launchpad) && (counts[P.airFuel.type] || 0) < P.airFuel.n ? P.airFuel : null;
   if (airFuel) {
     plan = [[airFuel.type, airFuel.n]].concat(plan);
     if (airFuel.type === 'refinery' && !counts.pump) plan = [['pump', 1]].concat(plan); // (a Refinery waits for a pump)
@@ -843,15 +849,17 @@ function aiThink(p) {
   const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - defAt) / FT.every)) + (aiMurCut(P) ? 1 : 0);
   const defence = (type) => (S.mode !== 'colony' || !!S.horde) && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
-     (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2) ||
+     (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === airGun && enemyAir && (counts[airGun] || 0) < 2) || (type === 'pdturret' && !!S.space && (counts.pdturret || 0) < aiPDs(p)) ||
      (type === 'keep' && wantKeeps > 0));
   // Only Fuel Stations charge robots: the first one comes before anything else.
   // Flak once a rival has aircraft: two Flak Guns by the Command Base (and Ammo to feed them).
-  const enemyAir = S.bots.some((u) => !u.dead && foes(u.owner, p) && BOTS[u.type].air) ||
+  // (Out in space: Gunships, or a rival's Launch Pad from AI_SPACE.pd, and Point-Defence in the Flak Gun's place.)
+  const airGun = S.space ? 'pdturret' : 'flak';
+  const enemyAir = S.space ? S.bots.some((u) => !u.dead && foes(u.owner, p) && BOTS[u.type].gunship) || (S.time >= AI_SPACE.pd && S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && foes(b.owner, p) && BDEFS[b.type].pad)) : S.bots.some((u) => !u.dead && foes(u.owner, p) && BOTS[u.type].air) ||
     S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && foes(b.owner, p) && BDEFS[b.type].airfield);
-  if (enemyAir && S.mode !== 'colony' && (counts.flak || 0) < 2 && !plan.some(([t]) => t === 'flak')) plan = [['flak', 2]].concat(plan); // (a copy: AI_PLAN is shared)
+  if (enemyAir && S.mode !== 'colony' && (counts[airGun] || 0) < 2 && !plan.some(([t]) => t === airGun)) plan = [[airGun, 2]].concat(plan); // (a copy: AI_PLAN is shared)
   // The first Flak Gun doesn't wait for a free site (nothing else goes past the usual limit for it).
-  const flakFirst = enemyAir && S.mode !== 'colony' && !counts.flak, capBefore = Math.max(siteCap, maxSites + 1);
+  const flakFirst = enemyAir && S.mode !== 'colony' && !counts[airGun], capBefore = Math.max(siteCap, maxSites + 1);
   if (flakFirst) siteCap = Math.max(capBefore, sites + 1);
   // Uplinks: the Bunker for an Uplink it holds goes first, past the usual limit on sites, once they're nearly online.
   const upFirst = !!(P.defWant && P.defWant.up && S.time < P.defWant.until && S.time >= UPLINK.online - 60 && (counts.bunker || 0) < P.defWant.n);
@@ -912,7 +920,7 @@ function aiThink(p) {
       if (sites >= maxSites && (cementStarved || fiberStarved || starved.length || tradeFirst) &&
           !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') &&
           !starved.includes(type) && !(tradeFirst && type === 'terminal')) continue;
-      if (flakFirst && sites >= capBefore && type !== 'flak' && !restoreCharge) continue;
+      if (flakFirst && sites >= capBefore && type !== airGun && !restoreCharge) continue;
       if (upFirst && sites >= capBefore && type !== 'bunker' && !restoreCharge) continue;
       if (blobFirst && sites >= capBefore && type !== 'mortar' && !restoreCharge) continue;
       if (reactorFirst && sites >= capBefore && type !== 'reactor' && !restoreCharge) continue;
@@ -931,7 +939,7 @@ function aiThink(p) {
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10 && !(airFuel && (type === airFuel.type || type === 'pump'))) continue;
       if ((counts[type] || 0) >= want) continue;
       // (An Architect saves from early on: its first Ammo Plant and first turret don't wait for it.)
-      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !(type === 'flak' && flakFirst) && !BDEFS[type].nuke &&
+      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && type !== 'launchpad' && !(type === airGun && flakFirst) && !BDEFS[type].nuke &&
           !(st.missiles && !counts[type] && (type === 'turret' || type === 'armory')) && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
@@ -945,7 +953,7 @@ function aiThink(p) {
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
       // So is an Architect's Missile Factory or Silo: waiting for the whole price to lie in storage while the Foundry and
       // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
-      const defenceNow = (restoreCharge && counts.smelter && aiAffordable(p, type, ['alloy'])) || (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
+      const defenceNow = (restoreCharge && counts.smelter && aiAffordable(p, type, ['alloy'])) || (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) || (type === 'launchpad' && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) ||
         (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip'])) ||
         (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])) || // (the Hollow's first Refinery: see oilFirst)
         (type === 'mortar' && blobFirst && aiAffordable(p, type, ['alloy'])); // (against a blob: see blobFirst)
@@ -1378,6 +1386,7 @@ function aiThink(p) {
 
   // 4d) A gap with no crossing on foot (The Ring, Sky islands): Cargo Planes fly warbots over it.
   if (S.mode !== 'colony') aiAir(p, me, kinds, lvl);
+  if (S.space && S.mode !== 'colony') aiSpace(p, me, kinds, lvl); // (space: Launch Pads, the craft, Point-Defence)
 
   // 4d2) Orbital platforms: work the drawbridges whose control boxes we hold.
   if (S.orb && S.mode !== 'colony') aiBridges(p);
@@ -2026,7 +2035,7 @@ function aiAirStyle(p) { return AI_AIR_STYLE[S.players[p].style] || AI_AIR_STYLE
 /** Rivals of p to fly to: [{ q, L }]. Empty off The Ring and Sky islands (every way across is a Viaduct, a Ropeway or a flight there). */
 function aiAirFoes(p) {
   const out = [], sh = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0];
-  if (!sh || !(sh.asteroids || sh.sky || sh.orbital) || S.difficulty === 'easy' || !warOn() || worldBan('airfield') || botBanned(p, 'cargoplane')) return out;
+  if (!sh || !(sh.asteroids || sh.sky || sh.orbital) || S.difficulty === 'easy' || !warOn() || (spaceMap() ? worldBan('launchpad') || botBanned(p, 'dropship') : worldBan('airfield') || botBanned(p, 'cargoplane'))) return out; // (out in space a Dropship flies the band: aiSpace)
   for (let q = 0; q < S.players.length; q++) {
     const Q = S.players[q], L = getE(Q.lander);
     if (q === p || !foes(q, p) || isWild(q) || Q.out || Q.absent || !L || L.dead || L.owner !== q) continue;
@@ -2038,6 +2047,7 @@ function aiAirFoes(p) {
 /** How many Airfields rival p wants (0: none: it has no gap to fly over yet, or the basics aren't up). */
 function aiAirFields(p, me) {
   const P = S.players[p], st = aiAirStyle(p);
+  if (spaceMap()) return 0; // (out in space: Launch Pads, aiPads)
   if (S.time < st.at - 240 || aiArmyOf(p) < AI_AIR.first || !me.some((b) => b.type === 'armory' && b.built) || !me.some((b) => b.type === 'foundry' && b.built)) return 0;
   if (!aiAirFoes(p).length) return 0;
   // (A second Airfield and plane once there is an army worth carrying: Chips go to the first plane, then to warbots.)
@@ -2053,11 +2063,12 @@ function aiAirPlanes(p) {
 /** Cargo Planes of p, and the ones parked ready (idle, at their Airfield, with a tank to fly). */
 function aiPlanes(p) {
   const all = [], ready = [];
+  const kind = spaceMap() ? 'dropship' : 'cargoplane'; // (out in space the band flies in a Dropship)
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p || u.type !== 'cargoplane') continue;
+    if (u.dead || u.owner !== p || u.type !== kind) continue;
     all.push(u);
-    const b = planeBase(u);
-    if (b && u.inside === b.id && !u.mission && !u.flight) ready.push(u);
+    const b = kind === 'dropship' ? craftPad(u) : planeBase(u);
+    if (b && u.inside === b.id && !u.mission && !u.flight && !u.sf) ready.push(u);
   }
   return { all, ready };
 }
@@ -2072,7 +2083,7 @@ function aiAirSpot(p, pl, T) {
   dangerMap(p);
   const guns = DANGER.guns[p] || [];
   const forts = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && BDEFS[e.type].mil && !BDEFS[e.type].bunker && e.garrison && e.garrison.length && dist2(e.x, e.y, T.x, T.y) <= (R + 8) * (R + 8));
-  const flak = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && BDEFS[e.type].flak), base = planeBase(pl);
+  const craft = BOTS[pl.type].craft, flak = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && (craft ? BDEFS[e.type].pd : BDEFS[e.type].flak)), base = craft ? craftPad(pl) : planeBase(pl);
   let best = null, bs = Infinity;
   for (let j = Math.max(1, T.y - R); j <= Math.min(S.H - 2, T.y + R); j++) for (let i = Math.max(1, T.x - R); i <= Math.min(S.W - 2, T.x + R); i++) {
     const t = tIdx(i, j), d = dist(i, j, T.x, T.y);
@@ -2082,7 +2093,7 @@ function aiAirSpot(p, pl, T) {
     if (cover) continue;
     for (const e of forts) if (dist2(e.x, e.y, i, j) <= (SORTIE_REACH + 2) * (SORTIE_REACH + 2)) cover++;
     const sc = cover * 10 + (S.owner[t] >= 0 && S.owner[t] !== p ? 3 : 0) + d * 0.4;
-    if (sc >= bs || (flak.length && base && aiAirFlak(flak, base.x, base.y, i + 0.5, j + 0.5)) || airdropBlocked(p, pl, 'warbot', i, j)) continue;
+    if (sc >= bs || (flak.length && base && aiAirFlak(flak, base.x, base.y, i + 0.5, j + 0.5)) || (craft ? !craftLandable(t, pl) || rampTile(t) < 0 : airdropBlocked(p, pl, 'warbot', i, j))) continue;
     bs = sc; best = { i, j };
   }
   return best;
@@ -2090,7 +2101,7 @@ function aiAirSpot(p, pl, T) {
 
 /** Does a Flak Gun of `flak` reach the plane's way from (x0, y0) to (x1, y1) (its range and a margin from the line, or the spot's)? */
 function aiAirFlak(flak, x0, y0, x1, y1) {
-  const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1, m = BDEFS.flak.range + 3;
+  const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1, m = (flak[0] && BDEFS[flak[0].type].pd ? BDEFS.pdturret.range : BDEFS.flak.range) + 3;
   for (const f of flak) {
     const k = clamp(((f.x + 0.5 - x0) * dx + (f.y + 0.5 - y0) * dy) / l2, 0, 1);
     if (dist2(f.x + 0.5, f.y + 0.5, x0 + dx * k, y0 + dy * k) <= m * m || dist2(f.x + 0.5, f.y + 0.5, x1, y1) <= (m + 2) * (m + 2)) return true;
@@ -2143,7 +2154,7 @@ function aiAir(p, me, kinds, lvl) {
   if (S.time < st.at - 240 || !me.some((b) => b.type === 'foundry' && b.built) || aiArmyOf(p) < AI_AIR.first) return;
   // The planes: each Airfield's hangar builds a Cargo Plane (up to what the doctrine keeps).
   const { all, ready } = aiPlanes(p);
-  const fields = me.filter((b) => b.built && BDEFS[b.type].airfield);
+  const fields = spaceMap() ? [] : me.filter((b) => b.built && BDEFS[b.type].airfield); // (out in space aiSpace orders the Dropship)
   let have = all.length;
   for (const b of fields) if (b.yard && b.yard.cargoplane > 0) have += b.yard.cargoplane;
   const want = have ? aiAirPlanes(p) : 1; // (more planes wait for an army)
@@ -2204,9 +2215,9 @@ function aiAir(p, me, kinds, lvl) {
     for (const u of ready) {
       const want = B.need + st.more - nHave - coming;
       if (want <= 0) break;
-      const base = planeBase(u), avail = rallyAvailable(p, base.x, base.y, true);
+      const sp = BOTS[u.type].craft, base = sp ? craftPad(u) : planeBase(u), avail = rallyAvailable(p, base.x, base.y, true);
       if (avail < Math.min(2, want)) continue;
-      const n = Math.min(AI_AIR.flight, avail, want), why = orderAirdrop(p, u, 'warbot', B.i, B.j, n);
+      const n = Math.min(sp ? BOTS[u.type].seats : AI_AIR.flight, avail, want), why = sp ? orderSquad(p, u, B.i, B.j, null, 'warbot', n) : orderAirdrop(p, u, 'warbot', B.i, B.j, n);
       if (why) { B.fails = (B.fails || 0) + 1; if (B.fails >= AI_AIR.tries) { aiAirEnd(P, 'flights failed', 0); return; } continue; }
       B.fails = 0; B.sent += n; coming += n;
     }
@@ -2215,7 +2226,7 @@ function aiAir(p, me, kinds, lvl) {
   // No band under way: start one, with the lead over a rival across the gap, a plane ready, warbots to spare.
   if (!ready.length || S.time < lvl.grace || S.time - (P.airLast || -999) < AI_AIR.gap || S.time < (P.airTry || 0) || army < lvl.threshold + 2) return;
   P.airTry = S.time + 20;
-  const pl = ready[0], base = planeBase(pl), avail = rallyAvailable(p, base.x, base.y, true);
+  const pl = ready[0], base = BOTS[pl.type].craft ? craftPad(pl) : planeBase(pl), avail = rallyAvailable(p, base.x, base.y, true);
   if (avail < Math.min(4, lvl.threshold)) return;
   let best = null;
   for (const { q } of foesAir) { const n = aiArmyOf(q); if (army >= n * st.lead + st.more && (!best || n < best.n)) best = { q, n }; }
@@ -2236,7 +2247,7 @@ function aiAir(p, me, kinds, lvl) {
     const spot = none.has(c.b.id) ? null : aiAirSpot(p, pl, c.b);
     if (!spot) { for (const e of cands) if (dist2(e.b.x, e.b.y, c.b.x, c.b.y) <= 36) none.add(e.b.id); continue; }
     P.air = { i: spot.i, j: spot.j, tgt: c.b.id, need: c.need, since: S.time, go: 0, rid: 0, sent: 0, fails: 0 };
-    const n = Math.min(AI_AIR.flight, avail), why = orderAirdrop(p, pl, 'warbot', spot.i, spot.j, n);
+    const n = Math.min(BOTS[pl.type].craft ? BOTS[pl.type].seats : AI_AIR.flight, avail), why = BOTS[pl.type].craft ? orderSquad(p, pl, spot.i, spot.j, null, 'warbot', n) : orderAirdrop(p, pl, 'warbot', spot.i, spot.j, n);
     if (why) { P.air = null; P.airLast = S.time - 30; return; }
     P.air.sent = n;
     return;
@@ -5071,6 +5082,8 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
           }
           if (near < Infinity) s += Math.max(0, 44 - near) * 0.9; // (stronger than the pull toward the enemy base)
         }
+        // Space: a derelict module its land would cover, not ours yet (the Hulk's haul most of all).
+        if (S.space) for (const m of S.space.mods) { if (modHolder(m) === p) continue; const dm = dist(i, j, m.x + 1, m.y + 1); if (dm <= BDEFS.outpost.terr - 1) s += (m.k === 'hulk' && !m.done ? 26 : 16) - dm; }
         // Crossroads for three: the rich quarter no one landed in draws expansion too.
         if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
         // Head for whatever we're running out of.
@@ -5910,4 +5923,114 @@ function aiDam(p, lander) {
     const r = sendToRally(p, t % S.W, (t / S.W) | 0, Math.min(avail, 16), true, false, true);
     if (r && r.sent && r.rally) { R[k] = r.rally.id; (P.damGo = P.damGo || {})[k] = S.time; }
   });
+}
+
+/*
+ * Space (spaceMap: The Ring, Orbital platforms): how a rival uses spacecraft and Point-Defence (every think).
+ *   - A Launch Pad once its Bot Foundry stands, from AI_SPACE.pad s (a second from AI_SPACE.pad2 s, or a bigger army).
+ *   - Its yards build a Dropship (with a gap to fly over: aiAir flies the warbots across in it, as it would in a Cargo
+ *     Plane), a Shuttle (from AI_SPACE.shuttle s) and, Medium and up, Gunships (from AI_SPACE.gun s, up to its `guns`).
+ *   - The Shuttle keeps its cut-off places stocked (Supply by air: an Outpost or Depot of its no road from home reaches)
+ *     and, short of Ore or Crystal, tows a passing asteroid of it home (once every AI_SPACE.towGap s).
+ *   - The Gunships go after the richest enemy building no Point-Defence Turret covers (its range and `pdMargin` more),
+ *     a new target every AI_SPACE.gunEvery s; with none, they wait on guard at their pad.
+ *   - Point-Defence: one from AI_SPACE.pd s, and one more for every two enemy Gunships (up to `pdMost`), at once if the
+ *     enemy has any.
+ *   - Its Outposts lean toward the derelict modules no one holds (aiSearchSpot).
+ */
+const AI_SPACE = { pad: 360, pad2: 900, shuttle: 480, gun: 720, guns: { easy: 0, medium: 1, normal: 2, hard: 3, warlord: 3 }, gunEvery: 20, pdMargin: 1.5,
+  pd: 840, pdMost: 3, towGap: 150, towShort: 25, supplyEvery: 30 };
+/** How much a rival's Gunships want to wreck each kind of enemy building (the rest: 2). */
+const AI_GUN_VALUE = { launchpad: 9, foundry: 8, smelter: 7, fab: 7, refinery: 6, armory: 6, generator: 5, pump: 4, mine: 4, tap: 4, depot: 3, outpost: 3, turret: 3, minigun: 3, charger: 3 };
+
+/** How many Launch Pads rival p wants now. */
+function aiPads(p, me, kinds) {
+  if (!S.space || worldBan('launchpad') || !me.some((b) => b.type === 'foundry' && b.built)) return 0;
+  if (S.time < AI_SPACE.pad) return 0;
+  return S.time >= AI_SPACE.pad2 || aiArmyOf(p) >= AI_AIR.second ? 2 : 1;
+}
+/** How many Point-Defence Turrets rival p wants now. */
+function aiPDs(p) {
+  if (!S.space || !warOn() || worldBan('pdturret')) return 0;
+  let foeGuns = 0;
+  for (const u of S.bots) if (!u.dead && BOTS[u.type].gunship && foes(u.owner, p)) foeGuns++;
+  if (!foeGuns && S.time < AI_SPACE.pd) return 0;
+  return Math.min(AI_SPACE.pdMost, 1 + Math.floor(foeGuns / 2));
+}
+
+/** Rival p's craft of `kind`, built and on order at its pads. */
+function aiCraftCount(p, me, kind) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === kind) n++;
+  for (const b of me) if (b.built && BDEFS[b.type].pad && b.yard && b.yard[kind] > 0) n += b.yard[kind];
+  return n;
+}
+/** Order one more `kind` at a pad of p's with room for it (the emptiest first). */
+function aiOrderCraft(p, me, kind) {
+  const pads = me.filter((b) => b.built && BDEFS[b.type].pad && !b.dead);
+  let best = null, bn = Infinity;
+  for (const b of pads) {
+    const n = padCraft(b).length + (b.yard ? sumValues(b.yard) : 0);
+    if (n < SPACE.holds && n < bn) { bn = n; best = b; }
+  }
+  if (best) orderAtYard(best, kind, 1);
+  return !!best;
+}
+
+/** The enemy building rival p's Gunships go after: the most worth wrecking that no Point-Defence covers, nearer home first. */
+function aiGunTarget(p, from) {
+  const pds = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && BDEFS[e.type].pd);
+  const R = BDEFS.pdturret.range + AI_SPACE.pdMargin;
+  let best = null, bs = -Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner < 0 || !foes(b.owner, p) || isWild(b.owner) || BDEFS[b.type].wild || BDEFS[b.type].pd || BDEFS[b.type].viaduct || BDEFS[b.type].ropeway || BDEFS[b.type].barrier || calmB(b) || captureOnly(b)) continue; // (never the spans: its own army crosses on the land they join)
+    const c = bCentre(b);
+    if (pds.some((d) => dist2(d.x + 0.5, d.y + 0.5, c.x, c.y) <= R * R)) continue;
+    const s = (AI_GUN_VALUE[b.type] || 2) - dist(c.x, c.y, from.x, from.y) * 0.06;
+    if (s > bs) { bs = s; best = b; }
+  }
+  return best;
+}
+
+function aiSpace(p, me, kinds, lvl) {
+  const P = S.players[p], L = getE(P.lander);
+  if (!L || L.dead) return;
+  const pads = me.filter((b) => b.built && BDEFS[b.type].pad);
+  if (!pads.length) return;
+  // The craft: a Dropship for a gap (aiAir flies it), a Shuttle, Gunships.
+  if (aiAirFoes(p).length && aiCraftCount(p, me, 'dropship') < 1) aiOrderCraft(p, me, 'dropship');
+  if (S.time >= AI_SPACE.shuttle && aiCraftCount(p, me, 'shuttle') < 1) aiOrderCraft(p, me, 'shuttle');
+  const gunWant = warOn() && S.time >= AI_SPACE.gun ? AI_SPACE.guns[S.difficulty] ?? 1 : 0;
+  if (aiCraftCount(p, me, 'gunship') < gunWant) aiOrderCraft(p, me, 'gunship');
+  // Logistics: its places no road from home reaches are supplied by Shuttle.
+  if (S.time - (P.spSupT ?? -999) >= AI_SPACE.supplyEvery && S.bots.some((u) => !u.dead && u.owner === p && u.type === 'shuttle')) {
+    P.spSupT = S.time;
+    for (const b of me) if (b.built && !b.airSupply && (BDEFS[b.type].mil || BDEFS[b.type].store) && b.type !== 'lander' && !BDEFS[b.type].pad && airSuppliable(b) && !onHomeNet(b)) b.airSupply = true;
+  }
+  // Towing: short of Ore or Crystal, a passing asteroid of it.
+  if (S.time - (P.spTowT ?? -999) >= AI_SPACE.towGap) {
+    const sh = S.bots.find((u) => !u.dead && u.owner === p && u.type === 'shuttle' && !u.mission && !u.sf && craftPad(u) && u.inside === craftPad(u).id && u.bat > 60);
+    if (sh) {
+      const want = ['ore', 'crystal'].filter((g) => goodTotal(p, g) < AI_SPACE.towShort);
+      const pad = craftPad(sh);
+      let best = null, bd = Infinity;
+      for (const r of S.space.rocks) {
+        if (r.gone || r.tow || !want.includes(r.k) || r.amt < 10 || S.bots.some((v) => !v.dead && v.mission && v.mission.kind === 'tow' && v.mission.rock === r.id)) continue;
+        const q = rockPos(r), d = dist2(q.x, q.y, pad.x + 1, pad.y + 1);
+        if (d < bd) { bd = d; best = r; }
+      }
+      if (best && !orderTow(p, sh, best.id)) P.spTowT = S.time;
+    }
+  }
+  // Gunships: off at the richest enemy building no Point-Defence covers, or home on guard.
+  if (S.time - (P.spGunT ?? -999) >= AI_SPACE.gunEvery) {
+    P.spGunT = S.time;
+    const guns = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].gunship);
+    const ready = guns.filter((u) => !(u.task && u.task.type === 'attack' && gunshipGoal(u)) && u.bat >= SPACE.low + 25 && u.hp >= u.maxHp * 0.7);
+    if (ready.length && warOn() && S.time >= lvl.grace) {
+      const T = aiGunTarget(p, L);
+      if (T) orderGunships(p, ready.map((u) => u.id), 'attack', T.id);
+      else orderGunships(p, ready.filter((u) => u.task && !u.task.guard).map((u) => u.id), 'home');
+    }
+  }
 }

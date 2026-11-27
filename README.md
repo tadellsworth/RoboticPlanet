@@ -532,8 +532,8 @@ refuses it (so no road, Sky bridge, pipe or track over it), `computeTerritory` l
 rim), `addLoot` lets crates that fall into it go, a plane that crashes into it only explodes (`wreckGround`) and a Viaduct
 (`viaductBlocked`: no `dip` test needed beyond `T_CHASM`) or a Ropeway spans it; a robot on a span that comes down goes back to the
 end it set out from, as anywhere. Airdrops, Drop Outposts, Mooring Masts and every building need ground (`T_GROUND`), so
-nothing can be put into space: `airdropBlocked` refuses a drop over it. Flight is as anywhere (Ring Crystal keeps craft aloft, LORE.md): Cargo
-Plane drops, Airships and Masts, Vulcan Bombers, Missiles. There are no ships or Ferries (no water).
+nothing can be put into space. Nothing flies on wings out here: spacecraft from Launch Pads instead (Shuttles, Dropships, Gunships), and
+Missiles (see **Space** below). There are no ships or Ferries (no water).
 **Look and rules**: `newGame` sets the biome to Lunar whatever the Biome setting (and drops the second biome), so Argos's art, cliffs
 (the canyon wall under each rim) and rules hold: silent (no Murmur, which `noMurmur` also says), no weather, no Arrival City or Atmosphere Engine
 (`worldBan`), no Crystal from the Deep Core; the new-game Biome row reads *set by the map: The Ring* (`biomeForced` in js/ui.js,
@@ -548,7 +548,7 @@ offsets from the Command Base) and richer ones lie further out, the Ore and Crys
 edge cut the stamp (`field` in `ringMap`, Nov 27 2026: a seed could leave one Crystal tile), each home asteroid is topped up to `RING.stone` Stone, and Ore, Crystal, Stalk and
 Stone hold `RING.mul` (1.25) times the usual. **Trade Posts and Uplinks** use the usual rules (`placePosts`, `placeUplinks`) and land on
 the middle rock and the two side rocks (three Posts) and on the middle rock and the stones (Uplinks), all reachable by span. **The rival**
-crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in Cargo Planes (`aiAir`, see *The rival's aircraft* under the AI); the map is laid out so every gap on the way is
+crosses with Viaducts (`aiBridge` → `aiViaductSpot`; the void is no sea to bridge) and, Medium and up, flies warbots over in a Dropship (`aiAir` with `aiSpace`, see **Space** below); the map is laid out so every gap on the way is
 short enough (the longest span the sides' chain needs is 4 to 7 tiles, `RING.gap`). **The look** (js/ring.js, display only; ART_GUIDE.md, Batch 40): the space
 behind the map (`ringSpace`, drawn instead of the off-map land, `R.void`) is high orbit round Ithaca I, painted as pictures
 (`art/ring/`, made by `tools/ringsky/ringsky.py`): the deep sky (the galaxy's band, faint nebulae, a grain of far stars) with two
@@ -575,7 +575,7 @@ Accord station decks high over the planet, joined by **drawbridges** that a colo
 (js/world.js, called first by `generateMap`) lays it out point-symmetric to the tile (`tools/map-symmetry-test.js`). The map is 1.2 × the
 size's in each direction (Medium 48 × 68). **Decks**: rectangles with their corners cut, level ground, the space between them `T_CHASM` that
 `voidTile` treats as on The Ring (`ringShape` is true for both maps: nothing is built on it or laid across it; a Viaduct or Ropeway still
-spans it, and aircraft, Airships and Missiles fly over). Small and Medium have **five decks** (a home deck at each end, a big middle deck, and a
+spans it, and spacecraft and Missiles fly over). Small and Medium have **five decks** (a home deck at each end, a big middle deck, and a
 side deck to each side of it, each over or under a home deck) and six bridges; Large and up have **seven** (the same homes and a tall middle
 deck, and two side decks on each side) and eight bridges (`ORBITAL` in js/defs.js; `S.orb`: `plats`, `br`, `bx`, `ver`).
 **Bridges**: a strip of three tiles across a gap of `g` tiles (4 to 7, by map height). Down, its tiles are ground (walkable, pathable, plated with
@@ -623,8 +623,98 @@ Standard's 17); raised, it is cut, and goods cross by Viaduct (which spans a rai
 **The rival** (`aiBridges`, `AI_BRIDGE`, js/ai.js): lowers a raised bridge of its own once 45 to 90 s have passed (by level) and the enemy
 warbots near it are fewer than 3, at once if its home deck is cut off from yours, and never shuts itself in; Medium and up raise a bridge
 of theirs (nothing on it) when three or more of your warbots stand on its far deck within 16 tiles and outnumber its own on the near deck, none of its own is out there,
-at most two of its bridges are up, and not before minute 4. It crosses by the bridges (they start down) and flies as on The Ring (`aiAir` is
-allowed here too).
+at most two of its bridges are up, and not before minute 4. It crosses by the bridges (they start down) and flies over them in a Dropship as on
+The Ring (`aiAir` is allowed here too).
+
+**Space: spacecraft, Point-Defence, drifting asteroids and derelict modules** (space expansion, phase 1: the owner's design and
+picks, Nov 2026; `SPACE`, `GUNSHIP`, `PDT`, `DRIFT`, `DERELICT` in js/defs.js; the rules at the end of js/sim.js; the look in
+js/space.js; the panels in js/space-ui.js). On the two maps out in space (`spaceMap()`: The Ring and Orbital platforms, `ringShape`)
+nothing flies on wings and the Flak Gun has no place: `spaceOff` (js/world.js, first in `worldBan`) refuses the Airfield, Mooring Mast
+and Flak Gun there and the Launch Pad and Point-Defence Turret (`BDEFS[type].space`) anywhere else, the build menu leaves them out
+(`spaceHidden`), and `spaceBotOff` (in `botBanned`) bars every aircraft (`BOTS[k].air`: Cargo Plane, Vulcan Bomber, Airship) out in
+space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them and no order makes one. Missiles and nukes still fly.
+- **Launch Pad** (`BDEFS.launchpad`: 2 by 2, `foot: 2`; 8 Cement, 4 Alloy, 2 Chips; `store`, `pad`). Its yard (`yard: shuttle, dropship,
+  gunship`; `updateYard`, `yardOpen` → `padRoom`) builds the craft, which are based on it (`u.home`), `SPACE.holds` (2) to a pad, parked
+  inside it (`u.inside`, `parkCraft`: the first in the cradle's middle, the second beside it). Parked, a craft mends `SPACE.mend` a second and
+  fills its tank, `SPACE.fill` (25) of it a Fuel, from the `SPACE.padFuel` (8) Fuel the pad keeps (`padKeep`, through `needsOf`: Tankers
+  bring it; and what the places its Shuttles supply are short of, as an Airfield's `airKeep`).
+- **Flight** (`u.sf`: `ph` 'up', 'go', 'hold', 'down', 'ground'; `craftFly`): straight up over `SPACE.climb` s (`u.alt` 0 to 1), a turn on
+  the spot (`SPACE.turn` rad/s) and straight there (accelerating, braking to stop over it), straight down onto the pad or any flat, free
+  ground (`craftLandable`: ground, walkable, no building, slope, drawbridge strip, deposit or craft already down; `craftLandSpot` takes the
+  nearest within a few tiles). No runway. The tank drains `SPACE.burn` a second in the air. In the air (`alt` over 0.3) a craft is `aloft`
+  and left out by `nearestEnemyBot`: only Point-Defence (`craftNear`) and Gunships hit it (`craftHit`; down to 0 it breaks up, and its
+  passengers and promised load go with it: `craftLost`, from `killBot`). A craft that passes within a rock's size of a drifting asteroid takes
+  `SPACE.bump` (2), once a `SPACE.bumpGap` (3) s (`craftBumps`).
+- **Shuttle** (`BOTS.shuttle`, 4 rounds, 10 goods): the space Cargo Plane. A pad's nearest Shuttle (`airBaseNear` counts a pad with a Shuttle)
+  takes `airSupplyRun` as a Cargo Plane does, for the places switched to Supply by air: it loads (`SPACE.load` s), lands beside the place
+  (`craftLandSpot`, or hovers over it and lowers the goods on its winch with nowhere to land), hands the load over (`craftUnload`: `inc` to
+  `stock`, `b.airIn`), and flies home. **Towing** (order `tow`, `orderTow`): to an Ore or Crystal rock, hooks it (`r.tow`), flies home at
+  `SPACE.tow` (0.45) of its speed with the rock on its cable 1.3 tiles behind (`spaceTick`), and over its pad the rock is broken up
+  (`rockToField`) into up to `DRIFT.tiles` (6) deposit tiles on free ground beside the pad (its Ore or Crystal shared among them; with no
+  room, into the pad's stock).
+- **Dropship** (`BOTS.dropship`, 5 rounds, `seats` 6): order `squad` (`orderSquad`): the robots picked (any that walk: warbots and Workers),
+  or up to n Warbots from the garrisons (`rallySources`, `takeArmed`, as a march) or idle Workers. They walk to its pad and board (`doBoard`,
+  `ferryWait` with `ferry` the Dropship: they ride with it), it waits for them (up to `SPACE.gather` s), flies to the spot, lands, lowers its
+  stern ramp (`u.ramp`, `SPACE.ramp` s) and lets them out one every `SPACE.out` s onto the tile behind it (`rampTile`, `squadOut`): warbots
+  hold the spot under a flag (on the spot ordered, so a rival's band finds it: see `aiAir`), Workers go to work; then it flies home. The order
+  for the AI is the Cargo Plane's (`u.mission.kind` 'warbot'). With a mouse, robots selected with a Dropship and a right-click on ground do it
+  (`spaceCommand`).
+- **Gunship** (`BOTS.gunship`: `war`, 6 rounds of 2 Alloy and 2 Chips, 14 hit points). Army orders, not `army` (it is no warbot: no garrison,
+  no march): the `command` order (js/orders.js) hands any craft in the selection to `spaceCommand` first: a rival building tapped → `attack`, a
+  rival robot or craft → `hunt`, its own Launch Pad → home, any tile (the void too) → `hold` there (`orderGunships`; the panel's buttons and the
+  `gunships` order do the same). `updateGunship`: off its pad when it has an order (and a tank and hull to fly on), it keeps `GUNSHIP.hold`
+  tiles off its goal; every `GUNSHIP.reload` s it fires a laser bolt (`addFx('laser')`) at what's in `GUNSHIP.range`: enemy craft first,
+  then armed robots, then other robots, then its goal, then any enemy building (`gunshipTarget`): `craft` off a craft, `bot` off a robot,
+  `bld` off a building (`laserHit`, as a bomb: a Command Base or Keep is held at its `missileFloor`, anything else wrecked at 0). Its goal gone,
+  it takes the nearest enemy building within 6 tiles or holds where it is. Below `SPACE.low` tank or `SPACE.hurt` of its hull it flies home.
+  Parked with no order, it is **on guard**: an enemy craft or armed robot within `SPACE.guard` (8) tiles of its pad and it goes up after it.
+- **Point-Defence Turret** (`BDEFS.pdturret`: `pd`, 7 tiles, Ammo; `updatePD`; in `DEFENCE_TYPES`, aimable like the other guns: `canFocus`):
+  the nearest enemy craft in the air in reach, Gunships first (`craftNear`), else an enemy robot within `PDT.ground` (3); turns (`PDT.turn`),
+  spins up (`PDT.spin` s), then a burst every `PDT.reload` s: `PDT.craft` (1.5) off a craft, `PDT.bot` (0.8) off a robot, `PDT.rounds` (30)
+  bursts an Ammo. A Gunship lasts about 2 seconds under one.
+- **Drifting asteroids** (`S.space.lanes`, `S.space.rocks`; `spaceSetup` in `newGame`, after the Trade Posts and Uplinks, from the seed's own
+  `makeRng` stream so nothing else in the map changes). A lane is a straight run of void at least `DRIFT.clear` (2) tiles from any ground,
+  drawbridge strip or the map's edge (a Chebyshev clearance field), `DRIFT.len` (8 to 26) tiles long, through a point on colony 0's side;
+  an Ore or Crystal lane passes within `DRIFT.reach - 2` of some ground. Each lane has its twin by the half turn (and each rock its twin, in
+  step), so both colonies meet the same: `DRIFT.kinds` (The Ring: Ore, Crystal and two plain; Orbital platforms: Ore, Crystal and plain, each a
+  pair). A rock's place is worked out from the time alone (`rockPos`: it swings along its lane and back, easing at each end, at about
+  `DRIFT.speed` tiles a second; deterministic trig), so drifting costs nothing a tick and nothing is saved but each rock's `t0`, phase, `amt`,
+  `tow` and `gone`. Once a second (`rockTick`) a staffed Mine or Crystal Tap within `DRIFT.reach` (5) tiles of a passing Ore or Crystal rock
+  mines it, `DRIFT.mine` a second, into its store (`driftReach` keeps such a gatherer from being "dry": `updateDepleted`); a rock mined out or
+  towed away comes back in on its lane `DRIFT.respawn` (240) s later, in step with its twin where it can be (`rockIn`).
+- **Derelict modules** (`S.space.mods`: `DERELICT`; a pair of each kind: Solar Array, Docking Ring, Salvage Hulk). Old Accord modules adrift,
+  moored off the decks and rocks: each is 2 by 2 tiles of void with ground within two tiles, off every lane, `DERELICT.apart` from the others,
+  the Trade Posts and Uplinks and `DERELICT.base` from every Command Base, outside every colony's starting land, the Solar Array nearest home and
+  the Hulk furthest; its twin by the half turn. The void is no one's land (`computeTerritory`), so a module is held (`modTick`, once a second)
+  by the colony whose land takes in its **shore tile** (`m.st`, `modShore`: the ground tile nearest its middle), unless an armed robot of
+  another colony stands within `DERELICT.jam` + 1 tiles of its middle (`m.jam`): then no one holds it (`modHolder`). **Solar Array**: its
+  holder's factories and the like (`work`, `t3pow`) within `DERELICT.solar.reach` (6) tiles are boosted as by a Generator, with no Fuel
+  (`boostUntil`), and a Maglev Terminal or Mass Driver end there has power (`solarNear` in `magPowered`). **Docking Ring**: its holder's
+  Shuttles fly `SPACE.dock` (1.35) times as fast (`dockHeld` in `craftSpeed`). **Salvage Hulk**: the first colony to hold it gets
+  `DERELICT.hulk.haul` (18 Alloy, 10 Chips) into its Command Base, once (`m.done`, `m.by`). Salvage is Alloy and Chips, no good of its own.
+  Placed in Versus on a space map (`newGame`); the mission *Into the Void* places its own.
+- **The rival** (`aiSpace`, `AI_SPACE` in js/ai.js; and `aiAir`): a Launch Pad from `AI_SPACE.pad` (6 minutes, with a Bot Foundry; a second
+  from `pad2` or a bigger army; `aiPads`), its yard's craft (`aiOrderCraft`): a Dropship whenever a rival lies across a gap (`aiAirFoes`), a
+  Shuttle from `shuttle`, and from `gun` its level's Gunships (`AI_SPACE.guns`: none on Easy). `aiAir`, the Cargo Plane band, flies the same
+  band in its Dropship on these maps (`aiPlanes` reads Dropships, `orderSquad` in place of `orderAirdrop`, six a flight, `aiAirSpot` keeps the
+  landing out of Point-Defence's reach and `squadBlocked`). Its Shuttle supplies its places no road from home reaches (it switches their Supply by
+  air on) and, short of Ore or Crystal, tows a passing rock home (once every `towGap` s). Its Gunships go after the richest building of yours
+  (`AI_GUN_VALUE`) no Point-Defence covers (`aiGunTarget`), a new target every `gunEvery` s, else they wait on guard. Point-Defence: one from
+  `pd` (14 minutes), at once and one more for every two of your Gunships (`aiPDs`, up to `pdMost`). Its Outposts lean toward the derelict modules
+  no one holds (`aiSearchSpot`).
+- **State, saves and lockstep.** Orders: `tow`, `squad`, `gunships`, `craftHome` (and `command`, `yard`). `S.space` is saved with the game and
+  checked by `checkSave` (`spaceCheckSave`); a space map saved before it gets its asteroids and derelicts on load. `hashState` takes in the
+  rocks, the modules, every craft's flight and job and every Point-Defence Turret's aim, only where `S.space` exists, so a planet map's hash is
+  as it was (seeded AI-vs-AI hashes on eight planet maps checked unchanged). Tests: `tools/space-test.js` (the ban, a pad and its yard, a Shuttle
+  run and a Dropship landing on Into the Void's cut-off deck, Gunships and Point-Defence, the rocks' lanes, twins and determinism, mining in
+  passing, towing, a bump, the modules' effects and jamming, a save made mid-flight, two runs alike).
+- **The look** (js/space.js, display only): the craft from the top, nose east (`craftArt`: flying, parked, the Dropship's ramp half and all the
+  way down), drawn a touch up the screen and bigger the higher they fly, with a hover bob, their lift thrusters' glow pulsing in code and a
+  shadow down-sun (`drawCraft`); parked ones on their pad with it (`spaceDrawBuilding`), the rest over everything after the aircraft
+  (`spaceDrawAir`, from the air layer: the modules, the rocks, the craft, the lasers, the tracers). Point-Defence picks its heading of 8. The
+  Gunship's laser (`drawLaserFx`) is a short bolt with a white-violet core (`#f3eeff`) and an indigo-violet glow (`#7d5cff`), its muzzle flash
+  and a flare where it hits; Point-Defence's tracers (`drawPdTracerFx`) orchid-white dashes (`#fff3fd` on `#ffb8ff`); the Murmur's violet
+  (`#a46cff`) is neither. Art: ART_GUIDE.md, Batch 41.
 
 **Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times

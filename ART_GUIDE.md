@@ -2097,6 +2097,63 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 43: Space expansion, phase 1: spacecraft, the Launch Pad, Point-Defence, drifting asteroids, derelict modules (installed; lasers, tracers, thruster glow, cables drawn in code)
+
+Space expansion phase 1 (Nov 2026; README, "Space") went through Claude Design: the concept canvas
+https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz showed two or three concepts of each in the Cargo Plane's armour
+language (faceted gunmetal, thin seams, team glow strips, a sensor visor, no canopy glass: nobody rides in them), in the
+game on The Ring and Orbital platforms by day and in eclipse. The owner's picks:
+
+- **Launch Pad: concept A, Cradle Ring**: a round blast deck on a plinth, a lattice service tower with a swing arm, two
+  fuel spheres, a hut. Accent **pad lilac `#d9c8ff`** on the deck's signal lamps.
+- **Shuttle: concept A, Frame Tug**: an open cargo frame with six containers in plain view, a sensor cab, four corner
+  thruster pods on outriggers, twin aft mains, a **tow claw** at the stern.
+- **Dropship: concept A, Clamshell**: a deep hull, thruster sponsons each side, four legs, a **stern ramp** the squad
+  walks out down.
+- **Gunship: concept A, Lancet** (the owner's pick over the designer's B): reworked for the game so it can never be taken
+  for the Vulcan Bomber at game zoom: short and broad-backed (an arrowhead, widest at the stern, not a long fuselage
+  with wings), two long cannon barrels running out past the nose like a tuning fork, short straight stubs ending in
+  round vertical lift pods and two more at the tail corners (four glowing discs from above), no jet nozzle, wings or tail
+  fins, and a team chevron across its back instead of the Vulcan's long double line. Its fire: **purple lasers**, drawn
+  in code (below).
+- **Point-Defence Turret: concept A, Twin Rotary**: an armoured drum, a yoke with two six-barrel rotary guns and a
+  fire-control radar dome between them, on the shared pad; tracers. Accent **orchid `#ffb8ff`**.
+- **Drifting asteroids**: plain (the Ring's grey-coral regolith), Ore-bearing (rust-orange nodules breaking the crust,
+  faint ember glints) and Crystal-bearing (violet Ring Crystal clusters, faintly glowing); a tow harness (a clamp band,
+  three claws, the cable led off west).
+- **Derelict modules**: the Solar Array (a solar wing on its truss), the Docking Ring and the Salvage Hulk (a stripped
+  transport hull, cargo spilling); derelict in Accord white with Trade Post amber lamps, captured lit in the holder's
+  team colour (the Hulk with a cutting rig clamped on).
+- The Graveyard's prize, "the Arbiter", is named for phase 2.
+
+Renders (`renderer/b/spacekit.js`, the shared kit; `ships.js` c=shuttle_a, drop_a, gun_a; `launchpad.js` v=a;
+`pdturret.js` v=a; `drift.js`; `module.js`; finished by `renderer/post/space_post.py`, which blooms the glow pass and
+paints the thrusters' plumes from the scene's nozzle marks; `renderer/tools/render_space.sh` (four renders at a time,
+raw passes deleted as it goes), then `install_space.py`: 192 files, about 2 MB, every one re-lit in
+`tod/<morning, evening, night>/`):
+
+| Art | What | Sizes |
+|---|---|---|
+| `bots/shuttle@T`, `shuttle-park@T` | the Shuttle straight down, nose east, 18 units across: flying (thrusters lit) and parked (gear down) | 320 |
+| `bots/dropship@T`, `dropship-park@T`, `dropship-ramp1@T`, `dropship-ramp2@T` | the Dropship, 18 units: flying, parked, its stern ramp half and all the way down (`bots=0`: its own robots left out, the game's walk out) | 320 |
+| `bots/gunship@T`, `gunship-park@T` | the Lancet, 15 units: flying and parked | 256 |
+| `buildings/launchpad@T` | the Cradle Ring, empty (the game parks its craft on it), the buildings' 57-degree view, drawn over its 2 by 2 tiles | 512 |
+| `buildings/pdturret-K@T` (`pdturret@T` is K 7, for the menus) | the Twin Rotary with its guns at heading K (K x 45 degrees clockwise from east; `rot` is -K x 45 in the scene), raised 30 degrees | 256 |
+| `space/rock-plain`, `rock-ore`, `rock-crystal`, `rock-ore-tow`, `rock-crystal-tow` | the drifting asteroids straight down (7 units in a 12-unit frame; in harness, a 16-unit frame) | 256 |
+| `space/mod-<k>`, `mod-<k>@T` (k solar, dock, hulk) | the derelict modules straight down, 26 units: derelict (no team) and captured | 384 |
+
+Drawn by js/space.js. **In code**: the craft's **hover bob** (a slow sine, up the screen), drawn a touch up the screen
+and 8% bigger at flying height, their **thruster glow** (four warm discs under the lift pods, `SPACE_LOOK.pods`,
+pulsing) and a soft shadow down-sun, further off the higher they fly; at night a pool of team light under each craft
+in the air. The **Gunship's laser** (`drawLaserFx`): a short bolt (0.8 tile) racing from the alternating nose cannon to
+the target in 0.11 s, a white-violet core `#f3eeff` in an indigo-violet glow `#7d5cff`, a muzzle flash, then a flare
+where it hits (a violet bloom and four short rays, `#b8a4ff`). The purple is bluer than the Murmur's violet (`#a46cff`,
+their nests and glow) and far from Point-Defence's pink orchid. **Point-Defence's tracers** (`drawPdTracerFx`):
+orchid-white dashes (`#fff3fd` core, `#ffb8ff` glow) from its twin muzzles, two a burst, and a light pool at night as it
+fires. A towed rock's **cable** from its harness to the Shuttle's claw (dark, a thin amber line along it). The modules
+bob slowly; a dashed ring round each shows its holder (team colour), no one (amber) or a jam (red, flashing); a
+stripped Hulk is shaded. With no art, plain shapes.
+
 ### Batch 42: Terraforming stage 5, the Reservoir and the Leveller (installed; the lake, the banks, the cut, the meter drawn in code)
 
 Stage 5 of terraforming (Nov 2026; README, "Terraforming, stage 5") went through Claude Design: the concept canvas

@@ -6,9 +6,10 @@
  * Commander, Warlord: DIFFICULTY in js/defs.js; bigger goals, less in the Command Base, a clock, tougher rivals). Every mission is open from the start; finishing one ticks it off at that difficulty, and
  * the Missions list marks the first one not yet finished as Next up.
  *
- * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
+ * The campaign is in eight chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
- * Roads and Traffic, Industry and Trade, Sea and Sky (ports, bridges over canyons, airships and earthworks; all in Colony games, so the economy is learned in peace), then
+ * Roads and Traffic, Industry and Trade, Sea and Sky (ports, bridges over canyons, airships and earthworks; all in Colony games, so the economy is learned in peace), Into the Void
+ * (spacecraft out on the Orbital platforms: the Launch Pad, a Shuttle run, a Dropship landing past a raised drawbridge, a derelict module), then
  * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War,
  * including the Uplinks race in King of the Hill before Final Descent. From the second mission on, setup puts down the colony the earlier
  * missions taught (`kit`), so each one is spent on its new idea.
@@ -220,6 +221,48 @@ function mooringFoothold(S, L) {
   for (let k = 0; k < 2; k++) { const w = addBot(0, 'worker', b.x, b.y); enterBuilding(w, b); }
   S.players[0].stats.startBots = S.players[0].stats.bots;
   return b;
+}
+
+/**
+ * Into the Void's setup (Orbital platforms): the deck on the home deck's west, cut off (both its drawbridges stuck up for
+ * good), with a Drop Outpost of yours on it that asks for Cement and Fiber and has Supply by air on (a Shuttle's first run),
+ * the drifting asteroids, and one derelict Solar Array adrift off the cut-off deck's far end, out of that Outpost's land
+ * (an Outpost built by the Workers a Dropship lands there takes it). S.mission.farT: a tile of the cut-off deck.
+ */
+function voidFoothold(S, L) {
+  const O = S.orb;
+  if (!O) return;
+  const home = O.plats.findIndex((D) => L.x >= D.x0 && L.x <= D.x1 && L.y >= D.y0 && L.y <= D.y1);
+  // the deck joined to home by a bridge, west of home's middle
+  let far = -1;
+  for (const B of O.br) { const o = B.a === home ? B.b : B.b === home ? B.a : -1; if (o >= 0 && O.plats[o].kind === 'deck' && (far < 0 || O.plats[o].x0 < O.plats[far].x0)) far = o; }
+  if (far < 0) return;
+  const D = O.plats[far], cx = Math.floor((D.x0 + D.x1) / 2);
+  // its Outpost, at the deck's middle, before the bridges go up (while Workers could still walk there)
+  let ot = -1;
+  for (let r = 0; r <= 4 && ot < 0; r++) for (let j = D.y0 + 2; j <= D.y1 - 2 && ot < 0; j++) for (let i = D.x0 + 1; i <= D.x1 - 1; i++) { const t = tIdx(i, j); if (Math.abs(j - (Math.floor((D.y0 + D.y1) / 2) + 2)) === r && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t] && !S.road[t] && !orbTile(t)) { ot = t; break; } }
+  const b = ot >= 0 ? addBuilding(0, 'dropost', ot % S.W, (ot / S.W) | 0, true) : null; // (a Drop Outpost: storage, so its supply orders stand)
+  if (b) { b.airSupply = true; b.keep = { cement: 6, fiber: 4 }; b.deployedAt = S.time; computeTerritory(); }
+  for (let k = 0; k < O.br.length; k++) {
+    const B = O.br[k];
+    if (B.a !== far && B.b !== far) continue;
+    orbFlip(k, true); B.mv = 0; B.cd = 1e9; // (stuck: no order moves it)
+  }
+  computeZones();
+  S.mission.farT = tIdx(cx, Math.floor((D.y0 + D.y1) / 2));
+  spaceSetup(S.seed);
+  // the Solar Array: open space off the cut-off deck's north end, out of its Outpost's land, the nearest such to the deck
+  let best = null, bd = Infinity;
+  for (let j = 1; j < S.H - 2; j++) for (let i = 1; i < S.W - 2; i++) {
+    const sq4 = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]].map(([a, c]) => tIdx(a, c));
+    if (!sq4.every((t) => voidTile(t) && !orbTile(t) && S.owner[t] < 0)) continue;
+    let shore = false;
+    for (let c = j - 2; c <= j + 3 && !shore; c++) for (let a = i - 2; a <= i + 3; a++) if (inMap(a, c) && S.terrain[tIdx(a, c)] === T_GROUND && S.zone[tIdx(a, c)] === S.zone[S.mission.farT]) { shore = true; break; }
+    if (!shore || j > D.y0 || S.owner[modShore(i, j)] >= 0) continue; // (off the deck's north end, out of its Outpost's land)
+    const d = dist(i + 1, j + 1, cx, D.y0);
+    if (d < bd) { bd = d; best = { i, j }; }
+  }
+  S.space.mods = best ? [{ id: 1, k: 'solar', x: best.i, y: best.j, st: modShore(best.i, best.j), owner: -1, jam: 0, done: 0, tw: 1 }] : [];
 }
 
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
@@ -1601,7 +1644,48 @@ const MISSIONS = [
     ],
   },
 
-  // Chapter 6, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
+  // Chapter 6, Into the Void (space expansion, phase 1): one mission out on the Orbital platforms. The Launch Pad, a Shuttle run to a
+  // deck no bridge reaches, a Dropship landing past a raised drawbridge, and a derelict module taken (voidFoothold).
+  {
+    id: 'spacefall', name: 'Into the Void', chapter: 'Into the Void',
+    brief: 'The station\'s west deck is cut off: both its drawbridges stuck up, years ago. Fly to it, and take the derelict Solar Array adrift beside it.',
+    intro: [
+      'Out in space nothing flies on wings. A <b>Launch Pad</b> (2 by 2) builds spacecraft and is their home: they lift straight off, fly straight over the void and land on any flat, free ground.',
+      'A <b>Shuttle</b> is the space Cargo Plane: it keeps the places you switch to <b>Supply by air</b> stocked, landing beside them, and it can tow a drifting asteroid home.',
+      'A <b>Dropship</b> lands up to six robots anywhere flat and free: across a raised drawbridge, or onto a rock no bridge reaches. They walk out down its ramp.',
+      'Derelict Accord modules drift off the decks. Like an Uplink, one is yours while your land reaches out over it: a <b>Solar Array</b> powers what stands near it.',
+      'Your craft burn Fuel and fill up on their pad: Tankers bring the pad its Fuel.',
+    ],
+    mode: 'colony', seed: 7701, size: 1, rough: 1, rich: 3, biome: 'lunar', shape: 30, limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT6, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 30; L.stock.alloy += 24; L.stock.chip += 20; L.stock.fuel += 20; L.stock.fiber += 10;
+      enterBuilding(addBot(0, 'tanker', L.x, L.y), L); // (the pad's Fuel)
+      voidFoothold(S, L);
+    },
+    goals: [
+      { kind: 'built', type: 'launchpad', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Launch Pad</b> (<kbd>L</kbd>) on 2 by 2 flat tiles. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='launchpad'], #sh-layroad" },
+      { kind: 'shuttleRun', n: 1, text: 'Fly supplies to the cut-off Drop Outpost', at: 'launchpad',
+        // (A Shuttle's load handed over, as a Cargo Plane's crates landing: airIn. The far Outpost's Supply by air is on.)
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.airIn !== undefined).length,
+        hint: '<b>Launch Pad</b> → <b>Yard</b>: Shuttles <b>+1</b>. It flies the Drop Outpost its orders (<b>Supply by air</b>: <b>On</b>).',
+        ui: "#sh-yard .order-row[data-k='shuttle'] [data-d='1'], #sh-airsup [data-v='1']" },
+      { kind: 'squad', n: [2, 3, 4], text: ['Land a Worker on the cut-off deck', 'Land {n} Workers on the cut-off deck'], at: 'launchpad',
+        count: (P, S) => { const z = S.zone[S.mission.farT]; return S.bots.filter((u) => !u.dead && u.owner === 0 && !u.inside && !BOTS[u.type].craft && u.type === 'worker' && S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] === z).length; },
+        focus: (S) => { const d = S.bots.find((u) => !u.dead && u.owner === 0 && u.type === 'dropship'); return d ? { e: d, ui: '#sh-sp-sq-k' } : null; },
+        hint: '<b>Launch Pad</b> → <b>Yard</b>: Dropships <b>+1</b>. Dropship → <b>Land 6 Workers</b>, then tap past the raised bridge twice.',
+        ui: "#sh-yard .order-row[data-k='dropship'] [data-d='1'], #sh-sp-sq-k, #banner-ok" },
+      { kind: 'derelict', n: 1, text: 'Take the derelict Solar Array',
+        count: (P, S) => (S.space ? S.space.mods.filter((m) => modHolder(m) === 0).length : 0),
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Outpost</b> (<kbd>O</kbd>) on the cut-off deck by the Solar Array: its land covers it.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost']" },
+    ],
+  },
+
+  // Chapter 7, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
     brief: 'The Murmur breed in nests under the swamp, and by night they come up to raid your colony. Arm up, hold the night and clear the nests.',
@@ -2200,7 +2284,7 @@ const MISSIONS = [
         ui: '#btn-attack' },
     ],
   },
-  // Chapter 7, War. Ammo and repairs, siege robots and missiles, the nuclear race and a final assault.
+  // Chapter 8, War. Ammo and repairs, siege robots and missiles, the nuclear race and a final assault.
   {
     id: 'supply', name: 'Supply Lines', chapter: 'War',
     brief: 'Warbots win nothing on empty magazines. Keep the Ammo flowing, mend the wounded and take the rival base.',

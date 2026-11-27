@@ -3364,6 +3364,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (type === 'deepcore') { drawDeep(ctx, cx, cy, s, owner, b); return; }
   if (type === 'atmos') { drawAtmos(ctx, cx, cy, s, owner, b); return; }
   if ((type === 'lance' || type === 'dome') && !artFor(type, owner)) { drawMegaPlain(ctx, type, cx, cy, s, owner, b); if (type === 'lance' && b) drawLanceCharge(ctx, b, cx, cy, s); return; } // (a Maglev pylon standing is drawn with its line, under the guideway: drawMaglevs)
+  if ((type === 'launchpad' || type === 'pdturret') && typeof spaceDrawBuilding === 'function' && spaceDrawBuilding(ctx, type, cx, cy, s, owner, b)) return; // (space: js/space.js)
   // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
   let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
   // A Silo shows its missile only once it's ready to fire (a Nuclear Silo: once it's armed); the
@@ -5953,6 +5954,7 @@ function hpBar(ctx, id, frac, x, y, w, h) {
 }
 
 function drawBot(ctx, u, sx, sy, s) {
+  if (BOTS[u.type].craft) return; // (spacecraft: drawn over everything, as aircraft are, spaceDrawAir in js/space.js)
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].sea) { drawShip(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].air) { drawPlane(ctx, u, sx, sy, s, 0); return; }
@@ -10012,6 +10014,7 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
+    if (f.type === 'laser' || f.type === 'pdtracer') continue; // (space: over everything, spaceDrawAir)
     if (f.type === 'flak' || f.type === 'crateland' || f.type === 'quake' || f.type === 'sunderhit' || f.type === 'domehit' || f.type === 'domefall') continue; // (a Shield Dome's: see drawDomes) // see drawAirLayer (a quake only shakes the screen: see fxShake)
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
@@ -11786,6 +11789,7 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
     u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
     drawPlane(ctx, u, ox + u.x * z, oy + u.y * z, z, planeAlt(u));
   }
+  if (S.space && typeof spaceDrawAir === 'function') spaceDrawAir(ctx, ox, oy, z, inView); // (space: drifting rocks, derelicts, spacecraft, lasers and tracers: js/space.js)
   drawFlakSearchlights(ctx, ox, oy, z, inView, 'lit');
   drawFlakTracers(ctx, ox, oy, z, inView);
   for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) { drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z); if (f.t < 0.4) fxGround(ctx, ox + f.x * z, oy + f.y * z + z, z * 1.6, '#ff9a3c', 0.6 * (1 - f.t / 0.4)); }

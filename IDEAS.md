@@ -3,6 +3,44 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Space expansion, phase 1 (built Nov 27 2026: calls made, open questions for the owner)
+
+Built from the owner's picks on the space canvas (https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): the Launch Pad
+(Cradle Ring), the Shuttle (Frame Tug, with its tow claw), the Dropship (Clamshell, its stern ramp), the Gunship (the
+Lancet, with purple lasers), the Point-Defence Turret (Twin Rotary), drifting asteroids (plain, Ore, Crystal) and three
+derelict modules, on The Ring and Orbital platforms only. README ("Space"), How to play ("Out in space"), the guide,
+ART_GUIDE.md (Batch 43), the mission *Into the Void* (its own chapter, after Sea and Sky).
+
+Decided (the owner):
+- **Salvage gives Alloy and Chips.** There is no new "Accord parts" good: the Salvage Hulk's haul is 18 Alloy and 10 Chips.
+- **"The Arbiter"** is the approved name of the Graveyard's prize, for phase 2 (not built yet).
+- The Gunship is the Lancet over the designer's Halo; it was reworked so it never reads as the Vulcan Bomber (an
+  arrowhead, cannon prongs, four round lift pods, no wings, nozzle or fins).
+
+Calls made, to confirm:
+- **Derelicts float in the void, moored off a deck** (as the designer drew them), not on the decks. The void is no one's
+  land, so a module is held by whoever's land takes in its *shore tile* (the deck tile nearest it), as an Uplink is held by
+  land; armed rivals within 3 tiles jam it. One pair of each kind, placed alongside the Trade Posts and Uplinks, not
+  instead of them.
+- **Two craft to a pad**, of any kinds. The rival keeps a Dropship and a Shuttle on its first pad and Gunships on its second.
+- **Gunships are not warbots** (no garrison, march, flag or Army Group): they take the same tap and right-click orders
+  (attack, hunt, hold, home) through `command`, and guard their pad when idle. Should they join Army Groups?
+- **Only Point-Defence and Gunships hit craft in the air.** Pulse Turrets, warbots and Missiles don't. A Gunship's lasers
+  hold a Command Base or Keep at a third of its armor, like bombs, so it can't win a game alone.
+- **Point-Defence costs what Flak does** (4 Cement, 3 Alloy; no Chips, so the rival's goes up in time).
+- **A towed rock becomes a field beside the pad** (up to 6 deposit tiles), not a rock you mine in the void.
+- **Mining in passing** needs a staffed Mine or Crystal Tap within 5 tiles of a lane: such a gatherer is never "dry" while a
+  lane passes, even with no deposits of its own.
+- Missions: one, not a chapter of several (Launch Pad, Shuttle run, Dropship landing past a stuck drawbridge, a derelict
+  taken). Gunships and Point-Defence aren't taught in it (Colony, no war); a War-chapter mission could.
+
+Open questions:
+- Lanes are straight runs the rocks swing along and back. Loops round the rocks would look more like orbits.
+- The rival seldom takes a derelict (they lie out on the far decks and rocks); it leans its Outposts toward them. Worth a
+  stronger pull, or a Dropship landing to take one?
+- Space art loads with the rest on every map (about 0.5 MB a time of day); it could load only for the two space maps.
+- Phase 2: the Graveyard map (the Arbiter), capital ships (the canvas's Tender and Line), more derelict kinds.
+
 ## Terraforming stage 5: big projects and greening (built Nov 27 2026: calls made, open questions for the owner)
 
 Built from the owner's picks on the stage 5 canvas (https://claude.ai/artifact/VHV4A3euU7amL1QHzfrif1): the Reservoir

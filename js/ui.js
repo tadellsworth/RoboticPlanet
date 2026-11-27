@@ -2639,8 +2639,8 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'r', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'c', smelter: 'm', fab: 'f', refinery: 'r', tarworks: 't', foundry: 'b', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
-  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
-  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
+  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', magterm: 'g', mdriver: 'v', catcher: 'c', port: 'p', airfield: 'i', mast: 't', launchpad: 'l', terminal: 'm' }, // (the Launch Pad: L, out in space only)
+  defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', pdturret: 'p', repair: 'r', silo: 'i', nukesilo: 'n' }, // (Point-Defence: P, out in space only)
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u', reservoir: 'v', leveller: 'g' }, // (stage 5: the reserVoir, V; the Leveller, G for Grade: L is the Lance) (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
   // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
   // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P);
@@ -3229,8 +3229,8 @@ function unitAtTap(wx, wy) {
   const r = Math.max(0.55, 22 / R.cam.z);
   let best = null, bd = r * r;
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege)) continue;
-    const d = dist2(u.x, u.y, wx, wy);
+    if (u.dead || u.inside || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege && !BOTS[u.type].craft)) continue;
+    const d = dist2(u.x, u.y - (u.alt || 0) * 0.35, wx, wy); // (a spacecraft in the air is drawn a little up the screen)
     if (d < bd) { bd = d; best = u; }
   }
   return best;
@@ -3456,7 +3456,7 @@ function onSelectBox(box, add, armed) {
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege) || u.inside) continue;
+    if (u.dead || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege && !BOTS[u.type].craft) || u.inside) continue; // (spacecraft too: spaceCommand)
     const p = worldToScreen(u.x, u.y);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(u.id);
   }
@@ -3523,6 +3523,13 @@ function onMapCommand(i, j, wx, wy, done) {
   act('command', [UI.sel.slice(), spec], (r) => {
     const where = `${onTouch() ? 'Tap' : 'Right-click'} open ground, a rival building or one of your garrisons.`;
     if (!r || r.why) { sfx('error'); toast((r && r.why) || where, 'warn'); return; }
+    if (r.kind === 'craft') { // (spacecraft: spaceCommand)
+      sfx('order'); addFx('ring', rx, ry, { color: theirs || foe ? '#ff5a6e' : '#d9c8ff' });
+      toast([r.guns ? `${r.guns} Gunship${r.guns === 1 ? '' : 's'} ${theirs ? `attacking the ${bName}` : foe ? `after the ${foeName}` : mine && BDEFS[b.type].pad ? 'coming home' : 'holding that spot'}` : '', r.squad ? `${r.squad} robot${r.squad === 1 ? '' : 's'} boarding the Dropship to land there` : ''].filter(Boolean).join('; ') + '.', 'info');
+      if (done) done();
+      refreshSelection();
+      return;
+    }
     if (r.kind === 'repair') {
       sfx('order'); addFx('ring', rx, ry, { color: '#7dffa0' });
       toast(`${r.n} robot${r.n === 1 ? '' : 's'} heading to the Repair Station.`, 'info');
@@ -4876,6 +4883,7 @@ function setMode(mode, keepPlan) {
   if (mode !== 'scorch') { R.scorchAt = null; UI.scorchIds = null; }
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
   if (mode !== 'airdrop') { R.dropAt = null; UI.dropPlane = 0; }
+  if (mode !== 'space') { R.spaceAt = null; UI.spaceAct = null; }
   if (mode !== 'attack') UI.armyCmd = null;
   if (mode !== 'agpick') UI.agPick = null; // (picking an Army Group's points or home)
   R.ghost = null;
@@ -6018,7 +6026,7 @@ function mastLinkTap(i, j, wx, wy) {
 
 /** The "Supply by air" switch for one of your Depots, Outposts and the like, once you have an Airfield. */
 function airSupplySection(b) {
-  if (!airSuppliable(b) || !b.built || b.owner !== ME || !S.buildings.some((o) => !o.dead && o.built && o.owner === ME && BDEFS[o.type].airfield)) return '';
+  if (!airSuppliable(b) || !b.built || b.owner !== ME || !S.buildings.some((o) => !o.dead && o.built && o.owner === ME && (BDEFS[o.type].airfield || BDEFS[o.type].pad))) return ''; // (out in space: a Launch Pad's Shuttles)
   return '<div class="section-label">Supply by air</div><div class="seg" id="sh-airsup"><button data-v="1">On</button><button data-v="0">Off</button></div><p class="hint" id="sh-airsup-hint"></p>';
 }
 
@@ -6028,6 +6036,7 @@ function airSupplyRoad(b) { return !b.airSupply && onHomeNet(b); }
 function airSupplyHint(b) {
   const base = airBaseNear(b.owner, b.x, b.y);
   if (airSupplyRoad(b)) return 'A road from home reaches this place: Haulers supply it. Supply by air is for places no road reaches.';
+  if (spaceMap()) return !b.airSupply ? `On: a Shuttle from your nearest Launch Pad keeps this place stocked (its supply orders, Ammo for its warbots), landing beside it, ${BOTS.shuttle.carry} goods a flight: for a place no road reaches. It switches off by itself once a road from home reaches it.` : !base ? 'Waiting for a Shuttle: none is based at a Launch Pad yet (order one in a pad\'s yard).' : `Supplied by Shuttle from the Launch Pad ${dirText(b, base)}, ${BOTS.shuttle.carry} goods a flight.` + (S.bots.some((u) => !u.dead && u.owner === b.owner && u.mission && u.mission.to === b.id) ? ' A Shuttle is on its way.' : '');
   if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield keeps this place stocked by parachute (its supply orders, Ammo for its warbots), wherever it is. For a place no road reaches: it switches off by itself once a road from home reaches it.';
   if (!base) return 'Waiting for a Cargo Plane: none is based at an Airfield yet (order one in an Airfield\'s hangar).';
   const coming = S.bots.some((u) => !u.dead && u.owner === b.owner && u.mission && u.mission.to === b.id);
@@ -6452,6 +6461,7 @@ function confirmBanner() {
   if (R.mode === 'agpick') { agPickDone(); return; }
   if (R.mode === 'land') { confirmLanding(); return; }
   if (R.mode === 'airdrop') { confirmAirdrop(); return; }
+  if (R.mode === 'space') { spaceConfirm(); return; }
   if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllTap(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode === 'place' && UI.placeType === 'maglev' && UI.magEdit && UI.ropeA) {
@@ -6872,6 +6882,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'agpick') { agPickTap(i, j, wx, wy); return; } // (an Army Group's points or home)
   if (R.mode === 'land') { landTap(i, j); return; }
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
+  if (R.mode === 'space') { spaceTap(i, j, wx, wy); return; } // (a spacecraft's pick: js/space-ui.js)
   if (R.mode === 'mastlink') { mastLinkTap(i, j, wx, wy); return; }
   if (R.mode === 'mdaim') { mdAimTap(i, j, wx, wy); return; }
   if (R.mode === 'focusaim') { focusAimTap(i, j, wx, wy); return; }
@@ -6931,7 +6942,7 @@ function onMapTap(i, j, wx, wy) {
     else if (s.kind === 'bld') openBuildingSheet(s.e);
     else if (s.kind === 'town') townSheet(s.e);
     else {
-      const bot = s.e, mine = bot.owner === ME && (isArmy(bot) || BOTS[bot.type].siege);
+      const bot = s.e, mine = bot.owner === ME && (isArmy(bot) || BOTS[bot.type].siege || BOTS[bot.type].craft);
       if (mine && !INPUT.mouse) { closeSheet(); touchSelect(bot); return; } // (a finger selects it: its panel is behind Info on the selection bar)
       if (mine) selectBots([bot.id], INPUT.shift);
       openBotSheet(bot);
@@ -6941,6 +6952,7 @@ function onMapTap(i, j, wx, wy) {
   }
   UI.lastTap = null;
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
+  if (S.space && spaceTapped(wx, wy)) return; // (a drifting asteroid or a derelict module out in the void: js/space-ui.js)
   if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && S.orb && orbTapped(i, j, wx, wy) >= 0) { sfx('click'); openBridgeSheet(orbTapped(i, j, wx, wy)); return; } // (a drawbridge or one of its control boxes: Orbital platforms)
@@ -6977,8 +6989,8 @@ function tapStack(rally, b, wx, wy) {
   const bots = [];
   for (const u of S.bots) {
     if (u.dead || u.inside || (u.under && !murmurInSight(u))) continue; // (nor a Sapper underground out of the colony's sight)
-    const bt = BOTS[u.type], r2 = bt.airship ? 1.1 : bt.crawler || bt.siege || bt.truck || bt.rail || bt.magpod ? 0.6 : 0.3; // (an Airship is big)
-    const d = dist2(u.x, u.y - (bt.magpod ? MAGLEV.head : 0), wx, wy); // (a Maglev pod rides at deck height)
+    const bt = BOTS[u.type], r2 = bt.airship ? 1.1 : bt.crawler || bt.siege || bt.truck || bt.rail || bt.magpod || bt.craft ? 0.6 : 0.3; // (an Airship is big)
+    const d = dist2(u.x, u.y - (bt.magpod ? MAGLEV.head : 0) - (u.alt || 0) * 0.35, wx, wy); // (a Maglev pod rides at deck height)
     if (d < r2) bots.push([d, u]);
   }
   bots.sort((p, q) => p[0] - q[0]);
@@ -8029,7 +8041,7 @@ function sheetCols() {
  */
 const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots', wf: 'Command · Workforce',
   econ: 'Command · Economy', green: 'Command · Greening', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
-  move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral', bridge: 'Orbital platforms' };
+  move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral', bridge: 'Orbital platforms', space: 'Neutral · Space' };
 function sheetEyebrow(kind, id) {
   const head = $('sheet-body').querySelector('.sheet-title'), h3 = head && head.querySelector('h3');
   if (!h3 || head.querySelector('.sh-eye')) return;
@@ -8176,7 +8188,7 @@ function costInline(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalOk()) && !modNoBuild(t));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].mega && !megaOn()) && !(BDEFS[t].gup && !gupWinOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalOk()) && !modNoBuild(t) && !spaceHidden(t)); // (space: no Airfield, Mast or Flak out there, no Launch Pad or Point-Defence anywhere else)
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'gather'; } catch (e) { UI.buildTab = 'gather'; } }
@@ -8322,7 +8334,8 @@ function renderYard(b) {
       // Its spots in the hangar, and orders past them as spares (built when one is lost).
       const h = hangarCount(b, k);
       $('sh-y-' + k).textContent = `${h.have} of ${h.cap} in the hangar` + (h.making ? ` · ${h.making} ordered${partsIn}` : '') + (h.spare ? ` · ${h.spare} spare${h.spare === 1 ? '' : 's'}, built if one is lost` : '');
-    } else $('sh-y-' + k).textContent = n ? `${n} ordered${partsIn}` : 'none ordered';
+    } else if (BDEFS[b.type].pad) { const here = padCraft(b).filter((u) => u.type === k).length; $('sh-y-' + k).textContent = `${here} based here` + (n ? ` · ${n} ordered${partsIn}` : ''); }
+    else $('sh-y-' + k).textContent = n ? `${n} ordered${partsIn}` : 'none ordered';
     el.querySelector(`.order-row[data-k="${k}"]`).classList.toggle('next', k === now);
   }
   $('sh-yard-status').textContent = b.yardStatus || (now ? '' : 'Nothing ordered');
@@ -8430,12 +8443,13 @@ function openBuildingSheet(b) {
     ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div>${mine && def.inp && !def.pump ? '<div id="sh-why"></div>' : ''}<div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
+    if (def.pad && b.built) html += padSection(b); // (a Launch Pad's craft: js/space-ui.js)
     if (def.magterm && b.built && mine) html += magSection();
     if ((def.mdriver || def.catcher) && b.built && mine) html += mdSection(b);
     if (def.lift && b.built && mine) html += '<div class="section-label">Orbital Lift</div><div id="sh-lift"></div>';
     if (def.gup && b.built) html += '<div class="section-label">Transmission</div><div id="sh-gup"></div>';
-    if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : def.magterm ? 'Pod bay' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
-      <p class="hint">${def.magterm ? `Maglev Pods are built here, two rounds of parts (2 Alloy, 1 Chip) every ${YARD.work} s each: 4 Alloy and 2 Chips a pod, ${MAGLEV.perLine} to a line. Haulers bring the parts (or a conveyor from storage beside it). A new pod docks here and runs the line by itself.` : ''}${def.magterm ? '' : def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}${def.magterm ? '' : `, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s:`} ${def.magterm ? '' : def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ') + ' rounds. Haulers bring the parts. '}${def.magterm ? '' : def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
+    if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : def.pad ? 'Yard' : def.magterm ? 'Pod bay' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
+      ${def.pad ? `<p class="hint">Spacecraft are built here, a round of parts every ${YARD.work} s (1 Alloy and 1 Chip; a Gunship's 2 and 2): ${def.yard.map((k) => `${BOTS[k].plural} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. Each one is based on this pad, ${SPACE.holds} to a pad; orders past that wait until there is room.</p>` : ''}<p class="hint"${def.pad ? ' hidden' : ''}>${def.magterm ? `Maglev Pods are built here, two rounds of parts (2 Alloy, 1 Chip) every ${YARD.work} s each: 4 Alloy and 2 Chips a pod, ${MAGLEV.perLine} to a line. Haulers bring the parts (or a conveyor from storage beside it). A new pod docks here and runs the line by itself.` : ''}${def.magterm ? '' : def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}${def.magterm ? '' : `, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s:`} ${def.magterm ? '' : def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ') + ' rounds. Haulers bring the parts. '}${def.magterm ? '' : def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
       '<div class="section-label">Market board <span class="label-note">the Post\'s ledger: what each good sells for and costs</span></div><div class="board" id="sh-board"></div><p class="hint" id="sh-trade-hint"></p>';
     // A Rail Station: its line, what it stocks automatically, and its conveyors.
@@ -8866,6 +8880,7 @@ function refreshBuildingSheet(b) {
   const mine = b.owner === ME;
   if (mine && def.terminal && b.built) renderTrade(b);
   if (mine && def.yard && b.built) renderYard(b);
+  if (def.pad && b.built) renderPad(b); // (js/space-ui.js)
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
   const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(ME, b.x, b.y) : null;
@@ -9415,6 +9430,7 @@ function renderFoundryOrders(b) {
 function botActivity(u) {
   const t = u.task;
   if (BOTS[u.type].airship) { const st = shipStatus(u); return st[0].toUpperCase() + st.slice(1); }
+  if (BOTS[u.type].craft) { const st = craftStatus(u); return st[0].toUpperCase() + st.slice(1); } // (js/space-ui.js)
   if (BOTS[u.type].magpod) { const st = podStatus(u); return st[0].toUpperCase() + st.slice(1); }
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
@@ -9570,6 +9586,7 @@ function openBotSheet(u) {
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
       <button class="btn" id="sh-found">Found a Port on another shore</button>
       <p class="hint"><b>Sail out of the Port</b>: tied up, it sails out to wait just off the Port, where you can tap it on the map. <b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders; with a mouse, right-click the water while its panel is open. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
+    ${u.owner === ME && BOTS[u.type].craft ? craftButtons(u) : ''}
     ${u.owner === ME && BOTS[u.type].airship ? '<div class="section-label">Line</div><div id="sh-sline"></div>' : ''}
     ${u.owner === ME && BOTS[u.type].rail ? '<div class="section-label">Armor</div><p class="hint" id="sh-tarmor-hint"></p><button class="btn big" id="sh-tarmor">Armor this train</button>' : ''}
     ${u.owner === ME && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
@@ -9626,6 +9643,7 @@ function openBotSheet(u) {
     sync();
   }
   if ($('sh-rgo')) $('sh-rgo').onclick = () => { sfx('click'); closeSheet(); setMode('rgo'); UI.rocket = u.id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); };
+  if (BOTS[u.type].craft && u.owner === ME) bindCraftButtons(u); // (js/space-ui.js)
   if ($('sh-recall')) $('sh-recall').onclick = () => {
     if (u.task && u.task.type === 'hold') act('recallRally', [u.task.rally], (n) => toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'));
     closeSheet();
@@ -9834,11 +9852,12 @@ function oilAround(i, j) {
  */
 function openArmySheet(tab) {
   if (tab) UI.armyTab = tab;
-  if (UI.armyTab === 'air' && !myAirfields().length) UI.armyTab = 'army';
+  if (UI.armyTab === 'air' && !myAirfields().length && !myPads().length) UI.armyTab = 'army';
   UI.armyTab = UI.armyTab || 'army';
   UI.armyN = UI.armyN || 4;
-  openSheet('army', 0, `<div class="sheet-title"><div><h3>${UI.armyTab === 'air' ? 'Air' : 'Army'}</h3></div></div>
-    <div class="seg" id="ar-tabs"><button id="ar-tab-army" data-t="army">Army</button><button id="ar-tab-air" data-t="air">Air</button></div>
+  const sky = spaceMap() ? 'Space' : 'Air'; // (out in space the Air tab is the Space tab: js/space-ui.js)
+  openSheet('army', 0, `<div class="sheet-title"><div><h3>${UI.armyTab === 'air' ? sky : 'Army'}</h3></div></div>
+    <div class="seg" id="ar-tabs"><button id="ar-tab-army" data-t="army">Army</button><button id="ar-tab-air" data-t="air">${sky}</button></div>
     <div id="ar-body"></div>`);
   for (const btn of $('ar-tabs').children) btn.onclick = () => { sfx('click'); openArmySheet(btn.dataset.t); };
   $('ar-body').onclick = (e) => { const btn = e.target.closest('button'); if (btn && !btn.disabled) armyButton(btn); };
@@ -9855,11 +9874,11 @@ function armyWant() { return UI.armyN === 'all' ? -1 : UI.armyN || 4; }
 function armyNText() { return UI.armyN === 'all' ? 'every spare warbot' : `${UI.armyN} warbots`; }
 
 function refreshArmySheet() {
-  const air = myAirfields().length > 0;
+  const air = myAirfields().length > 0 || myPads().length > 0;
   $('ar-tab-air').hidden = !air;
   $('ar-tabs').hidden = !air; // (just the Army until there's an Airfield)
   for (const btn of $('ar-tabs').children) btn.classList.toggle('on', btn.dataset.t === UI.armyTab);
-  if (UI.armyTab === 'air' && air) refreshAirTab(); else refreshArmyTab();
+  if (UI.armyTab === 'air' && air) { if (spaceMap()) refreshSpaceTab(); else refreshAirTab(); } else refreshArmyTab();
   if (isWide()) foldLong($('ar-body'));
   markSheetKeys();
 }
@@ -9975,7 +9994,9 @@ function armyButton(btn) {
     case 'strike': if (e) startStrike(e); return;
     case 'unstrike': callOffStrike(id); UI.armySig = ''; return;
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
-    case 'yard': if (e) {
+    default: if (spaceArmyButton(btn, what, e)) return; // (the Space tab: js/space-ui.js)
+    case 'yard': if (e && BDEFS[e.type].pad) { act('yard', [e.id, btn.dataset.k, 1]); toast(`${BOTS[btn.dataset.k].name} ordered: the Launch Pad's yard builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); return; }
+      if (e) {
       const k = btn.dataset.k, h = hangarCount(e, k), full = h.have + h.making >= h.cap;
       act('yard', [e.id, k, 1]);
       toast(full ? `${BOTS[k].name} ordered as a spare: this Airfield has room for ${h.cap}, so it's built if one is lost.` : `${BOTS[k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info');
@@ -10212,7 +10233,7 @@ function refreshSheet() {
     if (isWide()) foldLong($('sheet-body'));
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
-    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail && !BOTS[u.type].airship && !BOTS[u.type].magpod)) { closeSheet(); return; } // (a ship tied up at a Port, a train at a station, an Airship at its Mast or a pod at its Terminal keeps its panel)
+    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail && !BOTS[u.type].airship && !BOTS[u.type].magpod && !BOTS[u.type].craft)) { closeSheet(); return; } // (and a spacecraft parked on its Launch Pad) // (a ship tied up at a Port, a train at a station, an Airship at its Mast or a pod at its Terminal keeps its panel)
     $('sh-status').textContent = botActivity(u);
     refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
@@ -10220,7 +10241,7 @@ function refreshSheet() {
       (BOTS[u.type].magpod ? `<div class="kv"><span>Power</span><span>${u.magTo ? (u.crawl ? 'none: crawling at a Worker\'s pace' : 'from the Generators by the Terminals') : u.inside && magPartner(getE(u.inside) || {}) ? (magLinePowered(getE(u.inside)) ? 'the line is powered' : 'the line has no power: it would crawl') : 'no line'}</span></div><div class="kv"><span>Hold</span><span>${u.cargo ? sumValues(u.cargo) : 0} of ${BOTS[u.type].carry} goods</span></div>` :
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>`) +
-      (BOTS[u.type].airship ? airshipRows(u) : BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top (${NAPALM.fuel} more with napalm)` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
+      (BOTS[u.type].craft ? craftRows(u) : BOTS[u.type].airship ? airshipRows(u) : BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top (${NAPALM.fuel} more with napalm)` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +

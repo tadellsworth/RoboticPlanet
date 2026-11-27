@@ -201,7 +201,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
 <nav class="toc" aria-label="Chapters">
   <div class="wrap">
     <a href="#goal">Goal</a><a href="#controls">Controls</a><a href="#opening">First 10 min</a><a href="#chain">Supply chain</a>
-    <a href="#buildings">Buildings</a><a href="#workers">Robots</a><a href="#traffic">Roads &amp; traffic</a><a href="#paving">Paving</a><a href="#longhaul">Long hauls</a><a href="#batteries">Batteries &amp; Fuel</a><a href="#terrain">Terrain</a><a href="#caves">Half underground</a><a href="#orbital">Orbital platforms</a><a href="#hollow">The Hollow</a>
+    <a href="#buildings">Buildings</a><a href="#workers">Robots</a><a href="#traffic">Roads &amp; traffic</a><a href="#paving">Paving</a><a href="#longhaul">Long hauls</a><a href="#batteries">Batteries &amp; Fuel</a><a href="#terrain">Terrain</a><a href="#caves">Half underground</a><a href="#orbital">Orbital platforms</a><a href="#space">Out in space</a><a href="#hollow">The Hollow</a>
     <a href="#war">War</a><a href="#rivals">Rivals</a><a href="#events">Planetary events</a><a href="#colony">The Murmur &amp; research</a><a href="#story">The story</a><a href="#mega">Megastructures</a><a href="#nuclear">Nuclear race</a><a href="#missions">Missions</a><a href="#contingency">Contingency</a><a href="#multiplayer">Multiplayer</a><a href="#stats">Statistics</a><a href="#goods">Economy</a><a href="#status">Status messages</a><a href="#saving">Saving</a>
   </div>
 </nav>
@@ -561,12 +561,28 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
   <div class="sec-head"><h2>Orbital platforms</h2><span class="tag">A map of its own</span></div>
   <p>Old Accord station decks high over the planet, for two colonies: a home deck each, a big middle deck and side decks (five decks on Small and Medium, seven from Large up), joined by <b>drawbridges</b> that a <b>control box</b> at each end raises and lowers. Argos's rules: no Murmur, no weather. Below the decks: Ithaca I's red coast and the curve of the planet, the Ring beyond, cloud drifting underneath; at dusk the night line crosses it, at night the colonies' lights shine.</p>
   <ul class="tight">
-    <li><b>Bridges</b> start down: a plated strip robots walk across. Up, a bridge is a gap nothing on foot crosses; aircraft, Airships and Missiles still fly over it, and a Viaduct or Ropeway spans it. Each carries a permanent road (it lights up again the moment the bridge is down, and is cut while it is up): Haulers and trucks cross a lowered bridge on it. Nothing is built on a bridge.</li>
+    <li><b>Bridges</b> start down: a plated strip robots walk across. Up, a bridge is a gap nothing on foot crosses; spacecraft and Missiles still fly over it (a Dropship lands a squad past it), and a Viaduct or Ropeway spans it. Each carries a permanent road (it lights up again the moment the bridge is down, and is cut while it is up): Haulers and trucks cross a lowered bridge on it. Nothing is built on a bridge.</li>
     <li><b>Control boxes:</b> two to a bridge, lit in the holder's colour. Held by the colony with the most armed robots within 4 tiles, or with none near, by the colony whose land it stands in. You start with the boxes on your home deck.</li>
     <li><b>Raise / Lower:</b> tap a bridge or a box. A raise warns for 4 seconds (cross or clear it), is called off if any robot is on the bridge when the warning ends, then the leaf swings up in 3 seconds; a bridge rests 20 seconds after moving. No robot is ever lost to a raise.</li>
     <li><b>Supplies:</b> your home deck has a starter Ore and Crystal field near the Command Base and a second of each a little further out, with Stalk, fertile soil, Stone and oil. The other decks have Ore, Crystal, Stone and oil of their own from Medium up, so crossing the bridges pays.</li>
-    <li><b>The rival</b> lowers its bridges again after a while, never shuts itself in, and from Medium up raises one when your warbots mass on its far side.</li>
+    <li><b>The rival</b> lowers its bridges again after a while, never shuts itself in, and from Medium up raises one when your warbots mass on its far side. Spacecraft: see <a href="#space">Out in space</a>.</li>
   </ul>
+</section>
+
+<section id="space">
+  <div class="sec-head"><h2>Out in space</h2><span class="tag">The Ring &amp; Orbital platforms</span></div>
+  <p>On the two maps out in space nothing flies on wings: no Airfield, Cargo Plane, Vulcan Bomber, Airship or Mooring Mast, and no Flak Gun. <b>Spacecraft</b> fly instead, from a <b>Launch Pad</b>, and the <b>Point-Defence Turret</b> takes Flak's place. Missiles and nukes still fly.</p>
+  <table class="kv">
+    <tr><th>Launch Pad</th><td>Build → Move (<b>L</b>). 2 by 2 tiles, 8 Cement, 4 Alloy, 2 Chips. Its <b>Yard</b> builds the craft from Alloy and Chips and is their home, two to a pad: they refuel there (it keeps 8 Fuel, Tankers bring it) and mend. It stores goods like a Depot.</td></tr>
+    <tr><th>Flying</th><td>A craft lifts straight up, flies straight over decks, rocks, the void and raised drawbridges, and lands straight down on its pad or any flat, free ground. In the air only Point-Defence and Gunships can hit it.</td></tr>
+    <tr><th>Shuttle</th><td>A Frame Tug, the space Cargo Plane: it keeps places switched to <b>Supply by air</b> stocked, 10 goods a flight, landing beside them, and <b>tows</b> a drifting Ore or Crystal asteroid home, where it is broken up into a field beside the pad.</td></tr>
+    <tr><th>Dropship</th><td>A Clamshell: lands up to 6 robots anywhere flat and free, past a raised drawbridge or on a rock no bridge reaches; they walk out down its stern ramp. Its panel: <b>Land 6 Warbots</b> or <b>Land 6 Workers</b>, then tap where; or select robots with it and right-click.</td></tr>
+    <tr><th>Gunship</th><td>A Lancet dart with twin nose cannons: it hovers and fires <b>purple lasers</b> at enemy craft, robots and buildings. Select it and give it orders like a warbot. Fragile (14 hit points) and dear; flies home to refuel and mend; guards its pad when idle.</td></tr>
+    <tr><th>Point-Defence</th><td>Build → Defend (<b>P</b>). A twin rotary gun: orchid tracers at enemy craft out to 7 tiles, Gunships first, and at robots within 3. It shreds a Gunship in seconds.</td></tr>
+    <tr><th>Drifting asteroids</th><td>Rocks drift on set lanes through the void, never over a deck. Plain ones nick a craft that clips them. Ore- and Crystal-bearing ones are mined in passing by a Mine or Crystal Tap within 5 tiles, or towed home by a Shuttle. They drift back in 4 minutes later. Mirrored, so both colonies meet the same.</td></tr>
+    <tr><th>Derelict modules</th><td>Old Accord modules moored off the decks, held like an Uplink by the colony whose land takes in the deck beside them (armed rivals within 3 tiles jam them). <b>Solar Array</b>: free power within 6 tiles. <b>Docking Ring</b>: your Shuttles 35% faster. <b>Salvage Hulk</b>: 18 Alloy and 10 Chips, once.</td></tr>
+  </table>
+  <p>The rival builds a pad, flies warbots over in a Dropship, supplies its cut-off places by Shuttle, sends Gunships at what no Point-Defence covers, and builds a Point-Defence Turret or two.</p>
 </section>
 
 <section id="hollow">
@@ -815,7 +831,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
 
 <section id="missions">
   <div class="sec-head"><h2>Missions</h2><span class="tag">The tutorial</span></div>
-  <p>Tap <b>Campaigns</b> on the main menu, then <b>Missions</b> (its card shows how many you've finished and the next one up). The missions are the tutorial campaign: hand-picked planets, each with its own goals, starting conditions and features, that teach the game one idea at a time, from your very first building to all-out war. They come in seven chapters, each building on the last: the colony and its logistics first, in peace, then creatures and rivals. From the second mission on you land with the colony the earlier missions taught already built and joined up, so you get straight to the new idea. Play them in order (the first one you haven't finished is marked <b>Next up</b>) or pick any: every mission is open from the start.</p>
+  <p>Tap <b>Campaigns</b> on the main menu, then <b>Missions</b> (its card shows how many you've finished and the next one up). The missions are the tutorial campaign: hand-picked planets, each with its own goals, starting conditions and features, that teach the game one idea at a time, from your very first building to all-out war. They come in eight chapters, each building on the last: the colony and its logistics first, in peace, then spacecraft, then creatures and rivals. From the second mission on you land with the colony the earlier missions taught already built and joined up, so you get straight to the new idea. Play them in order (the first one you haven't finished is marked <b>Next up</b>) or pick any: every mission is open from the start.</p>
   <p>Pick a level: the same five as rivals, Settler, Pioneer, Colonist (the default), Commander and Warlord. Each level up raises the goals, starts you with fewer goods and brings a tougher rival, and Commander and Warlord put most missions on the clock. The briefing card sets the scene; the goal banner marks the next goal with a hint, lights up the button it needs (or rings the building to tap) and shows any time left. Once a building it asks for is going up, the hint says to wait for it (or to lay its road) rather than build another.</p>
   <p>Taking the last rival Command Base ends the game, so in a mission it waits for the rest of your goals: until they are done it holds at 1 armor, and its panel says <b>Finish your other goals first</b>.</p>
   <figure><img src="%%shot_missions%%" alt="The Missions menu: the first chapters, with ticks on the finished difficulty levels and the next mission marked Next up"><figcaption>The Missions menu. Finished difficulty levels get a tick.</figcaption></figure>
@@ -868,7 +884,12 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
       <li><b>Deep Ground</b><span>Colony. The Cinderlands' lava lakes: build a Seam Drill and drill a hidden seam, grow Crystal at a Seed Mast with a Crystal Tap beside it, and power a factory with a Thermal Plant on the lava shore (Build → Terraform).</span></li>
       <li><b>Made Ready</b><span>Colony, Megastructures on. Build a Reservoir on the ridge and fill the dry basin, cut a mesa down with a Leveller, and make a share of the land ready (Build → Mega).</span></li>
     </ol>
-    <h3>6. First Contact</h3>
+    <h3>6. Into the Void</h3>
+    <p>Spacecraft out on the Orbital platforms.</p>
+    <ol class="missions">
+      <li><b>Into the Void</b><span>Colony. Orbital platforms: build a Launch Pad, fly supplies by Shuttle to a deck both of whose drawbridges are stuck up, land Workers on it by Dropship, and take the derelict Solar Array drifting beside it.</span></li>
+    </ol>
+    <h3>7. First Contact</h3>
     <p>The Murmur's nests, their cavern lair, how they hunt and their other forms, greening the land under the dust and the Bloom, a rival to practise on, a border war and a chokepoint to hold.</p>
     <ol class="missions">
       <li><b>The Murmur</b><span>Colony with the Murmur. Turrets and warbots ready by nightfall, when the packs come up: collapse tunnel exits, clear their nests.</span></li>
@@ -886,7 +907,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
       <li><b>Something Keeps Time</b><span>Colony, the Murmur on Active. Their tunnels already reach the base: build the Sundering Ray, power it, strike the deep over the nest that dug them, and hold the night they come for it.</span></li>
       <li><b>The Harrow</b><span>Colony, the Murmur on Active. The biggest of them comes up out of the ground: gather your army on a Hold ground flag in its path, bring it down with the heavy weapons, and keep both Generators standing.</span></li>
     </ol>
-    <h3>7. War</h3>
+    <h3>8. War</h3>
     <p>Ammo and repairs, trade convoys, siege robots and missiles, the nuclear race and a final assault.</p>
     <ol class="missions">
       <li><b>Supply Lines</b><span>Versus. Keep the Ammo flowing, mend the wounded, set a rally point and take the rival base.</span></li>

@@ -411,6 +411,8 @@ const ORDERS = {
       return result;
     };
     let s = spec || {};
+    // (Space: Gunships in the selection take the order as craft do, and a Dropship picked with robots lands them: spaceCommand.)
+    if (S.space || spaceMap()) { const sp = spaceCommand(p, ids, s); if (sp) { const rest = ids.filter((id) => !BOTS[getE(id).type].craft); if (!rest.length || sp.squad || sp.why) return assigned(sp); ids = rest; } }
     const out = { kind: '', n: 0, nr: 0 };
     // (Terraforming stage 4: `ew`, an Attack order on the earthwork on tile (i, j): they shoot it till it breaks: orderEwShoot)
     if (s.ew && !s.b && !s.foe && !s.ferry && Number.isInteger(s.i) && Number.isInteger(s.j) && inMap(s.i, s.j) && S.ewK && ewAt(tIdx(s.i, s.j))) {
@@ -489,6 +491,15 @@ const ORDERS = {
     }
     return n;
   },
+  /* ---------------------------------------------------------------- spacecraft (space maps: js/sim.js, spaceCommand and the rest) */
+  /** Shuttle uid tows drifting asteroid rid home to its pad. */
+  tow(p, uid, rid) { const u = ownU(p, uid, 'craft'); return u ? orderTow(p, u, rid | 0) : 'That Shuttle is gone.'; },
+  /** Dropship uid lands a squad at (i, j): robots `ids` (picked), or with none up to n of `kind` ('warbot' from the garrisons, 'worker' idle ones). */
+  squad(p, uid, i, j, ids, kind, n) { const u = ownU(p, uid, 'craft'); if (!u) return 'That Dropship is gone.'; return orderSquad(p, u, i | 0, j | 0, Array.isArray(ids) ? ownIds(p, ids).slice(0, 12) : null, kind === 'worker' ? 'worker' : kind === 'warbot' ? 'warbot' : null, n | 0); },
+  /** Gunships `ids`: 'attack' building tid, 'hunt' robot tid, 'hold' at (i, j), 'home' to their pads. */
+  gunships(p, ids, kind, tid, i, j) { if (!['attack', 'hunt', 'hold', 'home'].includes(kind)) return 0; const t = tid ? getE(tid) : null; if ((kind === 'attack' || kind === 'hunt') && (!t || t.dead || !foes(t.owner, p))) return 0; return orderGunships(p, ownIds(p, ids), kind, tid | 0, (+i || 0) + 0.5, (+j || 0) + 0.5); },
+  /** Craft uid back to its pad (a job not yet under way called off). */
+  craftHome(p, uid) { const u = ownU(p, uid, 'craft'); return !!u && recallCraft(u); },
   sail(p, fid, i, j) { const f = ownU(p, fid, 'ferry'); return f ? orderSail(p, f, i, j) : 'That Ferry is gone.'; },
   ferryBack(p, fid) { const f = ownU(p, fid, 'ferry'); if (f) ferryBack(f); },
   sailOut(p, fid) { const f = ownU(p, fid, 'ferry'); return f ? sailOut(p, f) : 'That Ferry is gone.'; },

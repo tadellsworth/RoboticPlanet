@@ -3764,6 +3764,7 @@ function newGame(opts) {
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
   clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
+  if (spaceMap() && mode === 'versus' && !hand) spaceSetup(seed); // (space: the drifting asteroids' lanes and the derelict modules)
   S.decor = makeDecor();
   if (S.orb) S.decor.fill(0); // (no plants on a station's decks)
   if (S.orb) orbRoads(); // (and the lowered bridges carry roads)
@@ -3772,6 +3773,7 @@ function newGame(opts) {
   if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = S.town.x0; i <= S.town.x1; i++) if (townIn(i, j)) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
   if (S.walker) for (let t = 0; t < S.W * S.H; t++) if (walkerYard(t % S.W, (t / S.W) | 0)) S.decor[t] = 0; // (nor on the Walking Factory's yard)
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
+  if (S.space) for (const m of S.space.mods) for (let dj = 0; dj < 2; dj++) for (let di = 0; di < 2; di++) S.decor[tIdx(m.x + di, m.y + dj)] = 0; // (nor on a derelict module)
   scarSetup(); // (War scars: its layers and lists)
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
@@ -3945,11 +3947,32 @@ function secondBiomePlant(x, y, seed, mix) {
 function hollowOn() { return !!(S && S.hollow); }
 
 /**
+ * Why building `type` is out on this map for space's sake ('' if it isn't): out in space (spaceMap) no Airfield, Mooring
+ * Mast or Flak Gun (spacecraft fly from Launch Pads; Point-Defence takes Flak's place); anywhere else no Launch Pad or
+ * Point-Defence Turret (BDEFS space). The build menu leaves them out altogether (spaceHidden).
+ */
+function spaceOff(type) {
+  const def = BDEFS[type];
+  if (!def || !S || !S.settings) return '';
+  if (spaceMap()) {
+    if (def.airfield || def.mast) return 'Nothing flies on wings out in space: spacecraft fly from a Launch Pad.';
+    if (def.flak) return 'No Flak Gun out in space: the Point-Defence Turret takes its place.';
+    return '';
+  }
+  return def.space ? `The ${def.name} is for space: The Ring and Orbital platforms.` : '';
+}
+/** Is building `type` left out of the build menu on this map (spaceOff)? */
+function spaceHidden(type) { return !!spaceOff(type); }
+
+/**
  * Why a `type` can't be built in this game's world at all ('' if it can): in the Hollow, no aircraft fly underground
  * (no Airfields, and no missiles: no Missile Factory, Silo or Nuclear race), nothing grows without light (no Grove Planters or Bio Farms), and there are no Trade Posts to dock
  * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
 function worldBan(type, t) {
+  // (Space, phase 1: out in space nothing flies on wings and no Flak fires; the Launch Pad and Point-Defence are for space alone: spaceOff.)
+  const sp = spaceOff(type);
+  if (sp) return sp;
   // (Terraforming stage 2: nothing to grow on the moon or under a cavern roof, and no water in the lava lakes.)
   if (BDEFS[type] && BDEFS[type].t2) {
     if (biome() === 'lunar') return 'Nothing grows on Argos: there is no air or water here for soil, groves or irrigation.';
@@ -4883,6 +4906,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
   if (orbTile(t)) return { ok: false, reason: 'A drawbridge: nothing is built on it.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
+  if (S.space && spaceModAt(t)) return { ok: false, reason: 'A derelict module stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
@@ -5224,6 +5248,7 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
+  if (S.space && spaceModAt(t)) return false; // (a derelict module: space)
   if (orbTile(t)) return false; // (a drawbridge's strip carries its own road while it is down: orbFlip)
   if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
@@ -6324,7 +6349,7 @@ function killBot(bot, quiet) {
   // A warbot carrying loot drops its crate where it falls (anyone's warbots can pick it up).
   if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
   // A Crawler wrecked on the move spills the goods it was carrying. (A plane's load is lost with it.)
-  if (bot.cargo && !BOTS[bot.type].air && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
+  if (bot.cargo && !BOTS[bot.type].air && !BOTS[bot.type].craft && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
   // A Tanker with a load on board explodes (see fuelBlast), and its load burns. Any other hauler, truck
   // or train with goods on board drops them.
   const boom = !quiet && (BOTS[bot.type].tanker || BOTS[bot.type].tankShip) && bot.carry && bot.carryN > 0 && typeof fuelBlast === 'function' ? Math.min(1, bot.carryN / BOTS[bot.type].carry) : -1;
@@ -6332,6 +6357,7 @@ function killBot(bot, quiet) {
   if (boom >= 0 || BOTS[bot.type].sea) { bot.carry = null; bot.carryN = 0; } // a ship's load goes down with it
   // A Ferry sunk with bots aboard takes them down with it; anyone waiting for a ferry stops.
   if (BOTS[bot.type].air && typeof planeLost === 'function') planeLost(bot);
+  if (BOTS[bot.type].craft && typeof craftLost === 'function') craftLost(bot); // (space: a Shuttle's promised load, a towed rock)
   if (bot.aboard) for (const id of bot.aboard) { const v = getE(id); if (v && !v.dead) { v.ferryWait = null; killBot(v, true); } }
   if (bot.ferryWait) bot.ferryWait = null;
   const wasFerry = BOTS[bot.type].ferry;
@@ -6781,6 +6807,8 @@ function checkSave(o) {
     if (C.nestsOut != null && (!Array.isArray(C.nestsOut) || C.nestsOut.length > 64 || !C.nestsOut.every((q) => pt(q, ['x', 'y'])))) bad(); // (the surface's: a save from before them has none)
     if (o.cave == null) bad();
   }
+  // Space (S.space: spaceSetup): the drifting asteroids' lanes and rocks, the derelict modules, plain numbers on the map.
+  if (o.space != null) spaceCheckSave(o, bad);
   // A Contingency battle's landmark (js/landmarks.js): its tiles and its state.
   if (o.landmarks != null) { if (typeof lmCheckSave === 'function') lmCheckSave(o, bad); else bad(); }
   // Passenger Town (townSetup): its rectangle, its blocks' spans, signs and plazas, and its buildings.
@@ -7242,6 +7270,7 @@ function deserializeGame(json) {
     tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
     clearCalmGround(); // (a save from before the Trade Posts' ground was kept clear of deposits: moved just off it)
+    if (spaceMap() && S.mode === 'versus' && !S.mission && !S.space) spaceSetup(S.seed); // (a space map saved before its asteroids and derelicts)
     const terrWas = S.territoryVer;
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
     // (The load's own count of the land is not a change of land: the AI's "no spot found" notes, which hold only while the land is as it was, keep holding, as in a game that wasn't saved.)
