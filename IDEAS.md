@@ -3026,3 +3026,10 @@ grey regolith, darker maria mostly on the side toward Ithaca I, a few hundred cr
 ones with rays. It is shaded per pixel at the size it shows, at the canvas's own resolution (`mplMoonShade`: a hard
 terminator, crater walls catching the light, a thin rim on the limb toward Corvane, faint planetshine on the night side),
 cached and shaded again only when it has turned a step (tidally locked, it turns once an orbit). Same place and size.
+
+## Open: map audit follow-ups (Nov 27 2026)
+
+From `docs/map-audit-nov27.md` (owner's call on each): a Fuel source in walking reach on Small maps (most map types have
+no oil seep either colony can walk to on Small); a floor on the starter Ore and Crystal fields (a seed can leave one
+tile of each, or none); Trade Posts and Uplinks on walkable ground on maps meant to be walked; the Small-map Trade Post
+gap; the starter Crystal under the Dam's ramp feet on Small; a start tip for Standard and Long haul.

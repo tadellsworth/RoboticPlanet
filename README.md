@@ -348,7 +348,7 @@ Players can cut additional ramps or build crossings through Paths.
 a flat map with the Pathfinder's town filling the middle. `townSetup` (js/world.js) lays a grid of blocks
 (`TOWN.blockX` 4 to 6 tiles wide, `blockY` 3 to 5 deep) with 2-tile streets between, by the map's symmetry:
 **two** colonies, a band across the map with a street down and across the middle, kept `TOWN.clear` rows short of each
-base, laid on the south half and turned half round onto the north, tile for tile; **four** (a square map, `quadMap`), a
+base (the town's ground is cleared bare and a row round it levelled, its deposits kept: the starter fields can reach it), laid on the south half and turned half round onto the north, tile for tile; **four** (a square map, `quadMap`), a
 square town `TOWN.ring.four` of the map's side across (`townQuad`), each colony on an edge a little left of its middle
 (generateMap's `edge4`: its starter fields stay in its own quarter), the town square in the middle with the one civic
 tower, laid on the south-west quarter and turned a quarter at a time, tile for tile (2 vs 2: allies side by side);
@@ -434,7 +434,9 @@ flat map (`flat`) with a raised shelf and the Pathfinder's reservoirs laid over 
 end of `generateMap`, so the new-game preview shows it). Each colony has a frame (`damFrames`: u from the middle toward
 its base, v across), the map's own turn (the half turn for two, a quarter turn for four, a third for three), so
 whatever is laid out by (u, v) in every frame is the same on every side, to the bit for two and four (four colonies:
-`quadMap`, each base at the middle of an edge, generateMap's `edge4`). In each frame: a shelf one level up from behind
+`quadMap`, each base at the middle of an edge, generateMap's `edge4`: its landing zone and starter fields straddle the
+quarter's edge, so the part over it is laid at the spot in the bottom-left quarter the turn copies there, `src4`, and
+no random field lands on it). In each frame: a shelf one level up from behind
 the middle to `rim` (`DAM.rim` of the way to the base, at least `DAM.room` short of it), `DAM.shelf` of that way wide
 each side (6 to 11 tiles), wobbling; a lake (water at level 1) on it whose throat reaches the front edge, where the dam
 (`DAM.gap` each side of the middle: 5 or 6 tiles of rock under its art, `pillarAt`) closes a notch between two crags,

@@ -285,6 +285,19 @@ function generateMap(seed, W, H, cfg) {
   }
   const CR_TOP = 2; // (the terrace is a level lower, the lowland two)
   const F_FERTILE = 100;
+  // The tile of the generated part a tile's value comes from: itself, or -1 outside it. (The Dam for four: each base
+  // stands on its quarter's edge, so the half of its landing zone and starter fields over the edge is laid at the spot
+  // in the bottom-left quarter that the turn copies there: beside the next colony's base, (bx1, by1).)
+  const dam4 = edge4 && !!SH.dam, bx1 = W - 1 - by, by1 = bx;
+  const src4 = (i, j) => {
+    if (canon(i, j)) return id(i, j);
+    if (!dam4 || i < 0 || j < 0 || i >= W || j >= H) return -1;
+    let s = id(i, j);
+    for (let n = quarter(i, j); n > 0; n--) s = r4back(s);
+    return s;
+  };
+  // Is (x, y) within r of a base's landing ground in the generated part (the Dam for four: the other half of it too)?
+  const nearHome = (x, y, r) => dist2(x, y, bx, by) < r * r || (dam4 && dist2(x, y, bx1, by1) < r * r);
   const stampDens = clamp(dens, 0.7, 1.15);
   const fields = [];
   // force: the field and a ring of ground around it become open land, so it is never cut off by
@@ -296,18 +309,18 @@ function generateMap(seed, W, H, cfg) {
       const m = rad + 1.5;
       for (let j = Math.floor(cy - m); j <= Math.ceil(cy + m); j++) {
         for (let i = Math.floor(cx - m); i <= Math.ceil(cx + m); i++) {
-          if (i < 1 || !canon(i, j) || i >= W - 1 || j >= H - 1 || dist2(i, j, cx, cy) > m * m) continue;
-          terrain[id(i, j)] = T_GROUND;
-          if (near) elev[id(i, j)] = baseLevel;
+          if (i < 1 || src4(i, j) < 0 || i >= W - 1 || j >= H - 1 || dist2(i, j, cx, cy) > m * m) continue;
+          terrain[src4(i, j)] = T_GROUND;
+          if (near) elev[src4(i, j)] = baseLevel;
         }
       }
     }
     for (let j = Math.floor(cy - rad); j <= Math.ceil(cy + rad); j++) {
       for (let i = Math.floor(cx - rad); i <= Math.ceil(cx + rad); i++) {
-        if (i < 1 || !canon(i, j) || i >= W - 1 || j >= H - 1) continue;
+        if (i < 1 || src4(i, j) < 0 || i >= W - 1 || j >= H - 1) continue;
         const d2 = dist2(i, j, cx, cy);
         if (d2 > rad * rad) continue;
-        const t = id(i, j);
+        const t = src4(i, j);
         if (force) terrain[t] = T_GROUND;
         else if (terrain[t] !== T_GROUND) continue;
         if (type === -1) { res[t] = R_NONE; fert[t] = 0; elev[t] = baseLevel; continue; }
@@ -320,7 +333,7 @@ function generateMap(seed, W, H, cfg) {
   const jit = () => Math.floor(rng() * 3) - 1;
   // The landing zone is one flat terrace so the starter fields are always within easy reach.
   for (let j = by - 7; j <= Math.min(H - 1, by + 7); j++) {
-    for (let i = bx - 7; i <= bx + 7; i++) if (dist2(i, j, bx, by) <= 49.5) elev[id(i, j)] = baseLevel;
+    for (let i = bx - 7; i <= bx + 7; i++) if (dist2(i, j, bx, by) <= 49.5 && (!dam4 || src4(i, j) >= 0)) elev[dam4 ? src4(i, j) : id(i, j)] = baseLevel;
   }
   // Starter fields inside the landing zone.
   field(bx - 6 + jit(), by - 2 + jit(), 2.5, R_STALK, 0.85 * stampDens, true);
@@ -401,7 +414,7 @@ function generateMap(seed, W, H, cfg) {
       if (tries === 55) gap = -1;
       const [x, y] = np === 2 ? [2 + rng() * (W - 5), half + 1 + rng() * (H - half - 3)] : canonPoint(rng, 3);
       if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND) continue;
-      if (dist2(x, y, bx, by) < 64) continue;
+      if (nearHome(x, y, 8)) continue;
       if (fields.some((o) => dist2(x, y, o.x, o.y) < sq(o.r + f.r + gap))) continue;
       field(x, y, f.r, f.type, f.fill, false);
       break;
@@ -414,7 +427,7 @@ function generateMap(seed, W, H, cfg) {
     for (let tries = 0; tries < 600 && placed < URANIUM_DEPOSITS; tries++) {
       const [x, y] = np === 2 ? [1 + Math.floor(rng() * (W - 2)), half + 1 + Math.floor(rng() * (H - half - 2))] : canonPoint(rng, 2).map(Math.floor);
       const t = id(x, y), d = Math.sqrt(dist2(x, y, bx, by));
-      if (terrain[t] !== T_GROUND || res[t] || fert[t] || d < 11) continue;
+      if (terrain[t] !== T_GROUND || res[t] || fert[t] || d < 11 || nearHome(x, y, 11)) continue;
       if (rng() > clamp((d - 8) / 20, 0.25, 1)) continue; // deposits near the base are rarer
       res[t] = R_URANIUM;
       placed++;
@@ -7373,12 +7386,14 @@ function townSetup(seed, bases) {
   if (round) { T.rad = rad; T.lobe = lobe; }
   const inTown = (i, j) => i >= x0 && i <= x1 && j >= y0 && j <= y1 && (!rad || dist2(i, j, ccx, ccy) <= townEdge(rad, lobe, datan2(j - ccy, i - ccx)) ** 2);
   const rectIn = (r) => inTown(r.x, r.y) && inTown(r.x + r.w - 1, r.y) && inTown(r.x, r.y + r.h - 1) && inTown(r.x + r.w - 1, r.y + r.h - 1);
-  // The town's ground (and a row round it): open, level, bare.
+  // The town's ground: open, level, bare; and a row round it open and level, its deposits kept (the starter fields in
+  // front of a base can reach it: on Medium for three, a colony's only Crystal or Ore near home).
   const e0 = S.elev ? S.elev[tIdx(W >> 1, H >> 1)] : 0;
   for (let j = Math.max(0, y0 - 1); j <= Math.min(H - 1, y1 + 1); j++) for (let i = Math.max(0, x0 - 1); i <= Math.min(W - 1, x1 + 1); i++) {
     if (rad && dist2(i, j, ccx, ccy) > (townEdge(rad, lobe, datan2(j - ccy, i - ccx)) + 1.5) ** 2) continue;
     const t = j * W + i;
-    S.terrain[t] = T_GROUND; S.res[t] = 0; S.amt[t] = 0; if (S.fert) S.fert[t] = 0; if (S.grow) S.grow[t] = 0; if (S.ramp) S.ramp[t] = 0;
+    if (S.terrain[t] !== T_GROUND || inTown(i, j)) { S.res[t] = 0; S.amt[t] = 0; if (S.fert) S.fert[t] = 0; if (S.grow) S.grow[t] = 0; }
+    S.terrain[t] = T_GROUND; if (S.ramp) S.ramp[t] = 0;
     if (S.elev) S.elev[t] = e0;
   }
   // The avenues: two colonies, the middle street from end to end; four, the street in front of each base right across
