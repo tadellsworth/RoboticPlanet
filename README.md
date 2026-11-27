@@ -855,7 +855,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   type being built is highlighted. The AI keeps the default order, taking turns.
 - **Terraforming, stage 1** (Nov 2026; `TERRA` in `js/defs.js`, the rules and the work in `js/sim.js`: `tfWhere`,
   `tfJob`, `tfPlace`, `graderDispatch`, `tfApproach`, `completeEarthwork`; the tab, the plan mode and the drawing in
-  `js/terraform.js`). **Build → Terraform** (key 7, `BUILD_KEYS.terra`): **Raise** (R) and **Lower** (L) a tile a
+  `js/terraform.js`). **Build → Terraform** (key 6, `BUILD_KEYS.terra`): **Raise** (R) and **Lower** (L) a tile a
   level, **Flatten** (F: a dragged rectangle to the level of its first tile), **Fill shallows** (H: water beside land
   becomes land, level with the ground it's built out from: new ground planned beside it, else the shore its owner's
   robots stand on) and **Dig channel** (C: land at the waterline beside water becomes water). The plan mode
@@ -3414,7 +3414,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
   Nov 2026). Late-game, one of each type per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
-  `late`: drawn after All, key **6**; L the Lance, Y the Sundering Ray, H the Dome, C Arrival City, O the Orbital Lift, N the Atmosphere Engine, E the Deep Core, U the Great Uplink), all bigger than a tile: `def.foot` (3, 3, 2, 4, 3, 4, 3 or 3)
+  key **5**; L the Lance, Y the Sundering Ray, H the Dome, C Arrival City, O the Orbital Lift, N the Atmosphere Engine, E the Deep Core, U the Great Uplink), all bigger than a tile: `def.foot` (3, 3, 2, 4, 3, 4, 3 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
   `footBlocks` for not closing a way through; `bCentre` its middle, `footDist` distances to it).
@@ -4127,15 +4127,14 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   (Pause, Move, Dismantle) or an Army group's `.army-cmds` is moved after the flow as `.sheet-foot` and sticks to the
   bottom. A `p.desc` or `p.hint` over three lines folds to two (`.folded`) with a `.more-btn` (More / Less, remembered
   in `UI.unfolded`). A very long panel takes three columns from 1400 px wide (`long > 1.6`). Build's cards are in tab
-  order, each tab's under a `.b-grp` heading; on All on a wide screen (`.build-grid.all`, `body.sheet-build-all`) the
-  panel spans the screen above the dock and the cards flow down columns as compact two-line cards; elsewhere the
-  grid's CSS `order` keeps the next step, Roads, Blueprints and Walls first. Missions and Keys flow down columns (four
+  order, one tab at a time (there is no All tab since Nov 27 2026: an old saved `botfall.buildTab` of `all` opens on
+  Gather); the grid's CSS `order` keeps the next step, Roads, Blueprints and Walls first. Missions and Keys flow down columns (four
   or five), Statistics' tiles take one row and its charts three across. Under a mouse (`pointer: fine`) a panel's rows
   of controls are compact (buttons 34 px, order rows 30 px); touch keeps 44 px. Third pass (a 1280×720 desktop): a
   panel two columns don't hold takes three from 1200 px wide (decided in the same frame, so nothing jumps); under
   1400 px those span the screen above the dock (solid, the selection bar stepping aside), and on a short screen
   (≤ 820 px tall) a panel three don't hold takes four (`.cols4`). A short screen also packs a panel's name line, rows,
-  paragraphs and upgrade cards, Keys (smaller type), Statistics (118 px charts), Missions, Build's All, Settings (two
+  paragraphs and upgrade cards, Keys (smaller type), Statistics (118 px charts), Missions, Settings (two
   columns) and the end of a game (its numbers two pairs a line) tighter; a mouse gets 30 px buttons there, touch
   keeps 44 px.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
@@ -4147,9 +4146,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   tall building is picked by its picture too (`buildingUpperAt`: the solid pixels of its art and turning head above its
   tiles, a Mooring Mast's cup, a Keep's walls; the one in front where they overlap; the Walking Factory's whole sprite,
   `walkerAtTap`; Passenger Town's buildings, `townAtTap`), robots drawn in front of it still first. Keys:
-  **B** build, then **1–6** a tab (Gather, Make, Move, Defend, All, Mega; **Tab** steps; a new game opens on Gather, then on the last one used) and the
+  **B** build, then **1–6** a tab (Gather, Make, Move, Defend, Mega, Terraform; **Tab** steps; a new game opens on Gather, then on the last one used) and the
   letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D or B;
-  R is Ore Mine on Gather and Refinery on Make; on All a card shows "2 C"; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
+  R is Ore Mine on Gather and Refinery on Make; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),

@@ -4,7 +4,7 @@
  * (the stage 2 block: updateComposter, the Nursery's Agribot in doStaff, t2Groves, t2Water, t2Shift, groveSlow,
  * groveBurn, t2Earthwork) and the numbers in SOIL, GROVE, IRR and SHIFT (js/defs.js).
  *
- *  - Build → Terraform (key 7) holds the stage 2 buildings beside the Grader's tools: the Composter (M), the Tree
+ *  - Build → Terraform (key 6) holds the stage 2 buildings beside the Grader's tools: the Composter (M), the Tree
  *    Nursery (N) and the Water Pump (P) (t2Cards), with their reach shown while placing (t2Ranges) and their panels
  *    (t2Panel). The Grader's Spread soil (O) and Reclaim (E) are tools in js/terraform.js.
  *  - The ground, baked with the map (t2PaintTile): humus darkening barren ground as it enriches, wet ground turning
