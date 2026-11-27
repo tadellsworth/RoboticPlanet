@@ -5222,6 +5222,7 @@ sites added; `node tools/workforce-test.js [seed] [minutes]`, every check runs o
 games with different settings (Auto untouched,
 Manual order, caps, minimums, pins and Keep staffed, Rebalance, a save and load, builders kept free, minimums with
 nobody free, a pinned factory at its stock limit, the player's own presets), then two devices over the lockstep
+(a Versus game on a Large map the computer plays for 10 minutes first, so neither colony has captured the other)
 changing the settings all game (and ordering Graders and Terraform jobs), one reloading halfway, their fingerprints compared every second.
 
 ```bash
