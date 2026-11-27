@@ -2882,6 +2882,7 @@ const SHIFT_KEYS = {
   f: { group: 'panels', label: 'Order bots (again for the next Foundry)', run: openFoundryOrders },
   w: { group: 'panels', label: 'Workforce: what your Workers are doing, and who gets them first', run: () => { if (UI.sheetKind === 'wf') closeSheet(); else openWorkforce(); } },
   t: { group: 'paths', label: 'Toggle Goods flow', run: () => togglePathsMap('goods', R.goodsMap) },
+  r: { group: 'army', label: 'Terrain routes: the ways through the terrain into your base, and its back doors', run: () => rtToggle(), when: () => typeof rtToggle === 'function' && !(R.mode === 'place' && UI.placeType && BDEFS[UI.placeType] && BDEFS[UI.placeType].lift) }, // (js/routes.js; placing an Orbital Lift, Shift+R turns it back)
   a: { group: 'army', label: 'Ally: command your computer teammate (team games)', run: () => openAllySheet(), when: () => myAiAllies().length > 0 }, // (else Shift+A pans, as A does)
   g: { group: 'panels', label: 'Greening: the land made ready, and what counts', run: () => { if (UI.sheetKind === 'green') closeSheet(); else openGreening(); } }, // (stage 5: js/terraform5.js)
   ...Object.fromEntries(Object.entries(PATHS_SHIFT_KEYS).map(([k, tool]) => [k, {

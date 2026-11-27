@@ -101,6 +101,7 @@
     <button id="mm-hide" class="mm-hide" aria-label="Hide minimap">
       <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
     </button>
+    <button id="mm-routes" class="mm-routes" aria-pressed="false" aria-label="Terrain routes: the ways through the terrain into your base" title="Terrain routes: the ways through the terrain into your base, and its back doors (Shift+R)" hidden>ROUTES</button>
     <button id="mm-green" class="mm-green" aria-pressed="false" aria-label="The Green layer: the land made ready" title="The Green layer: the land made ready (Shift+G for the Greening panel)" hidden></button>
   </div>
   <button id="mm-show" class="chip chip-btn mm-show" aria-label="Show minimap" hidden>
@@ -898,6 +899,7 @@
           <a href="#hs-army" data-jump="hs-army">Fighting and the army</a>
           <a href="#hs-agroups" data-jump="hs-agroups">Army Groups</a>
           <a href="#hs-defence" data-jump="hs-defence">Defences and walls</a>
+          <a href="#hs-routes" data-jump="hs-routes">Terrain routes: back doors into your base</a>
           <a href="#hs-missiles" data-jump="hs-missiles">Missiles and nukes</a>
           <a href="#hs-radiation" data-jump="hs-radiation">Radiation</a>
           <a href="#hs-mega" data-jump="hs-mega">Megastructures: the Lance, the Sundering Ray, the Dome, Arrival City, the Orbital Lift, the Deep Core, the Great Uplink</a>
@@ -1431,10 +1433,24 @@
         <ul class="chain">
           <li>They're paid straight from storage (what you have now, the rest as it comes in), so no Hauler or road is needed, and free Workers put each one up, standing beside it on your side so nobody is walled out. Drag a double wall and the outer row goes up first. They go anywhere on no-one's land your bots can reach, outside the site limit.</li>
           <li>Walls stop every bot, even a diagonal line of them. Your own bots drive through your Gates; enemy warbots have to go round or shoot their way through (a Wall takes 40 hits, a Gate 32, and a Missile knocks 24 off: two break one open), burning Ammo while your turrets pick them off. A wrecked Gate leaves its road behind.</li>
-          <li>Walls are best across a narrow pass, with turrets just behind.</li>
+          <li>Walls are best across a narrow pass, with turrets just behind. <b>Terrain routes</b> (<kbd>Shift</kbd>+<kbd>R</kbd>) shows the narrow gaps and any way in nothing covers.</li>
         </ul>
         <p><b>Earthworks</b> (Build → Terraform, a Grader's job): an Earth Bank or Dragon's Teeth stop vehicles and heavy robots and let the rest through slowly, cheaper than Walls; a Fire Trench and a Bank give your robots cover. See "Terraforming: earthworks, floods and saps".</p>
         <p><b>The rival defends too.</b> Beside a fort under attack it builds whichever of Minigun Nest, Bunker, Mortar Pit or Disruptor it has fewest of, and from about 10 minutes in it puts a Minigun Nest or Bunker by its front fort without waiting to be hit. Most rivals build a Keep about a quarter of an hour in (a Warden its first early, and up to three), put up Flak once you have an Airfield, and may wall the side that faces you. On Chokepoint maps the rival walls its end of the pass, from Medium up. From Medium up, when your army comes near its base it calls its warbots home and keeps about a third of them there (and a few in each Keep; a Salvager keeps its home guard thin). An army you park on its land, out of reach of its guns, gets a Mortar Pit put up to shell it (Normal and Hard, and a Warden on any level).</p>
+        <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
+      </section>
+
+      <section id="hs-routes">
+        <h3>Terrain routes: back doors into your base</h3>
+        <p><b>Terrain routes</b> (<kbd>Shift</kbd>+<kbd>R</kbd>, or the <b>ROUTES</b> tag on the minimap; on a phone it hangs under the minimap's left end) lays the ways through the terrain over the map, so you can see where a rival's army could slip round a cliff into your base. A card in the bottom left corner switches between <b>Ground</b>, <b>Aircraft</b> (<b>Spacecraft</b> on The Ring and Orbital platforms) and <b>Ships</b>, and its <b>×</b> (or <kbd>Shift</kbd>+<kbd>R</kbd> again) turns it off. It only shows: nothing in the game changes.</p>
+        <ul class="chain">
+          <li><b>Ground:</b> the ground a ground robot can walk is shaded green (paler where no foe's route starts in it), water, rock and chasms dark. <b>Cliff edges</b> are drawn <b>orange</b> where one level separates the two sides (a Ramp could join them) and <b>red</b> where the drop is two levels or more. <b>Ramps</b> are striped blue, <b>fords</b> dotted blue, bridges and tunnels outlined white. Viaducts, Ropeways, saps and Mass Driver lines are dashed links between their two ends, in their owner's colour.</li>
+          <li><b>Narrow gaps</b> are bright yellow <b>gates</b> across the gap: ground 3 tiles wide or less between cliffs, water or rock, with open ground either side, and Ramps up to 4 wide. A gate on an approach route glows brighter and is labelled with its width: the place to put a Wall and a turret.</li>
+          <li><b>Approach routes:</b> dashed lines in the foe's colour from each rival's Command Base, its armed robot nearest you, and its Mass Driver Catchers (in a colony with no rival: the Murmur's nearest nests) to your Command Base, and from the nearest of them to your Bot Foundry, Keep and megastructures. They are the routes the rival's army would really march: the game's own route search, round your guns where the way round is short, round groves and earthworks, through a Wall where it must.</li>
+          <li><b>Back doors:</b> where a route comes into your land, the first 6 tiles in are checked. A defence in reach (Pulse Turret, Minigun Nest, Mortar Pit, Disruptor Tower, a manned Bunker, a Keep), a Wall or Gate across it, an earthwork of yours or a manned Outpost or garrison within 5 tiles covers it: a small <b>green check</b>. Nothing there: a red <b>!</b>, <i>Back door: unguarded</i>. Only guns with no ammo: an amber <b>!</b>. The card counts them; <b>Show</b> takes you to each in turn and says why.</li>
+          <li><b>Aircraft</b> fly over everything: the whole map is open, the routes are straight lines from rival Airfields and bases, and only a <b>Flak Gun</b> in reach of the way in covers it. <b>Ships</b> sail open water: the water ships can sail is shaded blue, the routes run from rival Ports to the nearest water beside your land, and a defence that reaches the landing covers it.</li>
+        </ul>
+        <p>It is worked out when you open it, when you switch, and then every few seconds while the terrain, the buildings or the foes' armies have changed. Your own base's garrison doesn't count as covering a way in: it's the last line, not the door.</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -2072,6 +2088,7 @@
         <ul class="chain keys">
           <li><kbd>B</kbd> Build, then a tab (<kbd>1</kbd> Gather, <kbd>2</kbd> Make, <kbd>3</kbd> Move, <kbd>4</kbd> Defend, <kbd>5</kbd> Mega, <kbd>6</kbd> Terraform; <kbd>Tab</kbd> steps through them) and the letter on a card. A new game opens on Gather, after that on the tab you used last. <kbd>R</kbd> is the Ore Mine on Gather and the Refinery on Make; on the other tabs <kbd>B</kbd> <kbd>R</kbd> lays roads, <kbd>B</kbd> <kbd>X</kbd> walls.</li>
           <li><kbd>R</kbd> Paths on Roads (again to close); <kbd>P</kbd> Paths on the tool you used last. The tool keys work straight from the map too: <kbd>G</kbd> Bridges, <kbd>V</kbd> Ramps, <kbd>E</kbd> Pave, <kbd>O</kbd> Arrows, <kbd>L</kbd> Junctions, <kbd>X</kbd> Walls, <kbd>N</kbd> Rail, <kbd>K</kbd> Pipes, <kbd>T</kbd> Traffic map, <kbd>Z</kbd> Route to; <kbd>Shift</kbd>+<kbd>V</kbd> Viaducts, <kbd>Shift</kbd>+<kbd>Y</kbd> Ropeways, <kbd>Shift</kbd>+<kbd>T</kbd> Goods flow.</li>
+          <li><kbd>Shift</kbd>+<kbd>R</kbd> Terrain routes: the ways through the terrain into your base, and its back doors.</li>
           <li><kbd>Q</kbd> Army panel. Inside it: <kbd>Q</kbd> Attack, <kbd>G</kbd> Hold ground, <kbd>V</kbd> Station, <kbd>1</kbd>–<kbd>4</kbd> group size, <kbd>Z</kbd>/<kbd>X</kbd> Army or Air tab, <kbd>E</kbd> Strike. Picking a bomber's target, <kbd>B</kbd> or <kbd>N</kbd> switches between Bomb and Napalm.</li>
           <li><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>6</kbd> select an Army Group (twice to go to it), <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>6</kbd> its panel.</li>
           <li><kbd>C</kbd> recall all warbots; <kbd>F</kbd> select every warbot (all but one in each garrison); <kbd>,</kbd> pick the idle ones, a group at a time.</li>
@@ -2096,6 +2113,7 @@
           <li><b>Economy</b> (<kbd>Y</kbd>, or tap a good in the top bar): each good's stock, rates, chain and the buildings that make and use it; the whole supply chain and its bottlenecks; and History. See The Economy panel.</li>
           <li><b>Your robots</b> (<kbd>U</kbd>): every robot by type and job, against the limit, your spare Workers with <b>Recycle spare Workers</b>, and where each warbot is, with <b>Show</b>. <b>Show workers on the map</b> rings every Worker (and dots it on the minimap) by what it's doing: green running buildings, orange building or paving, blue carrying, purple recharging, red being repaired, grey going to be recycled, yellow free, with a line to where it's going.</li>
           <li><b>Traffic map</b> (<kbd>T</kbd>) and <b>Goods flow</b> (<kbd>Shift</kbd>+<kbd>T</kbd>): see Roads and traffic.</li>
+          <li><b>Terrain routes</b> (<kbd>Shift</kbd>+<kbd>R</kbd>, or <b>ROUTES</b> on the minimap): walkable ground, cliffs, ramps, narrow gaps and the routes into your base, with its back doors. See Terrain routes.</li>
           <li><b>Statistics</b> (<kbd>I</kbd> and the pause menu: the Economy panel's <b>History</b> tab; the end screen and Observer mode: a screen of its own): graphs over time of your bots, land and goods, your <b>Economy size</b> (pick Output: goods made a minute, Buildings, or Workers and vehicles) and, with war on, your <b>Military size</b> (pick Army or Defences), against your rivals in Versus; then how busy each kind of building was over the game. Each building's panel shows how busy it's been lately.</li>
           <li>The <b>end screen</b> opens with the result flaring in big over the map, <b>VICTORY</b> (or <b>DEFEAT</b>, <b>CONTACT</b>; in a mission <b>COMPLETE</b> or <b>FAILED</b>; in Horde <b>HELD</b> or <b>OVERRUN</b>; in Observer mode <b>GAME OVER</b>), which then settles as its heading with a short line under it on how it was won or lost (a Contingency battle shows the word in blue, then goes back to the globe). Tap, click or press any key to skip straight to it. Music swells in under the word (triumphant for a win, dark and crushing for a loss) and your Command core says its last line in the machine tongue, subtitled at the top of the screen (see Getting started). It says how the game was won or lost, with the time played, buildings, bots, captures and losses. <b>New game</b> plays the same settings on a new planet.</li>
           <li>Below that, the <b>report</b>: the moments that mattered (your first robot, the first attacks each way, buildings lost, when Fiber, Alloy, Crystal or another good ran out and for how long, the deciding battle or capture), where your goods were lost (buildings destroyed, robots destroyed with their loads, crates left lying), and one <b>Next time, try</b> tip drawn from what happened.</li>
@@ -2637,6 +2655,7 @@
 <script src="js/orbital.js"></script>
 <script src="js/workforce.js"></script>
 <script src="js/economy.js"></script>
+<script src="js/routes.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

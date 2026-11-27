@@ -4146,3 +4146,42 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 .o-flare.green .of-flash { background: radial-gradient(ellipse 70% 45% at 50% 50%, rgba(220, 250, 200, 0.5), rgba(123, 224, 90, 0.14) 45%, transparent 72%); }
 #screen-over.won-green #o-title { background-image: linear-gradient(180deg, #f4ffe8 10%, #b9f0a2 58%, #7be05a); filter: drop-shadow(0 0 12px rgba(123, 224, 90, 0.3)); }
 #screen-over.won-green .o-kicker { color: #b9f0a2; }
+
+/* Terrain routes (js/routes.js, Shift+R): the minimap's ROUTES tag (top left; under a finger a tab hanging under the
+   minimap's left end, like its close button on the right) and the card
+   while the view is on (bottom left, over the tools): the mover switch, the key, and the back doors. Amber: a gate's. */
+.mm-routes { position: absolute; left: 3px; top: 3px; padding: 2px 5px; font: 700 9.5px/1.2 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.08em;
+  color: #ffe68a; background: rgba(14, 12, 6, 0.78); border: 1px solid rgba(255, 214, 80, 0.45); border-radius: 3px; cursor: pointer; }
+.mm-routes.on { color: #0b0c10; background: #ffd650; border-color: #ffd650; }
+body.deck .mm-routes { left: 9px; top: 23px; }
+@media (pointer: coarse) {
+  .mm-routes, body.deck .mm-routes { top: calc(100% + 1px); left: 8px; height: 24px; padding: 0 9px; font-size: 11px; border-radius: 0 0 10px 10px; border-top: 0; background: #0c0d11; }
+  .mm-routes::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 44px; }
+  .mm-routes.on, body.deck .mm-routes.on { background: #ffd650; }
+}
+.rt-card { position: fixed; z-index: 6; left: calc(var(--safe-l) + 8px); bottom: calc(var(--safe-b) + 84px); width: min(400px, calc(100vw - 16px - var(--safe-l) - var(--safe-r)));
+  padding: 8px 10px; border-radius: 12px; background: var(--panel); border: 1px solid rgba(255, 214, 80, 0.35); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 12.5px; line-height: 1.35; color: var(--text); }
+.rt-head { display: flex; align-items: center; gap: 8px; }
+.rt-head > b { font: 700 12px/1.2 'Chakra Petch', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #ffe68a; white-space: nowrap; }
+.rt-seg { display: inline-flex; margin-left: auto; }
+.rt-seg button { padding: 4px 8px; font-size: 12px; }
+.rt-x { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.08); color: var(--text); font-size: 18px; line-height: 1; }
+.rt-key { margin-top: 6px; color: var(--muted); }
+.rt-line { margin-top: 4px; }
+.rt-line .btn { margin-left: 4px; padding: 2px 10px; min-height: 0; }
+.rt-bad { color: #ff7b6b; }
+.rt-ok { color: var(--good); }
+.rk { display: inline-block; width: 14px; height: 8px; margin: 0 3px 0 6px; vertical-align: middle; border-radius: 2px; }
+.rk.walk { background: rgba(110, 240, 150, 0.55); }
+.rk.cliff { height: 3px; background: #ffa04a; }
+.rk.drop { height: 4px; background: #ff4040; }
+.rk.ramp { background: repeating-linear-gradient(180deg, rgba(120, 235, 255, 0.95) 0 1.5px, transparent 1.5px 3px); }
+.rk.gate { height: 4px; background: #ffe14d; box-shadow: 0 0 4px #ffe14d; }
+.rk.route { height: 3px; background: repeating-linear-gradient(90deg, #ff5a6e 0 5px, transparent 5px 8px); }
+.rk.door { width: 0; height: 0; border-radius: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid #ff4b4b; }
+.rk.air { background: rgba(150, 200, 255, 0.5); }
+.rk.sea { background: rgba(80, 180, 255, 0.7); }
+@media (pointer: coarse) { .rt-seg button { padding: 7px 10px; } .rt-x { width: 36px; height: 36px; } }
+@media (max-width: 600px) { .rt-head { flex-wrap: wrap; } .rt-x { order: 2; margin-left: auto; } .rt-seg { order: 3; width: 100%; margin-left: 0; } .rt-seg button { flex: 1; } }
+body.photo .rt-card, body.photo .mm-routes { display: none; }

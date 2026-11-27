@@ -1409,6 +1409,36 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   each good (a `Float32Array`, tiles × goods), and twice a second `fadeGoodsFlow` lets them fade with a time constant of
   a minute of game time (`GFLOW_FADE`) and works out each tile's total and main good. Only tiles in view are drawn, one
   stroke per good and width.
+- **Terrain routes** (`js/routes.js`; **Shift+R** from the map, or the **ROUTES** tag on the minimap, `#mm-routes`;
+  `SHIFT_KEYS.r`, which gives Shift+R back to turning an Orbital Lift while one is being placed): an overlay of the ways
+  through the terrain into your base, with a card (`#rt-card`, bottom left) to switch the mover between **Ground**,
+  **Aircraft** (**Spacecraft** on a map with `asteroids`, `orbital` or `space`, `rtSpace`) and **Ships**. Display only:
+  `rtAnalyse(me, mover)` reads `S` and writes nothing (`hashState` is unchanged; it never calls `dangerMap`, so it can't
+  change when the danger maps are worked out: it reads `DANGER.maps` only when they are current for this game).
+  - **Ground:** walkable ground shaded green (paler in areas no foe's route starts in), the rest dark; cliff edges
+    between walkable tiles that `canStep` refuses, orange at one level, red at two or more; Ramps striped, fords dotted,
+    bridges and tunnels outlined. **Gates** (`rtGates`): a run of `RT_GATE_W` (3) tiles or fewer between whatever stops
+    a ground robot, with the way on through it at least 2 tiles both sides and ground at least 2 tiles wider beyond, one
+    gate a joined group at its narrowest tile; and a Ramp no more than 4 wide. Cached while the terrain is the same
+    (`rtTerrainKey`, a hash of terrain, levels, ramps, roads and fords). Viaducts, Ropeways, saps and Mass Driver lines are
+    dashed links (`rtLinks`).
+  - **Approach routes** (`rtOrigins`, `rtTargets`): from each rival's Command Base, its armed army robot nearest your
+    base and its Catchers (the nearest 3 Murmur nests when there is no rival) to your Command Base; from the nearest
+    origin to your Bot Foundry, Keep and megastructures (3 targets at most). Found with `findPath` and the options of an
+    armed army on the march (`rtOpts`: `breach`, `WARBOT_OFFROAD`, your guns' cover, `ew` 3, groves and radiation for an AI).
+  - **Back doors** (`rtEntry`): the first tile of a route in your land, and the `RT_DEPTH` (6) tiles from 2 before it:
+    covered by a defence in reach (`rtCoverMap`: Pulse Turret, Keep, Minigun Nest, Mortar Pit, Disruptor Tower, a manned
+    Bunker; an amber warning if they have no ammo, `gunReach`), a Wall or Gate of yours on it, your earthwork on it, or a
+    manned garrison other than the Command Base within `RT_GARRISON_R` (5). Otherwise a red warning. Aircraft: straight
+    lines from rival Airfields and bases, covered only by a Flak Gun. Ships: from rival Ports' docks over open water
+    (`rtSeaRoute`) to the nearest water beside your land.
+  - **When:** at once on opening or switching; then at most every `RT_EVERY` (3) seconds of render time, and only when
+    `rtSig` (terrain, roads, land, buildings standing and built, garrisons, foes' armies to 4 tiles) has changed, or
+    every 15 s regardless. The shading and edges are baked into one canvas (`RT.layer`, up to 12 px a tile) when the
+    terrain changes and drawn scaled each frame; gates, links, routes and warnings are drawn live (`routesGround` under
+    the buildings, `routesOver` over them). Measured in Chromium: about 7 to 11 ms a working-out on a Huge map (ground;
+    under 1 ms for air and sea), the layer about 27 ms when the terrain changes, about 50 ms on Planetary; the check that
+    nothing changed, 0.2 ms. `node tools/routes-test.js` checks it headless.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
   storage, and anything nearby then draws on the Depot. A garrison that is storage too (the Command Base, a Drop Outpost,
   a Crawler) holds its own `ammoStock` back from supply orders and from other such garrisons (`ammoHeld`, `keepSupply`). Who carries what (see the comment above `TRUCK_MIN_DIST` in
@@ -4434,7 +4464,7 @@ hour in, one drizzle in eight found no spot before, one in sixty now). None in t
   R is Ore Mine on Gather and Refinery on Make; elsewhere **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
-  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
+  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Shift+R** Terrain routes, **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
   **H** base, **I** statistics (Economy: History), **U** robots, **Y** Economy, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
   recycles it; the incoming-nuke card's **Evacuate**, **V**, works with no panel open too: `LOOSE_SHEET_KEYS`), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
@@ -4924,6 +4954,7 @@ js/polish.js              interface helpers: reach rings, health bars switch, +N
 js/polish3.js             the Daily Planet, multiplayer chat, Ready and colours in the lobby, who's reconnecting
 js/charts.js              line and bar charts for the statistics screen
 js/economy.js             the Economy panel: each good, the whole supply chain, bottlenecks, History; its map overlay
+js/routes.js              Terrain routes (Shift+R): walkable ground, cliffs, ramps, narrow gaps, approach routes and back doors (looks only)
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)
