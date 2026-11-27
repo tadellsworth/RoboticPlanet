@@ -24,13 +24,18 @@ function device(send) {
   return api;
 }
 
-// The game: computer colonies for ten minutes, so each has an economy to staff.
+// The game: computer colonies for ten minutes, so each has an economy to staff. A Large map, so that neither has taken
+// the other's Command Base by then or in the minutes the people play on (on the Medium default a computer colony can
+// capture its rival's at about ten minutes, and a game that is over stands still: simStep does nothing once there is a winner).
 const pre = device(() => {});
-pre.newGame({ seed: 5150, difficulty: 'normal', autoplay: true, mode: 'versus' });
+pre.newGame({ seed: 5150, size: 2, difficulty: 'normal', autoplay: true, mode: 'versus' });
+const over = (when) => { if (pre.getS().winner < 0) return; console.log(`the game was over ${when} (colony ${pre.getS().winner + 1} won at ${(pre.getS().time / 60).toFixed(1)} min): pick another seed or map\nworkforce lockstep: FAILED`); process.exit(1); };
 while (pre.getS().time < 600 && pre.getS().winner < 0) pre.simStep(1 / 30);
+over('before the people took their colonies');
 // (colonies 0 and 1 are the people's from here: their computer stops running them, as in a game they started)
 for (const P of pre.getS().players.slice(0, 2)) { P.ai = false; delete P.triage; }
-while (pre.getS().time < 620) pre.simStep(1 / 30);
+while (pre.getS().time < 620 && pre.getS().winner < 0) pre.simStep(1 / 30);
+over('as the people took their colonies');
 const snap = pre.serializeGame();
 
 const log = [], devs = [];
@@ -134,6 +139,7 @@ console.log(`  ran to ${(S.time / 60).toFixed(1)}m, ${orders} Workforce orders; 
 console.log(`  fingerprints compared ${checks}, differing ${bad}; desyncs seen by the devices ${desyncs.join('/')}; settings the same on both: ${same}`);
 const tf = S.buildings.filter((b) => b.tf).length + Object.keys(S.tfTiles || {}).length;
 console.log(`  terraforming: ${Object.keys(S.tfTiles || {}).length} tiles changed, ${S.buildings.filter((b) => !b.dead && b.tf).length} Earthworks open, ${S.bots.filter((u) => !u.dead && u.type === 'grader').length} Graders, ${S.buildings.filter((b) => !b.dead && b.type === 'composter').length} Composter sites, ${S.buildings.filter((b) => !b.dead && b.tf && b.tf.k === 'soil').length} Spread soil jobs, ${S.buildings.filter((b) => !b.dead && (b.type === 'seamdrill' || b.type === 'seedmast')).length} Seam Drill and Seed Mast sites, ${S.buildings.filter((b) => !b.dead && b.tf && (b.tf.k === 'bank' || b.tf.k === 'trench' || b.tf.k === 'teeth')).length} earthwork jobs, ${S.ewK ? [...S.ewK].filter((v) => v).length : 0} earthworks standing, ${S.buildings.filter((b) => !b.dead && b.type === 'saphead').length} Sap Head sites`);
-const ok = tf > 0 && bad === 0 && desyncs.every((x) => x === 0) && rejoined && checks > 60 && same && orders >= 20;
+if (S.winner >= 0) console.log(`  the game ended at ${(S.time / 60).toFixed(1)} min (colony ${S.winner + 1} won): too early for this test`);
+const ok = S.winner < 0 && tf > 0 && bad === 0 && desyncs.every((x) => x === 0) && rejoined && checks > 60 && same && orders >= 20;
 console.log(ok ? 'workforce lockstep: OK' : 'workforce lockstep: FAILED');
 if (!ok) process.exitCode = 1;
