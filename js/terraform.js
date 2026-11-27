@@ -3,7 +3,7 @@
  * Terrafall — Terraforming, stage 1: the interface and the drawing (the rules and the work are in js/sim.js: tfJob,
  * tfPlace, graderDispatch, completeEarthwork; the numbers in TERRA, js/defs.js).
  *
- *  - Build → Terraform (key 7): five tools, each with its letter (TF_TOOLS_UI). Picking one opens the Terraform mode
+ *  - Build → Terraform (key 6): five tools, each with its letter (TF_TOOLS_UI). Picking one opens the Terraform mode
  *    (R.mode 'terra'): drag (or tap) tiles to plan; Flatten drags a rectangle, every tile to the level of the tile the
  *    drag started on (shown on the map and in the banner). The plan is previewed tile by tile (tfPreview, the same
  *    rules as the order: tfJob), with what it costs, yields and takes; refused tiles in red with the reason. The

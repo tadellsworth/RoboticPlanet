@@ -1902,8 +1902,8 @@ const BUILD_GROUPS = [
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
-  // The megastructures (megaOn): their own tab, after All on the tab bar (its key, 6, comes after All's 5).
-  { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'], late: true },
+  // The megastructures (megaOn): their own tab, key 5 (then Terraform, 6: js/terraform.js).
+  { key: 'mega', name: 'Mega', types: ['lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup'] },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
 /**

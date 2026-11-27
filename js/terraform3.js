@@ -4,7 +4,7 @@
  * js/sim.js (the stage 3 block: t3SeamsMake, seamSurvey, updateSeamDrill, updateSeedMast, thermalHot) and the numbers
  * in SEAM, SEED and THERMAL (js/defs.js).
  *
- *  - Build → Terraform (key 7) holds them after stage 2's: the Seam Drill (I), the Seed Mast (G) and the Thermal Plant
+ *  - Build → Terraform (key 6) holds them after stage 2's: the Seam Drill (I), the Seed Mast (G) and the Thermal Plant
  *    (T) (t3Cards), with what each would reach shown while placing (t3Ranges, t3PlaceText) and their panels (t3Panel).
  *  - A found seam (yours: the seams a drill of yours surveyed): glowing cracks in the ground, orange for Ore and violet
  *    for Crystal, inside a dashed outline, baked with the map (t3PaintTile) and glowing at night (t3Glow); its survey

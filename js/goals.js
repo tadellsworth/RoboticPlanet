@@ -289,7 +289,7 @@ function goalAction(g) {
     return ['Build', () => {
       closeSheet(); setMode('normal');
       const grp = BUILD_GROUPS.find((x) => x.types.includes(g.build));
-      UI.buildTab = grp ? grp.key : 'all';
+      UI.buildTab = grp ? grp.key : (buildKeyOf(g.build) || { tab: 'gather' }).tab; // (a Terraform building: that tab)
       openBuildMenu();
       const card = $('sheet-body').querySelector(`.build-grid .bcard[data-t="${g.build}"]:not([hidden])`);
       if (card) { card.classList.add('goal-pick'); card.scrollIntoView({ block: 'nearest' }); }
