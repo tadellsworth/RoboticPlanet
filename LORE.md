@@ -322,7 +322,7 @@ The player is a Command intelligence too, newly woken for this terrafall. Its ba
 - First road: "Road online. Built to Accord passenger standard."
 - Nightfall: "Street lighting active. Traffic: freight only."
 - Uplink taken: "Uplink secured. Listening on all channels. No response."
-- Rival base captured: "Command authority transferred. Their robots report for duty."
+- Rival base captured: "Command authority transferred. Their buildings report for duty."
 - Defeat: "Command core lost. Transferring authority. Hold position."
 
 ## Mechanics to lore

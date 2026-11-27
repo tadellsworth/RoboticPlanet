@@ -56,7 +56,7 @@ The colony learns to build. The war stays at the edges, and the Murmur are only 
 - **Map:** Emberwood (autumn forest). Rival: a VIRIDIAN colony run by the Herald (Rusher).
 - **Objectives:** Survive the early attacks. Capture the Herald's Command Base.
 - **Teaches:** Bulwarks, capturing a Command Base (everything it built becomes yours).
-- **Story:** The Herald's clock has read "Arrival in one day" for 31 years. Its captured robots report for duty without a pause.
+- **Story:** The Herald's clock has read "Arrival in one day" for 31 years. Its captured buildings report for duty without a pause.
 
 ### 5. Ringfall
 
