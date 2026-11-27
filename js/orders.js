@@ -686,6 +686,8 @@ const ORDERS = {
   /** Disband group gid: its units go back to the Reserve. */
   agDisband(p, gid) { const g = agById(gid); if (!g || g.owner !== p) return false; agDisband(g); return true; },
   shipLine(p, uid, mid) { const u = ownU(p, uid, 'airship'); if (!u) return 'That Airship is gone.'; const b = mid ? ownB(p, mid) : null; if (mid && !b) return 'That Mooring Mast is gone.'; return setShipLine(p, u, b); },
+  /** Orbital platforms: raise (up 1) or lower (0) drawbridge k, ordered by a colony that holds one of its control boxes. '' or why not. */
+  bridgeSet(p, k, up) { return orbSet(p, k, !!up); },
 };
 
 /**
