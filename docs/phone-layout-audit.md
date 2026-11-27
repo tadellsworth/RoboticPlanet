@@ -22,3 +22,6 @@ Screenshots (in-app browser, mouse pointer; not touch emulation):
 - [Pause and truncated restore-point age, 390 × 844](phone-audit-shots/pause-390.jpg)
 - [Workforce, 430 × 932](phone-audit-shots/workforce-430.jpg)
 - [Economy, 430 × 932](phone-audit-shots/economy-430.jpg)
+- [Army, 430 × 932](phone-audit-shots/army-430.jpg)
+- [Selected Command Base, 430 × 932](phone-audit-shots/command-base-430.jpg)
+- [How to play, 430 × 932](phone-audit-shots/help-430.jpg)
