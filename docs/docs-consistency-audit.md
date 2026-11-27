@@ -48,3 +48,5 @@ The in-game help and guide say every building inside the blast is wiped out. The
 | Nuclear sequence | `NUKE_LAUNCH`, `NUKE` (`js/defs.js:1155`), `nukeImpact` (`js/sim.js:10800`); help `index.html:1387`–`1388`; guide `how-to-play.html:785` | Checked flight, launch lead, blast radius and direct-hit exceptions. Every evacuation and radiation edge case remains unverified. |
 
 These targeted checks do not yet amount to a comparison of every number and rule across all three documents. The remaining sections of the documents are unverified and must not be treated as clean solely because they do not appear in the findings table.
+
+As a further narrow automated check, building-name paragraphs with a parenthesized numeric cost were compared with matching `BDEFS` cost components: 35 stated components across 15 buildings in `index.html` and four components for one building in `how-to-play.html` matched. This only covers text in that exact format; it does not check unmentioned costs or costs phrased differently. A broad scan of README table numbers was not counted as a cost check because it also picked up historical prices and production recipes.
