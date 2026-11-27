@@ -36,7 +36,11 @@ for (const r of ['skirmisher', 'arccaster', 'railgunner']) for (const t of [0, 1
 // The Grader (renderer/tools/install_grader.py): its driving and work frames and the earth ahead of its blade.
 for (const r of ['grader', 'grader-work']) for (const t of [0, 1]) for (let f = 0; f < 4; f++) TOD_KEYS.push(`${r}@${t}-f${f}`);
 for (let n = 1; n <= 3; n++) TOD_KEYS.push(`grader-load-${n}`);
-// Space (renderer/tools/install_space.py): the spacecraft, the Launch Pad, Point-Defence at its 8 headings, the drifting asteroids and the derelict modules.
-for (const t of [0, 1]) TOD_KEYS.push(...['shuttle', 'shuttle-park', 'dropship', 'dropship-park', 'dropship-ramp1', 'dropship-ramp2', 'gunship', 'gunship-park', 'launchpad', 'pdturret', 'mod-solar', 'mod-dock', 'mod-hulk'].map((k) => `${k}@${t}`), ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `pdturret-${k}@${t}`));
-TOD_KEYS.push('rock-plain', 'rock-ore', 'rock-crystal', 'rock-ore-tow', 'rock-crystal-tow', 'mod-solar', 'mod-dock', 'mod-hulk');
+// Space (renderer/tools/install_space.py): the spacecraft, the Launch Pad, Point-Defence at its 8 headings, the drifting asteroids and the derelict modules
+// (loaded with the rest of the space art, only on a space map: see ensureSpaceArt and todSpaceAdd).
+const SPACE_TOD_KEYS = [];
+for (const t of [0, 1]) SPACE_TOD_KEYS.push(...['shuttle', 'shuttle-park', 'dropship', 'dropship-park', 'dropship-ramp1', 'dropship-ramp2', 'gunship', 'gunship-park', 'launchpad', 'pdturret', 'mod-solar', 'mod-dock', 'mod-hulk'].map((k) => `${k}@${t}`), ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `pdturret-${k}@${t}`));
+SPACE_TOD_KEYS.push('rock-plain', 'rock-ore', 'rock-crystal', 'rock-ore-tow', 'rock-crystal-tow', 'mod-solar', 'mod-dock', 'mod-hulk');
+// The Graveyard (renderer/tools/install_grave.py): the salvage, a debris lane's shards and the Arbiter's relay (its eclipse at night).
+SPACE_TOD_KEYS.push('grave-salvage-0', 'grave-salvage-1', 'grave-junk', 'grave-arb', 'grave-arb@0', 'grave-arb@1');
 const LANDMARK_TOD_KEYS = ["lm-hull", "lm-spire", "lm-pillar-1", "lm-pillar-2", "lm-pillar-3", "lm-falls", "lm-geyser", "lm-house-1", "lm-house-2", "lm-house-3", "lm-sign", "lm-shaft", "lm-wreck-kestrel", "lm-wreck-survey", "lm-wreck-halvard"]; // (the atlas landmarks: js/landmarks.js, loaded with them: ensureLandmarkArt)

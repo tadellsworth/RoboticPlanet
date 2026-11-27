@@ -242,6 +242,12 @@ const ART_MANIFEST = {
   ...Object.fromEntries([0, 1].flatMap((t) => [[`pdturret@${t}`, B3D(`buildings/pdturret-7@${t}.webp`, 1.3)], ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`pdturret-${k}@${t}`, B3D(`buildings/pdturret-${k}@${t}.webp`, 1.3)])])),
   ...Object.fromEntries(['rock-plain', 'rock-ore', 'rock-crystal', 'rock-ore-tow', 'rock-crystal-tow', 'mod-solar', 'mod-dock', 'mod-hulk'].map((k) => [k, `space/${k}.webp`])),
   ...Object.fromEntries(['solar', 'dock', 'hulk'].flatMap((c) => [0, 1].map((t) => [`mod-${c}@${t}`, `space/mod-${c}@${t}.webp`]))),
+  // The Graveyard (renderer/b/grave.js; tools/render_grave.sh, tools/install_grave.py): a hulk's deck plating (4 by 4 tiles
+  // each, baked with the ground: -0 the dead hulls, -1 torn up, -2 the Arbiter's), the towable salvage, a debris lane's
+  // shards and the Arbiter's relay (derelict, and a team's captured). js/grave.js draws them.
+  'ground-grave-0': 'space/grave-plate-0.webp', 'ground-grave-1': 'space/grave-plate-1.webp', 'ground-grave-2': 'space/grave-plate-2.webp',
+  'grave-salvage-0': 'space/grave-salvage-0.webp', 'grave-salvage-1': 'space/grave-salvage-1.webp', 'grave-junk': 'space/grave-junk.webp',
+  'grave-arb': 'space/grave-arb.webp', 'grave-arb@0': 'space/grave-arb@0.webp', 'grave-arb@1': 'space/grave-arb@1.webp',
   // The Maglev line (renderer/b/maglev.js v=a, Accord Phase 2, installed by tools/install_maglev.py): the Terminal (as big
   // as the Rail Station, its dock MAGLEV.head tiles up the screen), the pylon (no pad, its head MAGLEV.deck tiles up) and
   // the pylon shot down, the pod loaded and empty (top-down, facing +x, one tile) and one tile of guideway running east,

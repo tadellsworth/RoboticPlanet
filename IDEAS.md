@@ -24,8 +24,40 @@ stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Open, seen wh
   is given up and the next one goes up the same way. Should a rival escort its road crew, clear the warbots parked on
   its land first, or plan the road round the danger?
 - **One-sided measurements.** `tools/late-attack-audit.js` holds colony 1 only; the seed that showed the Warlord
-  collapse now plays out differently (the attacker wins at 14 minutes), so each fix is checked with its own test,
+  collapse now plays out differently (the attacker wins at 15½ minutes), so each fix is checked with its own test,
   and the holds were compared over several seeds instead.
+
+## Space expansion, phase 2: The Graveyard (built Nov 27 2026: calls made, open questions for the owner)
+
+Built from the approved design (the space canvas's Graveyard board, https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): a
+wreck field of dead Accord ships, landable hulks drawn as decks of torn hull plating, salvage towed in for Alloy and Chips,
+debris lanes, the derelict modules of phase 1, and the Arbiter in the middle. README ("The Graveyard"), How to play
+("The Graveyard"), the guide, ART_GUIDE.md (Batch 44), a mission (*The Graveyard*, in Into the Void).
+
+Calls made, to confirm:
+- **Two players only.** The layout (a home hulk at opposite corners, a bridge wreck and a far wreck each, the Arbiter in the
+  middle) is built round the half turn, as The Ring's and Orbital's are; four would need a quarter-turn layout and a square map.
+- **Salvage is broken down at the pad at once**, 10 Alloy and 6 Chips a wreck, into the pad's store (Haulers take it from
+  there); it drifts back 2½ minutes later. Four salvage lane pairs. No new good, as decided.
+- **Fuel is home oil**: three oil fields on each home hulk (as on The Ring and Orbital) and one on each far wreck; no Fuel-tank
+  salvage.
+- **The Arbiter: both.** Held (land over its relay, jammed by rival armed robots within 4 tiles), it always sends its holder
+  4 Alloy and 3 Chips every 30 s; and the Victory row's Uplinks choice is **The Arbiter** here: it is the one Uplink, on
+  the Uplinks clock (online at 8 minutes, 5 minutes held in all wins). The holder is the colony with the *most* land over its
+  16 relay tiles (a tie keeps the holder it had), so a single tile can't tip it.
+- **A Shuttle lands a Drop Outpost** (6 Cement, 3 Alloy), on every space map: the way to a hulk no Viaduct reaches yet, and
+  the rival's way to the Arbiter. It unfolds beside the Shuttle, never on the relay.
+- **Hulks are joined for Viaducts where it makes sense**: home to bridge wreck to Arbiter, 3 tiles of space each (a short span),
+  the far wreck 8 tiles out (a long span, or fly). On Small there are no bridge or far wrecks: the home hulk lies a short span
+  from the Arbiter.
+- **Debris lanes are a light hazard**: three shard clouds a lane, phase 1's asteroid rule (2 damage, at most every 3 s).
+- Past home there is a small Ore and a small Crystal field (spilled cargo) on each bridge and far wreck: scarce, not absent.
+
+Open questions:
+- AI games end by capture in about 10 to 25 minutes: the Viaduct chain through the Arbiter is short. A longer gap, or
+  Viaducts that cost more out here, would slow the rush and give salvage more time to matter.
+- The rival uses its Dropship bands and Gunships against what holds the Arbiter, but it doesn't yet land warbots just to jam it.
+- Capital ships (the canvas's Tender and Line) and The Void Fleet are still to come (phase 3).
 
 ## Space expansion, phase 1 (built Nov 27 2026: calls made, open questions for the owner)
 
@@ -37,9 +69,26 @@ ART_GUIDE.md (Batch 43), the mission *Into the Void* (its own chapter, after Sea
 
 Decided (the owner):
 - **Salvage gives Alloy and Chips.** There is no new "Accord parts" good: the Salvage Hulk's haul is 18 Alloy and 10 Chips.
-- **"The Arbiter"** is the approved name of the Graveyard's prize, for phase 2 (not built yet).
+- **"The Arbiter"** is the approved name of the Graveyard's prize (built in phase 2).
 - The Gunship is the Lancet over the designer's Halo; it was reworked so it never reads as the Vulcan Bomber (an
   arrowhead, cannon prongs, four round lift pods, no wings, nozzle or fins).
+- **Gunship lasers hold a Command Base or Keep at a third of its armor**, like bombs, so Gunships can't win a game alone.
+  Kept as built.
+- **Only Point-Defence and Gunships hit craft in the air.** Pulse Turrets, warbots and Missiles don't. Kept as built.
+- **Gunships stay out of Army Groups for now**: they join them later, with the Void Fleet.
+- **Curved orbits, not straight lanes** (followups, Nov 27 2026). Each asteroid goes round an ellipse: a whole loop where
+  one fits, else the longest clear arc of it, swung along and back. Worked out from the time alone, every point a clear tile
+  or more off any ground (two tiles' steps, as the lanes were), mirrored by the half turn; mining, towing and bumps as
+  before. Whole loops are preferred, then rounder ones; The Ring's open void gets mostly loops, Orbital platforms' narrow
+  gaps between decks more arcs (over 8 seeds: The Ring 38 loops of 64 orbits, Orbital 18 of 48). Old saves keep their
+  straight lanes.
+- **Rivals go after derelicts** (followups): a stronger Outpost pull toward them, and a grab of its own from 9 minutes:
+  an Outpost site beside the module (the Salvage Hulk first), and on a rock its Workers can't walk to a Dropship lands two
+  Workers there and its Shuttle flies the site its goods. No warbots go, and not while it is short of Workers or of an army.
+- **Space art loads only on the space maps** (followups): `ensureSpaceArt` (The Ring, Orbital platforms and The
+  Graveyard; its salvage, shards and relay too), and in the one-file build its own bundle, `space-art.js` (about 2.8 MB,
+  the day art and the three re-lit sets), that a planet map never fetches (checked in Chromium, web and one-file: none of
+  it requested on a planet map, all 50 sprites in on The Ring).
 
 Calls made, to confirm:
 - **Derelicts float in the void, moored off a deck** (as the designer drew them), not on the decks. The void is no one's
@@ -48,22 +97,41 @@ Calls made, to confirm:
   instead of them.
 - **Two craft to a pad**, of any kinds. The rival keeps a Dropship and a Shuttle on its first pad and Gunships on its second.
 - **Gunships are not warbots** (no garrison, march, flag or Army Group): they take the same tap and right-click orders
-  (attack, hunt, hold, home) through `command`, and guard their pad when idle. Should they join Army Groups?
-- **Only Point-Defence and Gunships hit craft in the air.** Pulse Turrets, warbots and Missiles don't. A Gunship's lasers
-  hold a Command Base or Keep at a third of its armor, like bombs, so it can't win a game alone.
+  (attack, hunt, hold, home) through `command`, and guard their pad when idle.
 - **Point-Defence costs what Flak does** (4 Cement, 3 Alloy; no Chips, so the rival's goes up in time).
 - **A towed rock becomes a field beside the pad** (up to 6 deposit tiles), not a rock you mine in the void.
-- **Mining in passing** needs a staffed Mine or Crystal Tap within 5 tiles of a lane: such a gatherer is never "dry" while a
-  lane passes, even with no deposits of its own.
+- **Mining in passing** needs a staffed Mine or Crystal Tap within 5 tiles of an orbit: such a gatherer is never "dry"
+  while one passes, even with no deposits of its own.
 - Missions: one, not a chapter of several (Launch Pad, Shuttle run, Dropship landing past a stuck drawbridge, a derelict
   taken). Gunships and Point-Defence aren't taught in it (Colony, no war); a War-chapter mission could.
+- **Workers landed by Dropship give a foothold** (followups, a rule the derelict grab needed): out in space, a deck or rock
+  where your Workers stand is one you can build on, so an Outpost can go up on a rock no Viaduct reaches (still within 10
+  tiles of your land), its site supplied by air. Before, nothing could be built on such a rock at all (there is no Drop
+  Outpost in space), so a Dropship's Workers had nothing to do there. Space maps only; How to play and Into the Void's
+  intro say so.
+
+Measured (followups, AI-vs-AI, Medium map, Normal, seeds 1 to 12 of each map):
+- **Fairness** (the follow-ups' code, games to 50 minutes): The Ring, P0 7 wins, P1 5, none undecided, decided in 16 to 42
+  minutes (median 21, mean 27); Orbital platforms, P0 5, P1 7, none undecided, 13 to 33 minutes (median 22, mean 21).
+  12 to 12 in all: no P0 bias. The phase 1 code (games to 30 minutes) had 11 to 7 with 6 undecided (The Ring 4, 4, 4;
+  Orbital 7, 3, 2), well inside seed noise (11 of 18 is about even odds); its lean went away with nothing done about it.
+  Checked for a cause all the same: the maps, the orbits and the modules are laid out on colony 0's side and turned half
+  round (the map-symmetry test and the twin checks pass), both seats play the Steward at the same speed (`mult`), and the
+  only seat order left is the rival's thinking (P0 first, P1 five ticks later when both are due: `simStep`), which makes no
+  measurable difference. Nothing changed for it. Hard not run (the machine was shared and slow).
+- **Derelicts taken** (any module ever held, by 30 minutes): before, 22 of 72 on The Ring and 11 of 70 on Orbital
+  platforms (33 of 142, 23%), Salvage Hulks 2 of 24, in 19 of 24 games; after, 27 of 72 and 25 of 72 (52 of 144, 36%),
+  Hulks 9 of 24, in 22 of 24 games, both seats alike (P0 26, P1 26). By the end of the longer games 56 of 144, Hulks 10.
 
 Open questions:
-- Lanes are straight runs the rocks swing along and back. Loops round the rocks would look more like orbits.
-- The rival seldom takes a derelict (they lie out on the far decks and rocks); it leans its Outposts toward them. Worth a
-  stronger pull, or a Dropship landing to take one?
-- Space art loads with the rest on every map (about 0.5 MB a time of day); it could load only for the two space maps.
-- Phase 2: the Graveyard map (the Arbiter), capital ships (the canvas's Tender and Line), more derelict kinds.
+- **Thin loops on The Ring.** Its gaps between rocks are narrow, so many of its loops are long thin ellipses; rounder ones
+  only fit out by the map's edges. A smaller `DRIFT.clear` (one tile's step) would allow rounder loops nearer the rocks.
+- **Workers as a foothold** (above): should it be any building, as now, or an Outpost only? And should warbots landed
+  count too?
+- The Graveyard's deck plating (`ground-grave-*`, baked into the map) still loads on every map; its salvage, shards and
+  relay load with the space art.
+- Phase 2: the Graveyard map (the Arbiter) is built (above); capital ships (the canvas's Tender and Line), more derelict
+  kinds and Gunships in Army Groups (with the Void Fleet) wait.
 
 ## Clear ground (built Nov 27 2026: calls made, open questions for the owner)
 

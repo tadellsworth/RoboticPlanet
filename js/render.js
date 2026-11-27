@@ -206,6 +206,7 @@ function mixBiomeRGB(a, b, weight) {
 function applyBiome() {
   if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt();
   if (S && ((S.landmarks && S.landmarks.length) || S.town) && typeof ensureLandmarkArt === 'function') ensureLandmarkArt(); // (js/landmarks.js; Passenger Town's welcome signs too)
+  if (S && spaceMap() && typeof ensureSpaceArt === 'function') ensureSpaceArt(); // (js/space.js: the space maps only)
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   const primary = R.primaryRegion = biomeRegion(biome());
   // (Half underground: the caves are a second region of their own, the Hollow's, over S.cave's tiles; no other second biome there.)
@@ -299,6 +300,7 @@ function bakedArtPending() { return artBakedLeft; }
  * resources, the pieces of bridges and track): only these arriving call for the map to be baked again.
  */
 function bakedArt(key) {
+  if (typeof spaceArtKey === 'function' && spaceArtKey(key)) return false; // (the drifting rocks are drawn each frame, not baked: js/space.js)
   return /^((ground|water|rock|cliff|chasm|lava)(-|$)|plant-|bridge-|skybridge-|railbridge-|rail-|scar-)/.test(key) || Object.values(RES).some((r) => r.key === key);
 }
 
@@ -365,7 +367,7 @@ function loadArt(onChange) {
   R.artChange = onChange;
   const entryOf = (key) => (typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
   // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
-  const keys = Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a)).filter((key) => !lazyBiomeOf(key) && !murmurArtKey(key) && !(typeof lmArtKey === 'function' && lmArtKey(key))); // (see ensureBiomeArt, ensureMurmurArt and ensureLandmarkArt)
+  const keys = Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a)).filter((key) => !lazyBiomeOf(key) && !murmurArtKey(key) && !(typeof lmArtKey === 'function' && lmArtKey(key)) && !(typeof spaceArtKey === 'function' && spaceArtKey(key))); // (see ensureBiomeArt, ensureMurmurArt, ensureLandmarkArt and ensureSpaceArt)
   if (typeof window !== 'undefined' && window.ART_BUNDLE) {
     // The single-file game: the art is in bundles beside the page (art-<group>.js, made by tools/build-single.js), loaded
     // now; each key loads as its bundle arrives. A bundle that's missing (the page copied without its folder) leaves its
@@ -784,6 +786,7 @@ function bakeMap() {
   R.skyFloor = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   R.void = ringShape(); // (The Ring: the void tiles are left clear over the space behind: js/ring.js)
   R.orbital = orbitalShape(); // (Orbital platforms: station decks over the high atmosphere: js/orbital.js)
+  R.grave = graveShape(); // (The Graveyard: the hulks of dead ships over The Ring's backdrop: js/grave.js)
   RSP.land = null;
   applyBiome();
   // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
@@ -1194,7 +1197,8 @@ function paintTile(ctx, i, j, other, blend) {
   ctx.fillStyle = levelColor(S.elev[t], n);
   ctx.fillRect(x, y, TP, TP);
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
-  if (R.orbital && (terr === T_GROUND || terr === T_ROCK)) { orbDeckPaint(ctx, i, j, x, y, t); } // (Orbital platforms: a deck's plating and railing over the ground)
+  if (R.grave && (terr === T_GROUND || terr === T_ROCK)) { graveDeckPaint(ctx, i, j, x, y, t); } // (The Graveyard: a hulk's plating, its torn edges and wreckage: js/grave.js)
+  else if (R.orbital && (terr === T_GROUND || terr === T_ROCK)) { orbDeckPaint(ctx, i, j, x, y, t); } // (Orbital platforms: a deck's plating and railing over the ground)
   else if (tex.ground) {
     drawTexture(ctx, tex.ground, i, j, x, y);
     if (blend && terr === T_GROUND && other.tex.ground) blendTexture(ctx, other.tex.ground, blend, i, j, x, y);
@@ -1246,7 +1250,7 @@ function paintTile(ctx, i, j, other, blend) {
     }
   } else if (terr === T_CHASM) {
     drawChasm(ctx, i, j, x, y);
-  } else if (terr === T_ROCK) {
+  } else if (terr === T_ROCK && !R.grave) { // (The Graveyard's crags are piles of wreckage: graveDeckPaint)
     if (tex.rock) {
       drawTexture(ctx, tex.rock, i, j, x, y);
       if (blend && other.tex.rock) blendTexture(ctx, other.tex.rock, blend, i, j, x, y);
@@ -1759,6 +1763,7 @@ function canyonArt(key) {
 function drawVoidTile(ctx, i, j, x, y) {
   ctx.clearRect(x, y, TP, TP);
   if (R.orbital) { orbVoidPaint(ctx, i, j, x, y); return; } // (Orbital platforms: a deck's hull, not rock)
+  if (R.grave) { graveVoidPaint(ctx, i, j, x, y); return; } // (The Graveyard: a wreck's flank and snapped ribs: js/grave.js)
   const one = terrAt(i, j - 1) === T_GROUND, two = !one && terrAt(i, j - 1) === T_CHASM && terrAt(i, j - 2) === T_GROUND;
   if (!one && !two) return;
   if (two && hash2(i, j, 771) < 0.4) return; // (a ragged bottom: not every column of the rock goes down a second tile)
@@ -7427,7 +7432,8 @@ function render(dtReal) {
   if (artFor('streetlamp-road', 0)) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   for (const g of expressGantries(v0, v1)) items.push(g); // (sign gantries over Express pairs)
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
-  if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
+  if (S.uplinks) for (const u of S.uplinks) if (!u.arb && inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u }); // (The Graveyard's Uplink is the Arbiter: drawn as it, below)
+  if (S.grave) { const C = S.grave.core; if (inView((C.x0 + C.x1 + 1) / 2, (C.y0 + C.y1 + 1) / 2, 5)) items.push({ ent: 'arb', x: (C.x0 + C.x1 + 1) / 2, y: C.y1 + 0.5 }); } // (The Graveyard: the Arbiter's relay)
   if (S.orb) for (const b of S.orb.bx) if (inView(b.x, b.y, 3)) items.push({ ent: 'obox', x: b.x, y: b.y + 0.5, bx: b }); // (Orbital platforms: a bridge's control box)
   if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
   if (typeof radRuinItems === 'function') radRuinItems(items, inView); // (breached Reactors' ruins: js/radfx.js)
@@ -7462,6 +7468,7 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
+      if (e.ent === 'arb') { const C = S.grave.core, h = arbHolder(); pool(ox + ((C.x0 + C.x1 + 1) / 2) * z, oy + ((C.y0 + C.y1 + 1) / 2) * z, z * 3, h >= 0 ? PLAYER_COLORS[h] : '#ffc860'); continue; }
       if (e.ent === 'obox') { pool(ox + (e.bx.x + 0.5) * z, oy + (e.bx.y + 0.5) * z, z * 1.1, e.bx.owner >= 0 ? PLAYER_COLORS[e.bx.owner] : '#dfefff'); continue; }
       if (e.ent === 'harrowdie') { const g0 = ctx.globalAlpha, age = S.time - e.h.t; ctx.globalAlpha = g0 * (hash2(Math.floor(age * 24), Math.round(e.x * 13), 5) > 0.4 ? 0.9 : 0.25) * clamp(1.2 - age / HARROW_DEATH.thud, 0.3, 1); pool(ox + e.x * z, oy + e.y * z, z * MURMUR_LOOK.harrow.light, '#a46cff'); ctx.globalAlpha = g0; continue; } // (its light stuttering as it dies)
       if (e.ent === 'gantry') {
@@ -7513,6 +7520,7 @@ function render(dtReal) {
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
+    if (e.ent === 'arb') { const C = S.grave.core; drawArb(ctx, ox + ((C.x0 + C.x1 + 1) / 2) * z, oy + ((C.y0 + C.y1 + 1) / 2) * z, z); continue; }
     if (e.ent === 'obox') { drawOrbBox(ctx, ox + (e.bx.x + 0.5) * z, oy + (e.bx.y + 0.5) * z, z, e.bx); continue; }
     if (e.ent === 'b') {
       const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
@@ -10707,8 +10715,10 @@ function renderMinimap() {
     ctx.fillStyle = MM_WARBOT[u.owner] || MM_WARBOT[1];
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
   }
+  if (S.grave) graveMinimap(ctx, sx, sy); // (The Graveyard: the Arbiter, js/grave.js)
   // Uplinks: a ringed dot each, in the holder's colour (white while no one holds it; flashing while jammed).
   if (S.uplinks) for (const u of S.uplinks) {
+    if (u.arb) continue; // (The Graveyard's: the Arbiter, above)
     const x = (u.x + 0.5) * sx, y = (u.y + 0.5) * sy, r = Math.max(3.5, sx * 2);
     const c = u.jam && (R.time * 4) % 2 < 1 ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : '#f2f6fa';
     ctx.fillStyle = c; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1.5;

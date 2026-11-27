@@ -128,7 +128,7 @@ const check = new Function('assert', 'sfx', source + `
         if (mapSizeForPlayers(size, players) !== size) continue;
         for (const teams of players === 4 ? [false, true] : [false]) {
           for (const seed of [11, 21, 37]) {
-            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids && !preset.orbital && !preset.caves; // (The Ring is always on Argos: no second biome; nor Half underground, whose caves are the second region)
+            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids && !preset.orbital && !preset.graveyard && !preset.caves; // (The Ring is always on Argos: no second biome; nor Half underground, whose caves are the second region)
             const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks',
               murmur: preset.hollow || preset.caves || seed === 37 ? 'active' : 'off', biome: 'desert', biome2: mixed ? 'jungle' : undefined };
             const label = [preset.name, SIZE_PRESETS[size].name, players, teams ? 'Teams' : 'Versus', 'seed ' + seed].join(' / ');

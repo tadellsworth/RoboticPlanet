@@ -2097,12 +2097,61 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 44: Space expansion, phase 2: The Graveyard (installed; edges, ribs, the flank, the beacon, cables drawn in code)
+
+The Graveyard (Nov 2026; README, "The Graveyard") follows the space canvas's Graveyard board
+(https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz: a landable hulk, towable debris, the prize relay ship and a layout
+sketch), in phase 1's kit (`renderer/b/spacekit.js`): the Cargo Plane's gunmetal for the dead hulls, Pathfinder-era Accord
+white (`#b9b6ad`) for the Arbiter and the salvage, Trade Post amber (`#ffc860`) for a light still answering, the holder's
+team colour once held. The backdrop is The Ring's ("Shadow pass", Batch 40), the wreck field adrift in it.
+
+- **Hulk deck plating** (`b/grave.js c=plate`): a 4 by 4 sheet of deck plates straight down, one plate a tile (40 units,
+  rivets round each plate, the heavy seams on the 2-tile grid), with hatches, vent grilles, scorch and gouges from the old
+  fight, hazard stripes, conduit runs and dead deck lights (dark lenses). `v=0` the dead hulls' weathered gunmetal
+  (`#4b4f54`, `#41454a`, `#373a3e`); `v=1` torn up (plates gone, the ribs and the dark hold under them showing, a curled
+  edge); `v=2` the Arbiter's Accord white, its deck lights still glowing faintly. Day only: the map's ground is baked and the
+  game's light grades it, eclipse included.
+- **Towable debris** (`c=salvage`): `v=0` a torn-off engine bell on a bent hull plate, ribs torn off with it, two amber tow
+  eyes; `v=1` hull plates round a ribbed cargo pod, ribs sticking out of the torn edge. Straight down, 12 units.
+- **Debris lane** (`c=junk`): a cloud of twisted Accord-white and gunmetal plates and beams, loose, 24 units.
+- **The Arbiter's relay** (`c=arb`): the old arbitration relay ship's superstructure over its 4 by 4 relay tiles: the beacon
+  drum (an octagonal tube banded three times), a great shallow relay dish on a yoke forward with its feed horn, a mast array
+  aft (five masts with crossbars and lamps), conduits and clamps down onto the deck, the beacon lamp on its spine. `cap=0`
+  derelict: the bands dark, the dish rim plain, the lamps a dim amber, scorch on its back; `cap=1` held: the bands, the dish
+  rim, the masts' lamps and the clamp lights in the holder's team colour. 46 units across.
+
+`renderer/tools/render_grave.sh` (four at a time; `post/space_post.py` blooms the glow pass, no plumes), then
+`install_grave.py`: 27 files, about 330 KB, the sprites re-lit in `tod/<morning, evening, night>/` (night is the eclipse):
+
+| Art | What | Sizes |
+|---|---|---|
+| `space/grave-plate-0`, `-1`, `-2` (keys `ground-grave-0..2`, baked with the ground) | a hulk's deck plating, 4 by 4 plates, one a tile: the dead hulls, torn up, the Arbiter's | 256 |
+| `space/grave-salvage-0`, `-1` | the towable wreckage straight down, 12 units | 256 |
+| `space/grave-junk` | a debris lane's shards, 24 units | 256 |
+| `space/grave-arb`, `grave-arb@T` | the Arbiter's relay straight down, 46 units: derelict (no team), and held | 448 |
+
+Drawn by js/grave.js. **In code**: the hulks' **torn edges** (a dark lip of buckled plate along every side with space
+beyond, its broken edge pale, rib ends showing through it, a dead running light now and then: dark red, slate or amber, the
+Arbiter's still lit), **piles of wreckage** for the crags (heaped plates and a beam), the **void beside a hulk** (snapped
+ribs sticking out past a torn edge; under a southern edge the ship's flank going down, ribbed, a row of dark ports, one now
+and then still glowing, a hole torn in it, fading into the void and tapering, ragged), the plates picked per tile from the
+sheet (no repeat), and a faint wash and old scorch per tile. The **Arbiter**: its relay drawn 5.6 tiles across over the
+relay tiles, a soft shadow, its **beacon pulsing** (slowly, amber, while derelict; faster, in the holder's colour, once
+held), a dashed ring round the relay in its holder's colour (amber for no one, red and flashing while jammed), a light pool
+at night, and a ringed diamond on the minimap. Salvage and shards **tumble slowly**; a towed wreck turns to its Shuttle on
+the cable (as a towed rock's). With no art, plain shapes.
+
 ### Batch 43: Space expansion, phase 1: spacecraft, the Launch Pad, Point-Defence, drifting asteroids, derelict modules (installed; lasers, tracers, thruster glow, cables drawn in code)
 
 Space expansion phase 1 (Nov 2026; README, "Space") went through Claude Design: the concept canvas
 https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz showed two or three concepts of each in the Cargo Plane's armour
 language (faceted gunmetal, thin seams, team glow strips, a sensor visor, no canopy glass: nobody rides in them), in the
 game on The Ring and Orbital platforms by day and in eclipse. The owner's picks:
+
+(All of this batch's art, and its morning, evening and night sets, loads only on a space map: `ensureSpaceArt` in
+`js/space.js`, the keys `SPACE_ART` matches and `SPACE_TOD_KEYS` in `art/tod/tod-keys.js`; in the single file the bundle
+`dist/space-art.js` beside the page. A new space sprite's key must match `SPACE_ART`, in `js/space.js` and
+`tools/build-single.js` alike, or it loads on every map.)
 
 - **Launch Pad: concept A, Cradle Ring**: a round blast deck on a plinth, a lattice service tower with a swing arm, two
   fuel spheres, a hut. Accent **pad lilac `#d9c8ff`** on the deck's signal lamps.

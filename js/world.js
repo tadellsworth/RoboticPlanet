@@ -28,6 +28,7 @@ function generateMap(seed, W, H, cfg) {
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).hollow) return hollowMap(seed, W, H, cfg); // (its own layout: see hollowMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).orbital) return orbitalMap(seed, W, H, cfg); // (Orbital platforms: station decks and drawbridges, see orbitalMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).graveyard) return graveMap(seed, W, H, cfg); // (The Graveyard: hulks of dead ships in space, see graveMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
@@ -3421,6 +3422,218 @@ function orbitalMap(seed, W, H, cfg) {
   };
 }
 
+/* ------------------------------------------------------------------ The Graveyard */
+
+/**
+ * The Graveyard (SHAPE_PRESETS graveyard, GRAVE in defs.js): two colonies on the hulks of dead Accord ships, adrift in space.
+ * Its own generator (called by generateMap first thing, as orbitalMap is), point-symmetric to the tile (every tile has its
+ * twin, the same spot turned half round), so both colonies get exactly the same. The hulks are the flat decks of wrecked
+ * ships: rectangles with their corners cut and their ends broken off ragged, bites torn out of their sides, level ground
+ * (elevation 0), a few piles of wreckage (crags) on them; the space between is `T_CHASM` (voidTile: nothing is built on it
+ * or crosses it but a Viaduct or a Ropeway, and craft fly over it). Laid out for player 0 (the bottom right) and turned onto
+ * player 1:
+ *   - its home hulk (GRAVE.home), at the bottom right;
+ *   - the Arbiter's hulk in the middle (its own twin), the relay at its middle on `core` tiles that stay bare;
+ *   - a bridge wreck between the home hulk and the Arbiter, GRAVE.gap tiles of space from each (a Viaduct spans it), where
+ *     the map is tall enough; on a small map the home hulk lies that close to the Arbiter itself;
+ *   - a far wreck at the bottom left, GRAVE.farGap tiles of space from the home hulk, where the map is wide enough.
+ * Resources: the standard colony's starter fields on the home hulk (the same offsets from the Command Base as every map, and
+ * Orbital's: Stalk, Stone, Ore, Crystal, fertile soil and three oil fields), and past home only the cargo spilled on the
+ * bridge and far wrecks (GRAVE.spill: a small Ore and Crystal field each, Stone, an oil seep on the far wreck). The rest of
+ * a colony's Alloy and Chips is salvage, towed in by Shuttle (DRIFT.salvage: spaceSetup lays the lanes).
+ * Returns what generateMap does, with `grave`: { hulks: [{ id, x0, y0, x1, y1, kind, tw }], core: { x0, y0, x1, y1 } }.
+ */
+function graveMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
+  const N = W * H, G = GRAVE, M = 2, CH = 2;
+  const terrain = new Uint8Array(N).fill(T_CHASM), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1);
+  const id = (i, j) => j * W + i, mir = (t) => N - 1 - t, inMap = (i, j) => i >= 0 && j >= 0 && i < W && j < H;
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const rng = makeRng((seed ^ 0x67a7e5) >>> 0), sH = seed * 7 + 11;
+  const stampDens = clamp(RPR.density, 0.7, 1.15);
+  const pick = ([f, lo, hi], n) => clamp(Math.round(f * n), lo, hi);
+  const twinR = (r) => ({ x0: W - 1 - r.x1, x1: W - 1 - r.x0, y0: H - 1 - r.y1, y1: H - 1 - r.y0 });
+  // 1) The hulks, as rectangles. 0 and 1: the home hulks; 2: the Arbiter's; then each wreck of player 0's half and its twin.
+  const hulks = [];
+  const add = (r, kind, tw) => { hulks.push({ id: hulks.length, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, kind, tw }); return hulks.length - 1; };
+  const hh = pick(G.home.hh, H), hw = pick(G.home.hw, W), mx = Math.max(M, Math.round(W * 0.05));
+  const home = { x0: W - mx - hw, x1: W - 1 - mx, y0: H - M - hh, y1: H - 1 - M };
+  add(home, 'home', 1); add(twinR(home), 'home', 0);
+  const ah = pick(G.arb.ah, H), aw = pick(G.arb.aw, W), ax0 = Math.floor((W - aw) / 2), ay0 = Math.floor((H - ah) / 2);
+  const arb = { x0: ax0, x1: W - 1 - ax0, y0: ay0, y1: H - 1 - ay0 };
+  add(arb, 'arb', 2);
+  const g = G.gap, room = home.y0 - arb.y1 - 1;
+  if (room >= 2 * g + 5) { // (a bridge wreck between: over the home hulk's left end, under the Arbiter's left half)
+    const b = { x0: Math.max(M + 1, Math.round(W * 0.08)), x1: Math.min(arb.x1 - 4, home.x0 + 5), y0: arb.y1 + g + 1, y1: home.y0 - g - 1 };
+    const k = add(b, 'bridge', 0), k2 = add(twinR(b), 'bridge', 0); hulks[k].tw = k2; hulks[k2].tw = k;
+  }
+  { // (a far wreck at the bottom left, a long span from home)
+    const f = { x0: Math.max(M, Math.round(W * 0.04)), x1: home.x0 - G.farGap - 1, y0: home.y0 + 2, y1: home.y1 - 1 };
+    if (f.x1 - f.x0 + 1 >= 9 && f.y1 - f.y0 + 1 >= 8) { const k = add(f, 'far', 0), k2 = add(twinR(f), 'far', 0); hulks[k].tw = k2; hulks[k2].tw = k; }
+  }
+  // The hulls: corners cut, and each ship broken off at its two ends (the ends of a long hull run ragged, a tile or two in).
+  // Every tile is made from its canonical twin's noise, so the map stays symmetric.
+  const inHulk = (r, i, j) => {
+    if (i < r.x0 || i > r.x1 || j < r.y0 || j > r.y1) return false;
+    if (Math.min(i - r.x0, r.x1 - i) + Math.min(j - r.y0, r.y1 - j) < CH) return false;
+    if (r.kind === 'arb') return true; // (the Arbiter is whole: only its corners)
+    const m = Math.min(id(i, j), mir(id(i, j))), mi = m % W, mj = (m / W) | 0, wide = r.x1 - r.x0 >= r.y1 - r.y0;
+    const end = wide ? Math.min(i - r.x0, r.x1 - i) : Math.min(j - r.y0, r.y1 - j);
+    const torn = Math.floor(hash2(wide ? mj : mi, r.kind === 'home' ? 3 : 5, sH) * 2.4);
+    return end >= torn;
+  };
+  for (const r of hulks) for (let j = r.y0; j <= r.y1; j++) for (let i = r.x0; i <= r.x1; i++) if (inHulk(r, i, j)) terrain[id(i, j)] = T_GROUND;
+  // Bites torn out of the long edges (a tile or two deep), away from the Command Base and the heads of the spans.
+  const bx = Math.floor((home.x0 + home.x1) / 2), by = Math.min(home.y0 + Math.round(hh * 0.55), home.y1 - 7);
+  for (const r of hulks) {
+    if (r.kind === 'arb' || r.id === 1 || (r.kind !== 'home' && r.id > r.tw)) continue; // (each pair once: its twin is cut by mir)
+    const n = 1 + Math.floor(rng() * 2.5);
+    for (let k = 0; k < n; k++) {
+      const top = rng() < 0.5, w = 2 + Math.floor(rng() * 3), d = 1 + Math.floor(rng() * 2), i0 = r.x0 + CH + 2 + Math.floor(rng() * Math.max(1, r.x1 - r.x0 - 2 * CH - 4 - w));
+      for (let dj = 0; dj < d; dj++) for (let di = 0; di < w; di++) {
+        const i = i0 + di, j = top ? r.y0 + dj : r.y1 - dj;
+        if (!inMap(i, j) || (r.kind === 'home' && dist2(i, j, bx, by) < 13 * 13)) continue;
+        if (r.kind === 'bridge' && (i >= r.x1 - 7 || (top && i <= arb.x1 - 3))) continue; // (the spans' heads: to home and up to the Arbiter)
+        if (r.kind === 'home' && top && i <= r.x0 + 9) continue;
+        if (r.kind === 'far' && !top) continue;
+        terrain[id(i, j)] = T_CHASM; terrain[mir(id(i, j))] = T_CHASM;
+      }
+    }
+  }
+  // Specks cut off from their hulk go back to space.
+  {
+    const lab = new Int32Array(N).fill(-1);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_GROUND || lab[t] >= 0) continue;
+      const q = [t];
+      lab[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] === T_GROUND) { lab[u] = t; q.push(u); } });
+      if (q.length < 14) for (const u of q) terrain[u] = T_CHASM;
+    }
+  }
+  // 2) The rim (kept clear), the Arbiter's relay and the bare middles.
+  const rim = new Uint8Array(N), bare = new Uint8Array(N), near = new Uint8Array(N);
+  for (let t = 0; t < N; t++) if (terrain[t] !== T_CHASM) { const i = t % W, j = (t / W) | 0; if (i === 0 || j === 0 || i === W - 1 || j === H - 1) { rim[t] = 1; continue; } orth(t, (u) => { if (terrain[u] === T_CHASM) rim[t] = 1; }); }
+  for (let t = 0; t < N; t++) if (rim[t]) { near[t] = 1; orth(t, (u) => { near[u] = 1; }); }
+  const cw = G.arb.core.w + (W % 2), chh = G.arb.core.h + (H % 2), cx0 = (W - cw) / 2, cy0 = (H - chh) / 2;
+  const core = { x0: cx0, y0: cy0, x1: cx0 + cw - 1, y1: cy0 + chh - 1 };
+  for (let j = arb.y0; j <= arb.y1; j++) for (let i = arb.x0; i <= arb.x1; i++) bare[id(i, j)] = 1; // (nothing on the Arbiter's deck: its relay, and room round it)
+  for (const r of hulks) if (r.kind === 'bridge' || r.kind === 'far') { const cx = Math.round((r.x0 + r.x1) / 2), cy = Math.round((r.y0 + r.y1) / 2); for (let j = cy - 2; j <= cy + 2; j++) for (let i = cx - 2; i <= cx + 2; i++) if (inMap(i, j)) { bare[id(i, j)] = 1; bare[mir(id(i, j))] = 1; } }
+  // Piles of wreckage (crags), away from the rim, the middles and the home hulk's fields.
+  for (let t = 0; t < N; t++) {
+    if (terrain[t] !== T_GROUND || near[t] || bare[t] || rim[t]) continue;
+    const i = t % W, j = (t / W) | 0, m = Math.min(t, mir(t)), mi = m % W, mj = (m / W) | 0;
+    if (dist2(i, j, bx, by) < 169 || dist2(i, j, W - 1 - bx, H - 1 - by) < 169) continue;
+    if (fbm(mi / 5.5, mj / 5.5, sH, 3) > TPR.rock + 0.08) terrain[t] = T_ROCK;
+  }
+  // 3) Resources, every tile made to its twin as well.
+  const free = (t) => terrain[t] === T_GROUND && !rim[t] && !res[t] && !fert[t] && !bare[t];
+  const stamp = (x, y, rad, type, fill) => {
+    for (let j = Math.max(0, Math.floor(y - rad)); j <= Math.min(H - 2, Math.ceil(y + rad)); j++) {
+      for (let i = Math.max(1, Math.floor(x - rad)); i <= Math.min(W - 2, Math.ceil(x + rad)); i++) {
+        const d2 = dist2(i, j, x, y), t = id(i, j);
+        if (d2 > rad * rad || !free(t) || !free(mir(t))) continue;
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        for (const u of [t, mir(t)]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+      }
+    }
+  };
+  const oil = (x, y, k) => {
+    const c = [];
+    for (let j = Math.max(0, Math.floor(y - 3)); j <= Math.min(H - 2, Math.ceil(y + 3)); j++) for (let i = Math.max(1, Math.floor(x - 3)); i <= Math.min(W - 2, Math.ceil(x + 3)); i++) { const t = id(i, j); if (free(t) && free(mir(t))) c.push([dist2(i, j, x, y), t]); }
+    c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
+  };
+  // A field sure of its size (as orbitalMap's): the stamp, then the free tiles nearest its middle until it holds `min`.
+  const field = (x, y, rad, type, fill, min) => {
+    stamp(x, y, rad, type, fill);
+    for (const R of [4, 6]) {
+      let have = 0;
+      const c = [];
+      for (let j = Math.max(0, Math.floor(y - R)); j <= Math.min(H - 2, Math.ceil(y + R)); j++) {
+        for (let i = Math.max(1, Math.floor(x - R)); i <= Math.min(W - 2, Math.ceil(x + R)); i++) {
+          const t = id(i, j), d2 = dist2(i, j, x, y);
+          if (d2 > R * R) continue;
+          if (type === 'fert' ? fert[t] : res[t] === type) have++; else if (free(t) && free(mir(t))) c.push([d2, t]);
+        }
+      }
+      c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      for (let k = 0; k < c.length && have < min; k++) {
+        if (!free(c[k][1])) continue;
+        for (const u of [c[k][1], mir(c[k][1])]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+        have++;
+      }
+      if (have >= min) return;
+    }
+  };
+  // The landing zone: open ground round each Command Base.
+  for (let j = by - 4; j <= by + 4; j++) for (let i = bx - 4; i <= bx + 4; i++) { const t = id(i, j); if (terrain[t] === T_ROCK) for (const u of [t, mir(t)]) terrain[u] = T_GROUND; }
+  // The home hulk: the standard colony's starter fields (Ore and Crystal first, each at least GRAVE.field), then the rest, and oil.
+  field(bx - 4, by - 5, 1.5, R_ORE, 0.9 * stampDens, G.field);
+  field(bx + 4, by - 5, 1.5, R_CRYSTAL, 0.9 * stampDens, G.field);
+  field(bx + 9, by - 3.5, 1.7, R_ORE, 0.85 * stampDens, G.field);
+  field(bx - 10, by + 2.5, 1.6, R_CRYSTAL, 0.85 * stampDens, G.field);
+  stamp(bx - 6, by - 2, 2.5, R_STALK, 0.85 * stampDens);
+  stamp(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens);
+  stamp(bx + 6, by, 1.8, R_BOULDER, 0.8 * stampDens);
+  stamp(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens);
+  field(bx - 1, by - 6.5, 2.0, 'fert', 0.85, 8);
+  for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, G.oil.home)) oil(bx + dx, by + dy, 4);
+  stamp(bx - 8, by + 6, 1.4, R_BOULDER, 0.75 * stampDens);
+  // The wrecks: spilled cargo (a small Ore and a small Crystal field each, Stone), an oil seep on the far one.
+  for (const r of hulks) {
+    if ((r.kind !== 'bridge' && r.kind !== 'far') || r.id > r.tw) continue;
+    const at = (u, v) => [r.x0 + (r.x1 - r.x0) * u, r.y0 + (r.y1 - r.y0) * v];
+    for (let k = 0; k < G.spill.n; k++) {
+      field(...at(0.22 + 0.1 * k, 0.4), G.spill.r, R_ORE, 0.85, 3);
+      field(...at(0.78 - 0.1 * k, 0.6), G.spill.r, R_CRYSTAL, 0.85, 3);
+    }
+    for (let k = 0; k < G.spill.stone; k++) stamp(...at(0.5, 0.25), 1.5, R_BOULDER, 0.85);
+    if (r.kind === 'far') for (let k = 0; k < G.oil.far; k++) oil(...at(0.5, 0.75), 3);
+  }
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 600 && placed < Math.ceil(URANIUM_DEPOSITS / 2); tries++) {
+      const i = 2 + Math.floor(rng() * (W - 4)), j = Math.floor(H / 2) + 1 + Math.floor(rng() * (H - Math.floor(H / 2) - 3)), t = id(i, j);
+      if (!free(t) || !free(mir(t)) || dist(i, j, bx, by) < 12) continue;
+      for (const u of [t, mir(t)]) res[u] = R_URANIUM;
+      placed++;
+    }
+  }
+  // Stone: each home hulk is topped up to GRAVE.stone (Cement comes from Stone alone, and every Viaduct costs Cement).
+  {
+    const per = clamp(Math.round(RES[R_BOULDER].amount * RPR.amount * G.mul), 1, 255), target = Math.round(G.stone * RPR.amount);
+    const b0 = id(bx, by), land = new Uint8Array(N), q = [b0];
+    land[b0] = 1;
+    for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!land[u] && terrain[u] !== T_CHASM) { land[u] = 1; q.push(u); } });
+    let have = 0;
+    for (const t of q) if (res[t] === R_BOULDER) have += per;
+    const spots = q.filter((t) => free(t) && free(mir(t)) && dist((t % W), (t / W) | 0, bx, by) >= 4.5)
+      .sort((a, c) => (dist2(a % W, (a / W) | 0, bx + 3, by + 7) - dist2(c % W, (c / W) | 0, bx + 3, by + 7)) || a - c);
+    for (let k = 0; k < spots.length && have < target; k++) { for (const u of [spots[k], mir(spots[k])]) res[u] = R_BOULDER; have += per; }
+  }
+  // The rim stays clear; nothing lies off the ground; the relay's tiles are bare deck.
+  for (let t = 0; t < N; t++) {
+    if (rim[t]) { if (terrain[t] === T_ROCK) terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+    if (terrain[t] !== T_GROUND) { res[t] = R_NONE; fert[t] = 0; }
+  }
+  for (let j = core.y0; j <= core.y1; j++) for (let i = core.x0; i <= core.x1; i++) { const t = id(i, j); terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+  // How much each holds (as on every map: richer out toward the middle).
+  const reach = Math.max(1, dist(bx, by, W - 1 - bx, H - 1 - by) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (SKY_RICH.includes(res[t]) ? G.mul : 1)), 1, 255);
+  }
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }],
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    grave: { hulks: hulks.map((r) => ({ id: r.id, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, kind: r.kind, tw: r.tw })), core },
+  };
+}
+
 /* ------------------------------------------------------------------ new game */
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
@@ -3630,7 +3843,7 @@ function newGame(opts) {
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
-  if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring and Orbital platforms have Argos's look and rules, whatever the Biome setting)
+  if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital || SHAPE_PRESETS[settings.shape].graveyard) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring, Orbital platforms and The Graveyard have Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
   const { W, H } = mapDims(settings);
@@ -3692,10 +3905,11 @@ function newGame(opts) {
   mapEventsStart(m);
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
   if (m.orbital) S.orb = orbInit(m.orbital, m.bases); // (Orbital platforms: its decks, drawbridges and control boxes: orbitalMap)
+  if (m.grave) S.grave = { hulks: m.grave.hulks, core: m.grave.core, owner: -1, jam: 0, held: 0, paid: 0 }; // (The Graveyard: its hulks and the Arbiter: graveMap, graveTick)
   const preRes = S.res.slice(), preAmt = S.amt.slice(); // (what the town or the yard cuts at home is laid again beside it: homeFieldFloor)
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   if (SHAPE_PRESETS[settings.shape].walker) walkerSetup(m.bases); // (the Walking Factory: its yard and loop round the middle)
-  if (!opts.layout && !['hollow', 'caves', 'orbital', 'asteroids'].some((k) => SHAPE_PRESETS[settings.shape][k])) homeFieldFloor(m.bases, settings, preRes, preAmt); // (what a later layer cut from the starter fields: see homeFieldFloor)
+  if (!opts.layout && !['hollow', 'caves', 'orbital', 'asteroids', 'graveyard'].some((k) => SHAPE_PRESETS[settings.shape][k])) homeFieldFloor(m.bases, settings, preRes, preAmt); // (what a later layer cut from the starter fields: see homeFieldFloor)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
@@ -3766,7 +3980,7 @@ function newGame(opts) {
   clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
   if (spaceMap() && mode === 'versus' && !hand) spaceSetup(seed); // (space: the drifting asteroids' lanes and the derelict modules)
   S.decor = makeDecor();
-  if (S.orb) S.decor.fill(0); // (no plants on a station's decks)
+  if (S.orb || S.grave) S.decor.fill(0); // (no plants on a station's decks, nor on a wreck's)
   if (S.orb) orbRoads(); // (and the lowered bridges carry roads)
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
@@ -4301,7 +4515,8 @@ function homeZone(p) {
 
 /**
  * The bodies of land player p can build on: its Command Base's, and every one where it holds a built store or
- * garrison (a Drop Outpost dropped on another island, a Port founded by sea, an Outpost taken in a landing...).
+ * garrison (a Drop Outpost dropped on another island, a Port founded by sea, an Outpost taken in a landing...), and out
+ * in space every one where its Workers stand (landed by Dropship: workersLanded).
  * Cached for the tick.
  */
 let _buildZones = { S: null, key: '', zone: null, sets: [] };
@@ -4313,8 +4528,19 @@ function buildZones(p) {
   if (set) return set;
   set = new Set([homeZone(p)]);
   for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && (BDEFS[b.type].store || BDEFS[b.type].mil)) set.add(S.zone[tIdx(b.x, b.y)]);
+  if (spaceMap()) for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker' && !u.inside && !u.ferryWait) set.add(S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]); // (out in space: where its Workers stand, landed by Dropship, see workersLanded)
   _buildZones.sets[p] = set;
   return set;
+}
+
+/**
+ * Out in space (spaceMap): does `owner` have Workers standing in area `zone` (landed there by Dropship)? They can build
+ * there (buildZones), an Outpost first, a foothold on a deck or rock no bridge reaches, as a Drop Outpost is on a planet.
+ */
+function workersLanded(owner, zone) {
+  if (!spaceMap() || zone < 0) return false;
+  for (const u of S.bots) if (!u.dead && u.owner === owner && u.type === 'worker' && !u.inside && !u.ferryWait && S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] === zone) return true;
+  return false;
 }
 
 /** The neutral Trade Post on tile t, or null. */
@@ -4907,6 +5133,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   if (orbTile(t)) return { ok: false, reason: 'A drawbridge: nothing is built on it.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.space && spaceModAt(t)) return { ok: false, reason: 'A derelict module stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
+  if (S.grave && graveCoreAt(t)) return { ok: false, reason: 'The Arbiter\'s relay stands here: build an Outpost near it, and the Arbiter is yours while its relay stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
@@ -4946,6 +5173,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   const zones = buildZones(owner);
   if (!zones.has(S.zone[t]) && !(def.ramp && rampSides(t).some((u) => zones.has(S.zone[u]) && !S.bAt[u]))) {
     return { ok: false, reason: def.ramp ? 'Your bots can\'t reach either side of this cliff yet.'
+      : spaceMap() ? 'Your bots cannot reach this spot. Span the gap with a Viaduct, or land Workers here by Dropship: they can build there (an Outpost first).'
       : 'Your bots cannot reach this spot. Find a slope, or build a Ramp from the side they can reach (on another island, hold an Outpost, Drop Outpost or Port there first).' };
   }
   if (def.ramp) {
@@ -5249,6 +5477,7 @@ function canRoad(owner, i, j) {
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
   if (S.space && spaceModAt(t)) return false; // (a derelict module: space)
+  if (S.grave && graveCoreAt(t)) return false; // (the Arbiter's relay: The Graveyard)
   if (orbTile(t)) return false; // (a drawbridge's strip carries its own road while it is down: orbFlip)
   if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
@@ -6809,6 +7038,7 @@ function checkSave(o) {
   }
   // Space (S.space: spaceSetup): the drifting asteroids' lanes and rocks, the derelict modules, plain numbers on the map.
   if (o.space != null) spaceCheckSave(o, bad);
+  if (o.grave != null) graveCheckSave(o, bad); // (The Graveyard: its hulks and the Arbiter)
   // A Contingency battle's landmark (js/landmarks.js): its tiles and its state.
   if (o.landmarks != null) { if (typeof lmCheckSave === 'function') lmCheckSave(o, bad); else bad(); }
   // Passenger Town (townSetup): its rectangle, its blocks' spans, signs and plazas, and its buildings.
