@@ -273,12 +273,15 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
 
 ## Three new maps (the owner's ideas, Nov 23 2026; to build later)
 
-- **Orbital platforms** (high atmosphere). A few large orbital platforms high over the planet, the clouds and the
-  planet's curve far below, joined by **bridges that can be raised and lowered** (drawbridges). Each bridge has a
-  **control box**: whoever holds it raises or lowers the bridge, cutting a route or opening one. The owner's model is a
-  StarCraft II-style platform map (mechanics only, no look or names borrowed). Lore fit: the Carriers' and the Orbital
-  Lift's world; open questions: what the platforms are (Accord stations? Pathfinder hardware?), how goods get there
-  (no ground resources: salvage, docking pads, Trade Posts?), what falling off means, air units and Missiles allowed.
+- **Orbital platforms** (high atmosphere): **built** (Nov 2026; `SHAPE_PRESETS` `orbital`, `orbitalMap` in js/world.js, `ORBITAL` in js/defs.js,
+  the rules `orbSet`/`orbTick`/`orbBoxes` in js/sim.js, the order `bridgeSet`, `aiBridges` in js/ai.js, the look in js/orbital.js; README, Orbital
+  platforms). The owner's decisions: the platforms are Accord station decks with an ordinary economy (the Ring's: Stalk, soil, Ore, Crystal, Stone, oil);
+  a bridge can't be raised with a robot on it; aircraft, Airships and Missiles work as on The Ring; two players, five decks (Small, Medium) or seven
+  (Large and up). Bridges start down; two control boxes per bridge, held by armed robots near or the land round; Raise warns 4 s, Lower and Raise take 3 s,
+  20 s rest. Argos's rules (no Murmur, no weather, no dust storm). Open: **four players** (a deck each round a middle deck); **more layouts** (a ring of
+  decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **a roadway on a bridge**
+  (today roads stop at it; goods cross on foot or by Viaduct); **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
+  cost or a cooldown per colony; a **mission** teaching the bridges (none yet); a rival that **sends a squad to hold** a contested box.
 - **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
   js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
   side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
