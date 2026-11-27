@@ -295,13 +295,13 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
   a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
 - **Half underground** (caves and surface): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
-  js/defs.js; README, Half underground). Two to four players, half the colonies starting inside the caves and half out on the surface:
+  js/defs.js; README, Half underground). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
   inside, the Hollow's dark look, plenty of Ore and Crystal, nothing grows, and no Missile, bomb, aircraft or Mass Driver canister reaches
   in; outside, the Biome's surface with the stalk groves and crop soil and little Ore. A solid wall (no road tunnels through it) runs between
   them with two or three mouths, narrow gates or wide mouths by seed; each side starts with an extra stock of what it lacks
-  (Fiber and Fuel inside; Ore, Crystal and Alloy outside) and has to branch out through the mouths; the Murmur, if on, live in the caves only; the rival plays either start
+  (Fiber and Fuel inside; Ore, Crystal and Alloy outside) and has to branch out through the mouths; the Murmur, if on, live in the caves and on the surface (mirrored twin nests); the rival plays either start
   (`aiNoCrops`, `aiBan`, the mouth pull in `aiSearchSpot`). Rival vs rival (Normal, 2 players, 12 games): 6 wins for the start inside, 6 for the start outside, none undecided, 6 to 23 minutes.
-  Open: **more entrance layouts** (a mouth that opens or collapses, a drop shaft, a natural bridge over the wall, side by side
+  Open: **three players** (parked: `cavesMap` still lays out three colonies, an outside pair and one inside on the line, but the map takes two or four for now, `evenOnly`: the owner will decide whether and how the split of three comes back); **more entrance layouts** (a mouth that opens or collapses, a drop shaft, a natural bridge over the wall, side by side
   gates in a long wall, more than three); **caves with more to them** (underground lakes, floating Crystal masses and ceiling tremors as
   in the Hollow, a Murmur mound under the middle, the Bloom's veins as an optional Fiber source); **entities in the caves' own
   light** (units and buildings are drawn in the surface's light at day: only the ground is graded dim); **the caves for the Ring** (an
@@ -2826,13 +2826,14 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    into land (land bridges to islands, more ground on water maps) or drain marsh. Moats (flood a trench before your
    walls) and canals (join lakes so ships sail inland). Blast cliffs into slopes with charges (new attack routes; a
    landslide onto an enemy road below).
-2. **Soil, plants and climate:** compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
+2. **Soil, plants and climate** (stage 2 BUILT Nov 27 2026: soil, groves, irrigation and the biome shift; see below): compost / fertiliser plants turn barren ground fertile over time (bigger farms, new
    crops on rich soil). Tree nurseries spread groves (slow Fiber/wood; cover that slows enemy robots). Irrigation:
    pump water by pipe or canal to dry land so farms grow there (big lever on desert biomes). Local climate (the
    Atmosphere Engine taken further): weather stations calming sandstorms or bringing rain; cooling lava ground into rich
    volcanic soil; greening pushing back the Murmur's blight. Biome shift: enough terraforming turns a region desert →
    savanna → forest, with its look, animals and resource bonuses.
-3. **Resources from the ground:** deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
+3. **Resources from the ground** (stage 3 BUILT Nov 27 2026: the Seam Drill, Seed Mast and Thermal Plant; see below; reclaiming was built with stage 2):
+   deep drilling for Ore/Crystal veins below the surface (beyond the Deep Core); crystal
    "seed" fields that slowly grow new Crystal on prepared ground (renewable, with upkeep); geothermal power from lava or
    hot springs (a Fuel-free Generator on volcanic maps); reclaiming wasteland (craters, scorched ground, fallen Lift
    cable) back into usable land (pairs with "total war scars the land").
@@ -2879,6 +2880,92 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
   Design; the owner picked concept A, "Dozer", now rendered and installed with the ground effects and the plans'
   overlays (ART_GUIDE Batch 35). Open: should a raised tile show its new cliff face while it is being raised (the
   bake only repaints it when the job is done)?
+
+**Stage 2, soil, plants and water: BUILT (Nov 27 2026; README "Terraforming, stage 2", ART_GUIDE Batch 36,
+`tools/terraform2-test.js`, the mission Topsoil).** The Composter (Fiber + Stone into soil in a ring: barren, improving,
+rich; rich soil is farmland, richer soil faster crops and more Fuel), the Tree Nursery (groves with lanes, saplings to
+young to mature, a slow Fiber trickle its Agribot gathers, foes slowed in them; they burn and can be cleared), the Water
+Pump (water along pipes and dug canals, wet ground green and farmable even in desert, sprinklers at pipe ends), the
+biome shift (soil, water and grove cover over time: the Rust to the Long Grass to Greenreach, drawn with the two-biome
+blend), and the Grader's Spread soil and Reclaim (craters, scorch, groves) on the Terraform tab. Calls made, for the
+owner:
+- **The fiber trickle goes to the Nursery's own Agribot**, not a Harvester: the Agribot already plants for the
+  Nursery, and a Harvester's job is stalk groves (a different plant, cut down for good).
+- **Water uses the existing pipe**, not a water-pipe variant: a pump joined to an oil line irrigates along it too. A
+  separate water pipe would be clearer if that confuses players.
+- **Rich soil becomes farmland (S.fert)** rather than a separate "plantable" flag, so everything that already reads
+  fertile soil (Bio Farm placement, napalm, a Torch's Scorch the earth) works on it; scorched ground needs Reclaim first.
+- **Groves keep lanes** by leaving every third row and column from the Nursery unplanted, and never block building
+  (placing over one clears it).
+- **The biome shift moves tiles one at a time** (each by its own soil, water and grove cover), so a region shifts as its
+  tiles do; a step takes 10 minutes with everything, 20 with two of the four. Long Grass ground counts as improving
+  soil; Greenreach grows groves half as fast again. Forests, swamps and the Shoals don't shift.
+- **Ditches are Dig channel**: a canal dug from the pump's water carries it. No separate ditch tool.
+- **Stage 2 is banned on Argos, in the Hollow and under the caves' roof**, and the Water Pump in the Cinderlands (lava).
+
+**Stage 2, the owner's decisions on the open questions (Nov 27 2026, "go with your recs for all"):**
+- **Grove Fiber stays with the Nursery's own Agribot** (no Harvester).
+- **Water keeps the shared pipe** (the oil network); no separate water pipe.
+- **Napalm and a Torch's Scorch the earth still ruin rich soil**, and **Reclaim brings it back**: the scorch cleared, the
+  rich soil under it is farmland again (How to play says so plainly, under soil and under Fuel's farmland burning).
+  Farmland that was never composted comes back as plain ground (a Composter or Spread soil makes it farmland again).
+- **The Polar Caps thaw to the Long Grass first, then Greenreach** (`SHIFT.chain.polar`), not straight to Greenreach.
+  Forests, swamps and the Shoals stay non-shifting. (With it, the groves' Greenreach speed-up now reads the tile's
+  biome, `t2TileBiome`, rather than "the second step", so ground that was the Long Grass to start gets it too.)
+- **Rivals route round a foe's groves, a light nudge**: a rival's robots (`P.ai`) pay `GROVE.path` [0, 1, 2] more a step
+  into a foe's young or mature grove (`groveCost`, `opts.grove` from `routeOpts`), so they go round where the way round
+  is short and through where there is none. The player's own robots and allies are unaffected. Nothing changes with no
+  groves on the map (seeded AI-vs-AI games hash as before). Rivals still don't build stage 2.
+- **The Atmosphere Engine's rain counts as wet ground**: from Rain, while it has power, its circle is wet for crops
+  (`IRR.crop`) and the biome shift (`rainWetAt`, worked out from the Engines; nothing new stored or hashed). Not drawn
+  as irrigated ground (the Engine's own greening shows there).
+- **A Composter keeps Fiber + Stone**, no scrap.
+
+**Stage 2, later:**
+- **Wildlife on shifted land** (the shift bringing the new biome's animals; `wildlife.js` reads the map's biome, not
+  the tile's): with the living-world rework.
+- A Composter's inputs could be other wastes (Crude sludge, scrap) once the economy has them; the owner's call for now
+  is Fiber + Stone only.
+- Rain wetness is the whole circle day and night (the rain falls at night; the ground stays damp). Only if it reads
+  oddly: wet only at night, or a drying lag.
+
+**Stage 3, resources from the ground: BUILT (Nov 27 2026; README "Terraforming, stage 3", ART_GUIDE Batch 37,
+`tools/terraform3-test.js`, the mission Deep Ground).** The owner said "your picks for all" on the canvas
+(https://claude.ai/artifact/Hcjo7wWok4Xri35aFSt5kJ): the Seam Drill (concept A "Derrick"), the Seed Mast (concept B
+"Charge Mast") growing a Crystal Seedbed, the Thermal Plant (concept A "Cooling Tower"). Reclaim was already built. Calls
+made, for the owner:
+- **Seams are made lazily from the map's seed** the first time any Seam Drill surveys (`t3SeamsMake`), so map
+  generation, saves and hashes are untouched in every game without a drill (seeded AI-vs-AI games hash as before). They
+  are drawn only for the colony that found them; a rival's drill finds its own.
+- **A drill surveys when it is finished**, not when its site is placed (placing and cancelling would be a free survey).
+  Its survey then grows a tile every 30 s it has power, 4 to 8 tiles: the "periodic" survey has something to find.
+- **Power is the Generator's boost role**: a drill or Mast asks for power and a Generator in reach burns its Fuel for it
+  as for a factory (1.5 Fuel a minute if it powers nothing else), or a Thermal Plant does it free. No separate fuel
+  hopper on the drill. The Thermal Plant powers factories, drills and Masts, **not** the megastructures, Maglev or the
+  Mass Driver (they still read a Generator's Fuel); say if it should.
+- **Rates, against the economy audit's measures** (an Ore Mine 3.7 Ore a minute, a Crystal Tap 2.2 Crystal): a drill 2
+  Ore or 1 Crystal a minute, a seam 60 Ore or 30 Crystal; six beds net about 1.6 Crystal a minute after their seed
+  Crystal. Neither beats a deposit, so the late Chip and Crystal balance stays the deposits'
+  (IDEAS "Economy balance audit to-do" 6). Rivals never build them, so the audit's AI numbers are unchanged.
+- **Grown Crystal is gathered by a Crystal Tap**, not Workers or a crew of the Mast's own: a ripe bed holds 3 Crystal as
+  an ordinary Crystal cluster, so a Tap beside the Mast gathers it like any Crystal (and a rival's Tap could take it on
+  no-one's land, as any deposit). The bed is drawn in place of the cluster's sprite. After a harvest the bed is seeded
+  again with a new Crystal (the "small input" of upkeep); power is the upkeep whose lapse starves it.
+- **Seed Masts keep 5 tiles apart**, so every bed has one Mast. None on Argos (the Seam Drill works there, Ore only).
+- **The Murmur**: a growing field counts as a Refinery's charge in `murmurPower` and a power plant's in `chargeWorth`;
+  the Thermal Plant as a Generator (and they can cut it, as a Generator).
+- **Accents**: the canvas's indigo (Seed Mast) and sulfur (Thermal Plant) were too near the Refinery, the Generator and
+  the Chip Fab; now rose `#f78fc0` and pale sulfur `#c9ef8f` (ART_GUIDE Batch 37 has the check).
+
+**Stage 3, open questions for the owner:**
+- **Ringfall refilling seams.** The canvas suggested seams refill with ringfall like deposits; built as one-off (a
+  worked-out seam is spent for good, as asked). A slow refill would make the drill a permanent fixture.
+- **Should the Thermal Plant power the megastructures and the Maglev** (a Fuel-free Deep Core on volcanic maps would be
+  strong), and should rivals use it on volcanic maps (the canvas suggested it; built player-only as asked)?
+- **Seedbeds and rival Taps**: a rival's Crystal Tap can gather a ripe bed on no-one's land. Keep (it's Crystal on the
+  ground), or make grown Crystal its grower's only?
+- **The Thermal Plant's reach (3) and cost** (6 Cement, 3 Alloy, 1 Chip) are first guesses for "nice, not a must"; worth
+  a look after play.
 
 ## Done: Argos on the main menu (owner, Nov 26)
 

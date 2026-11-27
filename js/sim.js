@@ -10,6 +10,10 @@ function simStep(dt) {
   S.time += dt;
   S.tick++;
   if (S.tick % 30 === 0) growStalks(30 * dt);
+  // Terraforming, stage 2: the groves grow, the Water Pumps' water spreads, the land shifts (only where they are).
+  if (S.grove && S.tick % (30 * GROVE.step) === 17) t2Groves();
+  if (S.tick % (30 * IRR.every) === 21 && (S.wet || S.buildings.some((b) => !b.dead && BDEFS[b.type].wpump))) t2Water();
+  if (S.tick % (30 * SHIFT.every) === 27 && t2Any()) t2Shift();
   if (S.tick % 30 === 7) settlePlans();
   if (S.tick % 30 === 11) updatePipes();
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
@@ -116,13 +120,13 @@ function checkMilestones() {
 
 /** Planted stalk groves and energy crops grow until they are ripe (grow = 1); Bloom veins cut down grow back (VEIN). */
 function growStalks(dt) {
-  const N = S.W * S.H, crop = CROP_GROW_TIME / modFuelRate(); // (Half Fuel: crops ripen slower)
+  const N = S.W * S.H, crop = CROP_GROW_TIME / modFuelRate(), t2 = !!(S.soil || S.wet || S.shift || rainHolds().length); // (Half Fuel: crops ripen slower) (t2: soil, water and an Engine's rain: cropRate)
   for (let t = 0; t < N; t++) {
     const r = S.res[t];
     if ((r !== R_STALK && r !== R_CROP && r !== R_VEIN) || S.grow[t] >= 1) continue;
     if (r === R_CROP && S.drought && S.drought[t]) continue; // (under a foe's Storm Front from Green: the drought, see atmosDrought)
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt * (r === R_CROP && S.green && S.green[t] >= 3 && atmosOwnAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, soilHolder(t)) ? ATMOS.crop : 1) / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME)); // (an Atmosphere Engine's Green: its owner's crops a quarter faster)
+    S.grow[t] = Math.min(1, S.grow[t] + dt * (r === R_CROP && S.green && S.green[t] >= 3 && atmosOwnAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, soilHolder(t)) ? ATMOS.crop : 1) * (r === R_CROP && t2 ? cropRate(t) : 1) / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME)); // (richer soil and water: SOIL, IRR) // (an Atmosphere Engine's Green: its owner's crops a quarter faster)
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
@@ -1242,6 +1246,7 @@ function routeOpts(u) {
   if (isArmy(u) && !u.fight) o.cover = u.owner; // and out of the enemy's guns
   if (isArmy(u) && !u.fight && u.task && u.task.type === 'hold') { const r = rallyById(u.task.rally); if (r && r.safe) o.safe = dangerMap(u.owner); } // (an Army Group's raid: round them, both ways, see agRaid)
   if (isArmy(u) && !u.fight && S.players[u.owner] && S.players[u.owner].ai && S.rads && S.rads.length) o.rad = true; // (a rival's army marches round radiation where it can)
+  if (S.grove && S.players[u.owner] && S.players[u.owner].ai && !bt.air && !bt.sea && !bt.rail) o.grove = u.owner; // (a rival's robots go round a foe's groves where the way round is short: GROVE.path)
   if (bt.wild && u.task && u.task.night && !u.fight && murmurSmart()) o.coverMap = murmurGunMap(); // (Active: the Murmur keep out of the colonies' guns where they can)
   return o;
 }
@@ -4120,7 +4125,7 @@ function completeRamp(b) {
  * (fromStore); dug earth comes out as crates of Stone on the spot. Done, the site goes and the ground stays changed
  * (completeEarthwork): the areas, territory, the sea, the bake and the minimap follow (terrainChanged).
  */
-const TF_TOOLS = ['raise', 'lower', 'flatten', 'fill', 'dig'];
+const TF_TOOLS = ['raise', 'lower', 'flatten', 'fill', 'dig', 'soil', 'reclaim']; // (the last two: stage 2, SOIL)
 
 /** The job planned on tile t: in `plan` (a Map being put together), else an Earthworks site's, else null. */
 function tfJobAt(t, plan) {
@@ -4202,6 +4207,14 @@ function tfJob(owner, tool, t, target, plan) {
   if (where) return { why: where };
   const sides = tfSides(t);
   let k, to;
+  // Stage 2 (SOIL): Spread soil on open ground, and Reclaim a crater, scorched ground or a grove back to usable ground.
+  if (tool === 'soil' || tool === 'reclaim') {
+    if (tfLevel(t) === null) return { why: S.terrain[t] === T_WATER ? 'Water: Fill shallows first.' : 'Only open ground.' };
+    if (tool === 'soil' && S.soil && S.soil[t] >= SOIL.max) return { why: 'The soil here is as rich as it gets.', same: true };
+    if (tool === 'reclaim' && !t2Scarred(t)) return { why: 'Reclaim: only craters, scorched or burned ground, or a grove to clear.', same: true };
+    return tool === 'soil' ? { k: 'soil', to: S.elev[t], n: 1, cost: { ...SOIL.spread }, yieldN: 0, time: SOIL.spreadTime }
+      : { k: 'clear', to: S.elev[t], n: 1, cost: {}, yieldN: 0, time: SOIL.reclaimTime };
+  }
   if (tool === 'fill') {
     if (!tfWet(t)) return { why: 'Fill shallows: only water beside land.' };
     if (!tfInReach(t)) return { why: `Too far out to sea: fill reaches ${TERRA.reach} tiles from the original shore.` };
@@ -4249,7 +4262,7 @@ function tfJob(owner, tool, t, target, plan) {
  * in the order dragged. Each that can be done becomes an Earthworks site. { placed, why, stone, yieldN, graders }.
  */
 function tfPlace(owner, tool, list, target) {
-  const out = { placed: 0, why: '', stone: 0, yieldN: 0, graders: 0 };
+  const out = { placed: 0, why: '', stone: 0, fiber: 0, yieldN: 0, graders: 0 };
   if (!TF_TOOLS.includes(tool) || !Array.isArray(list)) { out.why = 'Unknown tool.'; return out; }
   const plan = new Map(), N = S.W * S.H;
   for (const t of list.slice(0, TERRA.most)) {
@@ -4265,7 +4278,7 @@ function tfPlace(owner, tool, list, target) {
     // (Out on the water no Hauler can come: the Stone for filling is paid from storage as it comes in.)
     if (J.k === 'fill') { b.fromStore = true; queuePlan('b', b.id, owner); }
     markDirty(t % S.W, (t / S.W) | 0);
-    out.placed++; out.stone += J.cost.stone || 0; out.yieldN += J.yieldN;
+    out.placed++; out.stone += J.cost.stone || 0; out.fiber += J.cost.fiber || 0; out.yieldN += J.yieldN;
   }
   if (out.placed) settlePlans();
   out.graders = S.bots.filter((u) => !u.dead && u.owner === owner && BOTS[u.type].grader).length;
@@ -4325,11 +4338,11 @@ function graderWork(u, s) {
 /** What an Earthworks site shows on its panel. */
 function tfStatus(b) {
   const g = tfGrader(b), owed = storeFunded(b) ? stillOwed(b) : null;
-  const verb = { up: 'Raising', down: 'Lowering', fill: 'Filling', dig: 'Digging' }[b.tf.k];
+  const verb = { up: 'Raising', down: 'Lowering', fill: 'Filling', dig: 'Digging', soil: 'Spreading soil', clear: 'Reclaiming' }[b.tf.k];
   if (g && g.task.phase !== 'go') return `${verb}: ${Math.floor(b.progress * 100)}%`;
   if (owed && Object.keys(owed).length && !tfReady(b)) return `Waiting for ${costText(owed)} from storage`;
   if (b.unlinked && !tfReady(b)) return 'No road to storage yet';
-  if (!tfReady(b)) return 'Waiting for Stone';
+  if (!tfReady(b)) return b.tf.k === 'soil' ? 'Waiting for Fiber and Stone' : 'Waiting for Stone';
   if (g) return 'A Grader is on its way';
   if (!S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].grader)) return 'Waiting for a Grader: order one at the Bot Foundry';
   return b.tfNoAt > S.time - 45 ? 'No Grader can get beside it: it needs free ground beside it that your robots can reach' : 'Waiting for a Grader';
@@ -4346,6 +4359,9 @@ function completeEarthwork(b) {
   b.dead = true; b.gone = 1; // (finished, not lost: see noteGone)
   S.byId.delete(b.id);
   S.bAt[t] = 0;
+  if (J.k === 'soil' || J.k === 'clear') { t2Earthwork(b, t, J, P); return; } // (stage 2: the ground stays where it is)
+  groveClear(t); // (a grove where the ground is raised, lowered, filled or dug goes)
+  if (S.soil && J.k === 'dig') S.soil[t] = 0;
   S.tfTiles = S.tfTiles || {};
   if (!S.tfTiles[t]) S.tfTiles[t] = J.k === 'fill' ? 2 : 1; // (what it was before the Graders first changed it: see tfDry0)
   if (J.k === 'fill') { S.terrain[t] = T_GROUND; if (S.ford) S.ford[t] = 0; S.elev[t] = J.to; S.res[t] = R_NONE; S.amt[t] = 0; }
@@ -4378,6 +4394,573 @@ function completeEarthwork(b) {
   addFx('dustcloud', b.x + 0.5, b.y + 0.5, { r: 1.1 });
   if (!S.buildings.some((e) => !e.dead && e.owner === b.owner && e.tf && !e.built)) postMsg(b.owner, 'Terraforming done: the Graders have finished every job.', b.x, b.y, 'good');
 }
+
+/* ------------------------------------------------------------------ terraforming, stage 2 (SOIL, GROVE, IRR, SHIFT) */
+
+/*
+ * Soil, plants and water (the player's: no rival builds a Composter, Tree Nursery or Water Pump, nor plans the Grader's
+ * stage 2 jobs; rivals only meet the groves and the shifted ground). Per-tile layers, made the first time something needs
+ * them and kept in saves as sparse layers (SPARSE_LAYERS): S.soil (0..SOIL.max), S.grove (a grove's growth, 1..mature),
+ * S.grvF (a mature grove's Fiber coming, 0..fiberEvery), S.grvO (who planted it, owner + 1), S.wet (1 wet, 2 under a
+ * sprinkler or by a pump), S.tform (the terraform level toward the next biome step, 0..SHIFT.full) and S.shift (biome
+ * steps taken). A game without any of it has none of the layers, nothing hashed and nothing run.
+ */
+const T2_LAYERS = ['soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift'];
+/** Layer k (one of T2_LAYERS), made if it isn't there. */
+function t2Layer(k) { const N = S.W * S.H; if (!S[k] || S[k].length !== N) S[k] = new Uint8Array(N); return S[k]; }
+
+/** Tile t's soil: 0 barren, 1 improving, 2 rich (a biome shifted ground counts as improving at least). */
+function soilLv(t) {
+  const v = S.soil ? S.soil[t] : 0, lv = v >= SOIL.rich ? 2 : v >= SOIL.improving ? 1 : 0;
+  return lv < 1 && S.shift && S.shift[t] ? 1 : lv;
+}
+/** Is tile t wet (a Water Pump's water reaches it, or an Atmosphere Engine's rain: rainWetAt)? */
+function wetAt(t) { return !!(S.wet && S.wet[t]) || rainWetAt(t); }
+/**
+ * Is tile t in an Atmosphere Engine's rain: in the circle of a standing one at Rain or later, with power (rainHolds)?
+ * Its ground counts as wet for crops and the biome shift, like a Water Pump's (worked out from the Engines, not stored).
+ */
+function rainWetAt(t) {
+  if (!S.buildings.length) return false;
+  const L = rainHolds();
+  if (!L.length) return false;
+  const x = (t % S.W) + 0.5, y = ((t / S.W) | 0) + 0.5;
+  for (const h of L) if (dist2(x, y, h.x, h.y) <= h.r * h.r) return true;
+  return false;
+}
+/** How much faster a crop on tile t grows: its soil, and water (a pump's or an Engine's rain). 1 without either. */
+function cropRate(t) { return (S.soil || S.shift ? SOIL.crop[soilLv(t)] : 1) * (wetAt(t) ? IRR.crop : 1); }
+
+/** A grove's stage on tile t: 0 none, 1 saplings, 2 young, 3 mature. */
+function groveStage(t) { const g = S.grove ? S.grove[t] : 0; return !g ? 0 : g < GROVE.young ? 1 : g < GROVE.mature ? 2 : 3; }
+/** Who planted the grove on tile t (-1: none). */
+function groveOwner(t) { return S.grvO && S.grvO[t] ? S.grvO[t] - 1 : -1; }
+/** A grove's lanes: every third row and column from Nursery b stays open, so robots and roads get through. */
+function groveLane(b, i, j) { return ((i - b.x) % 3 + 3) % 3 === 0 || ((j - b.y) % 3 + 3) % 3 === 0; }
+/** The grove on tile t is gone (built over, burned, cleared, worked by a Grader). */
+function groveClear(t) {
+  if (!S.grove || !S.grove[t]) return;
+  S.grove[t] = 0; if (S.grvF) S.grvF[t] = 0; if (S.grvO) S.grvO[t] = 0;
+  S.groveVer = (S.groveVer || 0) + 1;
+}
+/**
+ * How fast robot u moves for the grove it is in: a foe's grove (not its owner's, nor an ally's) slows robots on the
+ * ground to GROVE.slow of their speed, the more the older it is. 1 elsewhere, and for aircraft and ships.
+ */
+function groveSlow(u) {
+  if (!S.grove) return 1;
+  const i = Math.floor(u.x), j = Math.floor(u.y);
+  if (!inMap(i, j)) return 1;
+  const t = j * S.W + i, g = S.grove[t];
+  if (!g) return 1;
+  const bt = BOTS[u.type];
+  if (bt.air || bt.sea || bt.rail || u.inside) return 1;
+  const o = groveOwner(t);
+  if (o === u.owner || (o >= 0 && !foes(o, u.owner))) return 1;
+  return GROVE.slow[groveStage(t) - 1];
+}
+/** A grove on tile t burns (napalm, a Torch): gone, its ground scorched (Reclaim makes it usable again). `by`: who burned it. */
+function groveBurn(t, by) {
+  if (!S.grove || !S.grove[t]) return false;
+  const o = groveOwner(t), i = t % S.W, j = (t / S.W) | 0;
+  groveClear(t);
+  (S.burnt || (S.burnt = {}))[t] = 1;
+  if (S.fert[t]) S.fert[t] = 0;
+  addFx('fire', i + 0.5, j + 0.45, { r: 0.32, life: 4, seed: t % 97 });
+  markDirty(i, j);
+  const P = by >= 0 ? S.players[by] : null;
+  if (P) P.stats.grovesBurned = (P.stats.grovesBurned || 0) + 1;
+  if (o >= 0 && by >= 0 && foes(o, by)) { const Q = S.players[o]; if (Q && S.time - (Q.groveMsg ?? -999) > 30) { Q.groveMsg = S.time; postMsg(o, 'Enemy fire is burning your groves. Reclaim the scorched ground (Build → Terraform) and the Nursery plants it again.', i, j, 'lost'); } }
+  return true;
+}
+
+/** What a Reclaim job clears on tile t: a crater, ash or scorch (War scars), scorched soil, or a grove. */
+function t2Scarred(t) { return !!((S.crater && S.crater[t]) || (S.ash && S.ash[t]) || (S.burnt && S.burnt[t]) || (S.grove && S.grove[t])); }
+
+/** Raise tile t's soil by n, to SOIL.max: rich soil becomes farmland (unless scorched: Reclaim it first). */
+function soilAdd(t, n) {
+  const A = t2Layer('soil'), v = A[t], w = Math.min(SOIL.max, v + n);
+  if (w === v) return;
+  A[t] = w;
+  if (w >= SOIL.rich && !S.fert[t] && !burntSoil(t) && S.terrain[t] === T_GROUND && !S.ramp[t]) S.fert[t] = 1;
+  if ((v >> 4) !== (w >> 4) || (v < SOIL.rich && w >= SOIL.rich)) markDirty(t % S.W, (t / S.W) | 0); // (drawn a shade richer every 16)
+}
+
+/** Can a Composter's humus reach tile t (open ground, nothing built or laid on it, not a rival's)? */
+function soilOpen(t, owner) {
+  return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t]) &&
+    !(S.owner[t] >= 0 && S.owner[t] !== owner) && !(S.sbed && S.sbed[t]);
+}
+
+/** A Composter at work (updateBuilding): a batch from its hopper every SOIL.every s enriches the ground in reach. */
+function updateComposter(b, dt) {
+  const have = Object.keys(SOIL.batch).every((g) => (b.stock[g] || 0) >= SOIL.batch[g]);
+  if (!have && !(b.cpT > 0)) { b.status = b.unlinked ? 'No road to storage yet: Haulers bring its Fiber and Stone' : 'Waiting for Fiber and Stone'; return; }
+  if (!(b.cpT > 0)) { for (const g in SOIL.batch) bump(b.stock, g, -SOIL.batch[g]); for (const g in SOIL.batch) usedGood(b.owner, g, SOIL.batch[g]); b.cpT = SOIL.every; }
+  b.working = true;
+  b.cpT -= dt;
+  if (b.cpT <= 0) {
+    b.cpT = 0;
+    const r2 = SOIL.reach * SOIL.reach + 0.3;
+    for (let j = Math.max(0, b.y - SOIL.reach); j <= Math.min(S.H - 1, b.y + SOIL.reach); j++) for (let i = Math.max(0, b.x - SOIL.reach); i <= Math.min(S.W - 1, b.x + SOIL.reach); i++) {
+      const t = j * S.W + i;
+      if (dist2(i, j, b.x, b.y) <= r2 && soilOpen(t, b.owner)) soilAdd(t, SOIL.gain);
+    }
+    b.batches = (b.batches || 0) + 1;
+    const P = S.players[b.owner];
+    if (P) P.stats.composted = (P.stats.composted || 0) + 1;
+  }
+  if (b.status && S.tick % 15 !== b.id % 15) return; // (the count, now and then)
+  const [n, rich] = soilInReach(b);
+  b.status = `Composting: ${rich} of ${n} tiles in reach rich${rich < n ? ', the rest improving' : ''}`;
+}
+/** [open tiles in a Composter's reach, how many of them are rich]. */
+function soilInReach(b) {
+  const r2 = SOIL.reach * SOIL.reach + 0.3;
+  let n = 0, rich = 0;
+  for (let j = Math.max(0, b.y - SOIL.reach); j <= Math.min(S.H - 1, b.y + SOIL.reach); j++) for (let i = Math.max(0, b.x - SOIL.reach); i <= Math.min(S.W - 1, b.x + SOIL.reach); i++) {
+    const t = j * S.W + i;
+    if (dist2(i, j, b.x, b.y) > r2 || !soilOpen(t, b.owner)) continue;
+    n++; if (S.soil && S.soil[t] >= SOIL.rich) rich++;
+  }
+  return [n, rich];
+}
+
+/** Open ground a Nursery's Agribot can plant a grove on: not a lane, farmland, scorched, built on, laid or a rival's. */
+function groveSpotOk(b, t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  return S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !S.fert[t] && !burntSoil(t) &&
+    !(S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) && !(S.pipe && (S.pipe[t] || (S.pipePlan && S.pipePlan[t]))) && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) &&
+    !(S.grove && S.grove[t]) && !S.resRes[t] && !(S.sbed && S.sbed[t]) && !groveLane(b, i, j) && !(S.owner[t] >= 0 && S.owner[t] !== b.owner) && !calmAt(i + 0.5, j + 0.5) && !runwayAt(t);
+}
+/** The groves Nursery b looks after (its owner's, in its reach). */
+function grovesOf(b) {
+  if (!S.grove) return 0;
+  let n = 0;
+  const R0 = GROVE.reach, r2 = R0 * R0 + 0.3;
+  for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
+    const t = j * S.W + i;
+    if (S.grove[t] && groveOwner(t) === b.owner && dist2(i, j, b.x, b.y) <= r2) n++;
+  }
+  return n;
+}
+/** The nearest tile in Nursery b's reach where its Agribot plants (act 'plant') or gathers a ripe grove's Fiber ('gather'); -1 if none. */
+function groveNode(b, act) {
+  const R0 = GROVE.reach, r2 = R0 * R0 + 0.3, zone = S.zone[tIdx(b.x, b.y)];
+  let best = -1, bd = Infinity;
+  for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
+    const t = j * S.W + i, d = dist2(i, j, b.x, b.y);
+    if (d > r2 || d >= bd || S.zone[t] !== zone || hotFor(b.owner, t) || radTile(t)) continue;
+    if (act === 'gather' ? !(groveStage(t) === 3 && groveOwner(t) === b.owner && S.grvF[t] >= GROVE.fiberEvery && !S.resRes[t]) : !groveSpotOk(b, t)) continue;
+    bd = d; best = t;
+  }
+  return best;
+}
+/** The Nursery's Agribot has planted at tile t. */
+function grovePlant(b, t) {
+  if (!groveSpotOk(b, t)) return;
+  clearDecor(t); // (the scenery on it makes way: before the grove goes in, as clearDecor clears a grove too)
+  t2Layer('grove')[t] = 1; t2Layer('grvF')[t] = 0; t2Layer('grvO')[t] = b.owner + 1;
+  S.groveVer = (S.groveVer || 0) + 1;
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (S.ash) scarHeal(i, j);
+  markDirty(i, j);
+  const P = S.players[b.owner];
+  if (P) P.stats.grovesPlanted = (P.stats.grovesPlanted || 0) + 1;
+}
+
+/** Every GROVE.step s: the groves grow (faster on ground shifted to Greenreach), and mature ones bear Fiber. */
+function t2Groves() {
+  const G = S.grove, F = t2Layer('grvF');
+  let changed = false;
+  for (let t = 0; t < G.length; t++) {
+    const g = G[t];
+    if (!g) continue;
+    if (g < GROVE.mature) {
+      const before = groveStage(t);
+      G[t] = Math.min(GROVE.mature, g + (S.shift && S.shift[t] && t2TileBiome(t) === 'jungle' ? GROVE.forest : 1));
+      if (groveStage(t) !== before) changed = true;
+    } else if (F[t] < GROVE.fiberEvery) F[t]++;
+  }
+  if (changed) S.groveVer = (S.groveVer || 0) + 1;
+}
+
+/** Is pipe tile t a pipe's open end (a sprinkler: one pipe beside it at most, and no building beside it)? */
+function pipeSprinkler(t) {
+  if (!S.pipe || !S.pipe[t]) return false;
+  let n = 0;
+  for (const u of tfSides(t)) { if (S.pipe[u] === S.pipe[t]) n++; if (S.bAt[u]) return false; }
+  return n <= 1;
+}
+/** A Water Pump stands beside water it can lift (not lava). */
+function wpumpWater(b) { return tfSides(tIdx(b.x, b.y)).some((u) => S.terrain[u] === T_WATER && !(S.lava && S.lava[u]) && biome() !== 'volcanic'); }
+
+/**
+ * Every IRR.every s: where the Water Pumps' water reaches. From each working pump along its owner's pipes joined to it
+ * and along canals a Grader dug (S.tfTiles water), IRR.reach tiles of them at most: the ground within IRR.fringe of
+ * them is wet, and within IRR.spray of a pipe's open end (a sprinkler) or the pump wetter. S.wet is made again.
+ */
+function t2Water() {
+  const pumps = S.buildings.filter((b) => !b.dead && b.built && BDEFS[b.type].wpump);
+  if (!pumps.length && !S.wet) return;
+  const N = S.W * S.H, W = S.W, wet = new Uint8Array(N), seen = new Uint8Array(N);
+  const mark = (t, r, v) => {
+    const i = t % W, j = (t / W) | 0, r2 = r * r + 0.3;
+    for (let y = Math.max(0, j - r); y <= Math.min(S.H - 1, j + r); y++) for (let x = Math.max(0, i - r); x <= Math.min(W - 1, i + r); x++) {
+      const u = y * W + x;
+      if (S.terrain[u] === T_GROUND && !(S.lava && S.lava[u]) && dist2(x, y, i, j) <= r2 && wet[u] < v) wet[u] = v;
+    }
+  };
+  const canal = (t) => !!(S.tfTiles && S.tfTiles[t]) && S.terrain[t] === T_WATER;
+  for (const b of pumps) {
+    b.wpN = 0;
+    if (b.paused || b.cut || !wpumpWater(b)) continue;
+    const t0 = tIdx(b.x, b.y), own = b.owner + 1, q = [t0];
+    seen.fill(0); seen[t0] = 1;
+    mark(t0, IRR.spray, 2);
+    let n = 0;
+    for (let k = 0; k < q.length && n < IRR.reach; k++) {
+      const t = q[k];
+      for (const u of tfSides(t)) {
+        if (seen[u] || !((S.pipe && S.pipe[u] === own) || canal(u))) continue;
+        seen[u] = 1; q.push(u); n++;
+        mark(u, IRR.fringe, 1);
+        if (pipeSprinkler(u)) mark(u, IRR.spray, 2);
+        if (n >= IRR.reach) break;
+      }
+    }
+    b.wpN = n;
+  }
+  let any = false;
+  const old = S.wet;
+  for (let t = 0; t < N; t++) {
+    if (wet[t]) any = true;
+    if ((old ? old[t] : 0) !== wet[t]) markDirty(t % W, (t / W) | 0);
+  }
+  S.wet = any ? wet : null;
+}
+
+/** The biome tile t was made with (the map's, or its second biome's where the two blend). */
+function t2BaseBiome(t) {
+  const b2 = S.settings && S.settings.biome2;
+  if (!b2) return biome();
+  const i = t % S.W, j = (t / S.W) | 0;
+  return biomeMixAt(i, j, S.W, S.H, S.seed, S.settings.biomeBoundary) >= 0.5 ? b2 : biome();
+}
+/** The biome tile t has shifted to (null: not shifted), and the next one along its chain (null: none). */
+function t2TileBiome(t) { const k = S.shift ? S.shift[t] : 0; return k ? (SHIFT.chain[t2BaseBiome(t)] || [])[k - 1] || null : null; }
+function t2NextBiome(t) { return (SHIFT.chain[t2BaseBiome(t)] || [])[S.shift ? S.shift[t] : 0] || null; }
+
+/** Tile t's biome-shift score: improving soil, rich soil, water (a pump's or an Engine's rain), grove cover (young or mature groves on it and round it). */
+function t2Score(t) {
+  let s = 0;
+  const v = S.soil ? S.soil[t] : 0;
+  if (v >= SOIL.improving) s++;
+  if (v >= SOIL.rich) s++;
+  if (wetAt(t)) s++;
+  if (S.grove) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    let c = 0;
+    for (let y = Math.max(0, j - 1); y <= Math.min(S.H - 1, j + 1); y++) for (let x = Math.max(0, i - 1); x <= Math.min(S.W - 1, i + 1); x++) if (S.grove[y * S.W + x] >= GROVE.young) c++;
+    if (c >= SHIFT.cover) s++;
+  }
+  return s;
+}
+/** Every SHIFT.every s: tiles with enough soil, water and grove cover move toward their biome's next step (SHIFT). */
+function t2Shift() {
+  const N = S.W * S.H;
+  let tf = S.tform;
+  for (let t = 0; t < N; t++) {
+    if (S.terrain[t] !== T_GROUND) continue;
+    const s = t2Score(t);
+    if (s < SHIFT.need || !t2NextBiome(t)) continue;
+    tf = tf || t2Layer('tform');
+    const was = tf[t], v = was + s;
+    if (v >= SHIFT.full) {
+      tf[t] = 0;
+      t2Layer('shift')[t]++;
+      const i = t % S.W, j = (t / S.W) | 0, P = soilHolder(t) >= 0 ? S.players[soilHolder(t)] : null;
+      if (P) P.stats.shifted = (P.stats.shifted || 0) + 1;
+      // The new biome's own scenery takes root on open ground now and then (drawn with its art: drawPlant).
+      if (S.decor && !S.decor[t] && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.ramp[t] && !(S.grove && S.grove[t]) && hash2(i, j, 4401) < (BIOMES[t2TileBiome(t)]?.plants || 0.1) * 0.8) S.decor[t] = 1 + Math.floor(hash2(i, j, 4403) * PLANT_KINDS);
+      markDirty(i, j);
+      if (!S.shiftMsg || S.time - S.shiftMsg > 120) { S.shiftMsg = S.time; const o = soilHolder(t); if (o >= 0) postMsg(o, `The land is changing: the ground round your groves and fields has become ${BIOMES[t2TileBiome(t)].name}.`, i, j, 'good'); }
+    } else {
+      tf[t] = v;
+      if (((was * 8) / SHIFT.full | 0) !== ((v * 8) / SHIFT.full | 0)) markDirty(t % S.W, (t / S.W) | 0); // (drawn a step further along every eighth)
+    }
+  }
+}
+
+/** A Water Pump (updateBuilding): working while its water reaches ground (t2Water counts it). */
+function updateWpump(b) {
+  if (!wpumpWater(b)) { b.status = biome() === 'volcanic' ? 'Nothing to pump: the lakes here are lava' : 'No water beside it: it has to stand right beside water'; return; }
+  b.working = true;
+  b.status = b.wpN ? `Pumping: water along ${b.wpN} tile${b.wpN === 1 ? '' : 's'} of pipe and canal` : 'Pumping: only round itself. Join pipe to it (Paths → Pipe), or dig a canal from the water beside it, to water further';
+}
+
+/** Is a stage 2 layer or building in this game (anything for t2Tick to do)? */
+function t2Any() { return !!(S.soil || S.grove || S.wet || S.tform || S.shift); }
+
+/**
+ * A stage 2 Earthworks job done (completeEarthwork): Spread soil makes the ground a level of soil richer (SOIL.spreadGain);
+ * Reclaim clears it back to usable ground: the crater, ash and scorch on it go (War scars), scorched soil can be farmed
+ * and planted again, and a grove is cut down (its Fiber, if it bore any, comes out as a crate).
+ */
+function t2Earthwork(b, t, J, P) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (J.k === 'soil') soilAdd(t, SOIL.spreadGain);
+  else {
+    if (S.crater) S.crater[t] = 0;
+    if (S.ash) S.ash[t] = 0;
+    if (S.burnt && S.burnt[t]) delete S.burnt[t];
+    if (S.grove && S.grove[t]) { const f = groveStage(t) === 3 ? 1 + (S.grvF[t] >= GROVE.fiberEvery ? 1 : 0) : 0; groveClear(t); if (f) addLoot(i, j, { fiber: f }, false, b.owner); }
+    if (S.soil && S.soil[t] >= SOIL.rich && !S.fert[t]) S.fert[t] = 1; // (rich soil under the scorch is farmland again)
+  }
+  if (P) { const k = 'tf' + J.k; P.stats[k] = (P.stats[k] || 0) + 1; }
+  for (let y = j - 1; y <= j + 1; y++) for (let x = i - 1; x <= i + 1; x++) if (inMap(x, y)) markDirty(x, y);
+  addFx('dustcloud', i + 0.5, j + 0.5, { r: 0.9 });
+  if (!S.buildings.some((e) => !e.dead && e.owner === b.owner && e.tf && !e.built)) postMsg(b.owner, 'Terraforming done: the Graders have finished every job.', b.x, b.y, 'good');
+}
+
+/* ------------------------------------------------------------------ terraforming, stage 3 (SEAM, SEED, THERMAL) */
+
+/*
+ * Resources from the ground (the player's: no rival builds a Seam Drill, Seed Mast or Thermal Plant; rivals only meet
+ * them). Nothing of it exists until one is built:
+ *  - Seams (SEAM): hidden Ore and Crystal seams under the ground, made from the map's seed the first time a Seam Drill
+ *    surveys (t3SeamsMake), so a game without one has none: no layer, nothing saved or hashed. S.seams, each
+ *    { id, x, y, g ('ore' | 'crystal'), t (its tiles), n (left), m (at first), f (found by: a bit per colony) }.
+ *    A drill surveys a ring round it (b.svR, growing while powered), finds seams for its colony, and works the
+ *    nearest found one in its survey (b.seam) slowly, while it has power.
+ *  - Crystal Seedbeds (SEED): a Seed Mast prepares tiles round it, seeds them with a Crystal, and grows them while it
+ *    has power; ripe, a bed holds SEED.yield Crystal as a Crystal cluster (S.res) that a Crystal Tap gathers, then it
+ *    is prepared again. Sparse layers (SPARSE_LAYERS, T3_LAYERS): S.sbed (1 prepared, 2.. growing, SEED.ripe + 1 ripe),
+ *    S.sbO (whose, owner + 1), S.sbS (1: starved, its Mast without power).
+ *  - The Thermal Plant (THERMAL): a Generator's power with no Fuel, built beside lava or hot water (thermalHot).
+ * Power for the drill and the Mast is a Generator's or a Thermal Plant's: they ask for it (b.t3want), a power plant in
+ * reach runs for them (updateGenerator) and they work while it boosts them (b.boostUntil).
+ */
+const T3_LAYERS = ['sbed', 'sbO', 'sbS'];
+/** Does building b have power this tick (a Generator burning Fuel, or a Thermal Plant, boosting it)? */
+function t3Powered(b) { return b.boostUntil > S.time && !murmurCutOn(b); }
+
+/** Is tile t hot: lava, or the hot water of the Cinderlands or the Steamwells, or a Steamwells vent? */
+function thermalHotTile(t) {
+  if (S.terrain[t] === T_WATER) return !!(S.lava && S.lava[t]) || ['volcanic', 'springs'].includes(t2BaseBiome(t));
+  return S.terrain[t] === T_GROUND && (S.decor[t] === 4 || S.decor[t] === 6) && t2BaseBiome(t) === 'springs';
+}
+/** How many hot tiles touch tile t (the 8 round it): a Thermal Plant goes where there's at least one. */
+function thermalHeat(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  let n = 0;
+  for (let y = j - 1; y <= j + 1; y++) for (let x = i - 1; x <= i + 1; x++) if ((x !== i || y !== j) && inMap(x, y) && thermalHotTile(tIdx(x, y))) n++;
+  return n;
+}
+function thermalHot(b) { return thermalHeat(tIdx(b.x, b.y)) > 0; }
+
+/* -- seams */
+
+/**
+ * The hidden seams, made once from the map's seed (the first survey): a seam may lie in each SEAM.cell square of the
+ * map, a few ground tiles round a point, Ore or Crystal (no Crystal on Argos), holding SEAM.ore or SEAM.crystal (up to
+ * a fifth more). No randomness from the game's generator: a hash of the seed and the square.
+ */
+function t3SeamsMake() {
+  if (S.seams) return S.seams;
+  const out = [], C = SEAM.cell, sd = (S.seed | 0) ^ 0x5ea3;
+  for (let cy = 0; cy * C < S.H; cy++) for (let cx = 0; cx * C < S.W; cx++) {
+    if (hash2(cx, cy, sd) >= SEAM.chance) continue;
+    const x = Math.min(S.W - 2, Math.max(1, cx * C + 2 + Math.floor(hash2(cx, cy, sd + 1) * (C - 4)))), y = Math.min(S.H - 2, Math.max(1, cy * C + 2 + Math.floor(hash2(cx, cy, sd + 2) * (C - 4))));
+    const t0 = tIdx(x, y);
+    if (S.terrain[t0] !== T_GROUND) continue;
+    const want = SEAM.size[0] + Math.floor(hash2(cx, cy, sd + 3) * (SEAM.size[1] - SEAM.size[0] + 1)), tiles = [t0];
+    for (let k = 0; k < 24 && tiles.length < want; k++) {
+      const from = tiles[Math.floor(hash2(cx * 31 + k, cy, sd + 4) * tiles.length)], s = tfSides(from), u = s[Math.floor(hash2(cx, cy * 31 + k, sd + 5) * s.length)];
+      if (u !== undefined && S.terrain[u] === T_GROUND && !tiles.includes(u)) tiles.push(u);
+    }
+    const g = biome() !== 'lunar' && hash2(cx, cy, sd + 6) < SEAM.crystalShare ? 'crystal' : 'ore';
+    const m = Math.round(SEAM[g] * (1 + 0.2 * hash2(cx, cy, sd + 7)));
+    out.push({ id: out.length + 1, x, y, g, t: tiles, n: m, m, f: 0 });
+  }
+  S.seams = out;
+  return out;
+}
+/** Seam s's distance to building b's tile (to its nearest tile). */
+function seamDist(s, b) { let d = Infinity; for (const t of s.t) d = Math.min(d, dist2(t % S.W, (t / S.W) | 0, b.x, b.y)); return Math.sqrt(d); }
+/** Has colony p found seam s? */
+function seamFound(s, p) { return !!(s.f & (1 << p)); }
+/** Seam s's marker's pips: of 5, rounded up while any is left. */
+function seamPips(s) { return s.n <= 0 ? 0 : Math.max(1, Math.ceil((s.n / s.m) * 5)); }
+
+/** Seam Drill b surveys out to b.svR: the seams there are found for its colony (and its owner told). */
+function seamSurvey(b) {
+  const P = S.players[b.owner], bit = 1 << b.owner;
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#d94dff', r: b.svR, life: 1.4 });
+  let ore = 0, cry = 0;
+  for (const s of t3SeamsMake()) {
+    if (s.f & bit || seamDist(s, b) > b.svR + 0.5) continue;
+    s.f |= bit;
+    if (s.g === 'ore') ore++; else cry++;
+    for (const t of s.t) markDirty(t % S.W, (t / S.W) | 0);
+    if (P) P.stats.seams = (P.stats.seams || 0) + 1;
+  }
+  if (ore || cry) postMsg(b.owner, `Your Seam Drill's survey found ${[ore ? `${ore} Ore seam${ore === 1 ? '' : 's'}` : '', cry ? `${cry} Crystal seam${cry === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} under the ground.`, b.x, b.y, 'good');
+}
+/** The seam Seam Drill b works: its own if it still has some, else the nearest found and unspent one in its survey. */
+function seamOf(b) {
+  const L = S.seams || [];
+  let s = b.seam ? L[b.seam - 1] : null;
+  if (s && s.n > 0) return s;
+  s = null; let bd = Infinity;
+  for (const e of L) {
+    if (e.n <= 0 || !seamFound(e, b.owner)) continue;
+    const d = seamDist(e, b);
+    if (d <= b.svR + 0.5 && d < bd) { bd = d; s = e; }
+  }
+  b.seam = s ? s.id : 0;
+  return s;
+}
+
+/** A Seam Drill (updateBuilding): surveys as it stands, deeper every SEAM.surveyEvery s of power; works its seam with power. */
+function updateSeamDrill(b, dt) {
+  const P = S.players[b.owner];
+  if (!b.svR) { b.svR = SEAM.survey[0]; b.svT = 0; seamSurvey(b); }
+  const s = seamOf(b);
+  const full = s && (b.stock[s.g] || 0) >= SEAM.cap;
+  b.t3want = !!(s && !full) || b.svR < SEAM.survey[1];
+  if (!t3Powered(b)) {
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power. It comes back at dawn.'
+      : `No power: a Generator with Fuel or a Thermal Plant within ${BDEFS.generator.burner.radius} tiles runs it` + (s ? ` (its ${GOOD[s.g].name} seam waits)` : '');
+    return;
+  }
+  // deeper surveys while powered: a tile further out every SEAM.surveyEvery s, out to the farthest
+  if (b.svR < SEAM.survey[1]) {
+    b.svT = (b.svT || 0) + dt;
+    if (b.svT >= SEAM.surveyEvery) { b.svT = 0; b.svR++; seamSurvey(b); }
+  }
+  if (!s) { b.status = b.svR < SEAM.survey[1] ? `Surveying: no seam found within ${b.svR} tiles yet (it reaches further, out to ${SEAM.survey[1]})` : `No seam left within ${SEAM.survey[1]} tiles: dismantle it and drill somewhere else`; b.working = b.svR < SEAM.survey[1]; return; }
+  if (full) { b.status = `Full of ${GOOD[s.g].name}: Haulers take it`; return; }
+  b.working = true;
+  b.sdAcc = (b.sdAcc || 0) + (SEAM.rate[s.g] / 60) * dt;
+  while (b.sdAcc >= 1 && s.n > 0) {
+    b.sdAcc -= 1; s.n--;
+    bump(b.stock, s.g, 1); madeGood(b.owner, s.g, 1);
+    if (P) { const k = s.g === 'ore' ? 'seamOre' : 'seamCrystal'; P.stats[k] = (P.stats[k] || 0) + 1; }
+    if (s.n % Math.max(1, Math.round(s.m / 5)) === 0) for (const t of s.t) markDirty(t % S.W, (t / S.W) | 0);
+    if (s.n <= 0) {
+      b.sdAcc = 0; b.seam = 0;
+      for (const t of s.t) markDirty(t % S.W, (t / S.W) | 0);
+      postMsg(b.owner, `${s.g === 'ore' ? 'An Ore' : 'A Crystal'} seam is worked out. The Seam Drill moves on to the next one in its survey, if there is one.`, s.x, s.y, 'warn');
+    }
+  }
+  b.status = `Drilling ${s.g === 'ore' ? 'an Ore' : 'a Crystal'} seam: ${SEAM.rate[s.g]} a minute, ${s.n} of ${s.m} left`;
+}
+
+/* -- Crystal Seedbeds */
+
+/** Layer k (one of T3_LAYERS), made if it isn't there. */
+function t3Layer(k) { return t2Layer(k); }
+/** Is there a Crystal Seedbed on tile t? */
+function t3Bed(t) { return !!(S.sbed && S.sbed[t]); }
+/** A bed's stage on tile t: 0 none, 1 prepared, 2 seeded, 3 sprouting, 4 ripe (harvestable). */
+function bedStage(t) { const v = S.sbed ? S.sbed[t] : 0; return !v ? 0 : v === 1 ? 1 : v > SEED.ripe ? 4 : v - 1 < SEED.sprout ? 2 : 3; }
+/** The bed on tile t is gone (its Crystal, if ripe, stays as a cluster). */
+function bedClear(t) { if (!t3Bed(t)) return; S.sbed[t] = 0; if (S.sbO) S.sbO[t] = 0; if (S.sbS) S.sbS[t] = 0; markDirty(t % S.W, (t / S.W) | 0); }
+/** Open ground a Seed Mast can prepare a bed on: not farmland, a grove, built on, laid, a resource or a rival's. */
+function bedSpotOk(b, t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  return S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !S.fert[t] && !S.resRes[t] && !t3Bed(t) &&
+    !(S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) && !(S.pipe && (S.pipe[t] || (S.pipePlan && S.pipePlan[t]))) && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) &&
+    !(S.grove && S.grove[t]) && !(S.owner[t] >= 0 && S.owner[t] !== b.owner) && !calmAt(i + 0.5, j + 0.5) && !runwayAt(t);
+}
+/** Is bed tile t still fit for a bed (nothing built, laid or grown over it since)? A ripe bed holds its Crystal. */
+function bedStands(t) {
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.grove && S.grove[t])) return false;
+  return S.sbed[t] > SEED.ripe ? true : !S.res[t];
+}
+/** The beds Seed Mast b keeps: its owner's within SEED.reach. */
+function bedsOf(b) {
+  const out = [];
+  if (!S.sbed) return out;
+  const R0 = SEED.reach, r2 = R0 * R0 + 0.3;
+  for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
+    const t = j * S.W + i;
+    if (S.sbed[t] && S.sbO[t] === b.owner + 1 && dist2(i, j, b.x, b.y) <= r2) out.push(t);
+  }
+  return out;
+}
+/** Where Seed Mast b prepares its next bed: the nearest open tile in its reach (tile order breaks ties), or -1. */
+function bedNext(b) {
+  const R0 = SEED.reach, r2 = R0 * R0 + 0.3;
+  let best = -1, bd = Infinity;
+  for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
+    const t = j * S.W + i, d = dist2(i, j, b.x, b.y);
+    if ((i === b.x && j === b.y) || d > r2 || d >= bd || !bedSpotOk(b, t)) continue;
+    bd = d; best = t;
+  }
+  return best;
+}
+
+/**
+ * A Seed Mast (updateBuilding): with power, it prepares a bed every SEED.prepEvery s (up to SEED.most), seeds each
+ * prepared one with a Crystal from its hopper (Haulers bring them), and grows its seeded beds a step every SEED.step s;
+ * a ripe bed holds SEED.yield Crystal as a cluster for a Crystal Tap, and once it's taken the bed is prepared again.
+ * Without power its beds starve (grey) and stop growing until it has power again.
+ */
+function updateSeedMast(b, dt) {
+  const beds = bedsOf(b), P = S.players[b.owner];
+  // beds gone (built over, a road laid, Ring Crystal fallen on a growing one), and ripe ones harvested
+  for (let k = beds.length - 1; k >= 0; k--) {
+    const t = beds[k];
+    if (!bedStands(t)) { bedClear(t); beds.splice(k, 1); continue; }
+    if (S.sbed[t] > SEED.ripe && S.res[t] !== R_CRYSTAL) { S.sbed[t] = 1; markDirty(t % S.W, (t / S.W) | 0); if (P) P.stats.bedHarvests = (P.stats.bedHarvests || 0) + 1; }
+  }
+  b.t3want = true;
+  const on = t3Powered(b), sv = on ? 0 : 1;
+  for (const t of beds) if ((S.sbS ? S.sbS[t] : 0) !== sv) { t3Layer('sbS')[t] = sv; markDirty(t % S.W, (t / S.W) | 0); }
+  if (!on) {
+    b.status = murmurCutOn(b) ? 'Dark: the Murmur cut its power, and its beds are starving. It comes back at dawn.'
+      : beds.length ? `Starved: no power, so its ${beds.length} bed${beds.length === 1 ? '' : 's'} stopped growing (a Generator with Fuel or a Thermal Plant within ${BDEFS.generator.burner.radius} tiles)`
+      : `No power: a Generator with Fuel or a Thermal Plant within ${BDEFS.generator.burner.radius} tiles runs it`;
+    return;
+  }
+  b.working = true;
+  if (beds.length < SEED.most) {
+    b.sbP = (b.sbP || 0) + dt;
+    if (b.sbP >= SEED.prepEvery) {
+      b.sbP = 0;
+      const t = bedNext(b);
+      if (t >= 0) { clearDecor(t); t3Layer('sbed')[t] = 1; t3Layer('sbO')[t] = b.owner + 1; t3Layer('sbS')[t] = 0; beds.push(t); markDirty(t % S.W, (t / S.W) | 0); }
+    }
+  }
+  for (const t of beds) {
+    if (S.sbed[t] !== 1 || (b.stock.crystal || 0) < SEED.seed) continue;
+    bump(b.stock, 'crystal', -SEED.seed); usedGood(b.owner, 'crystal', SEED.seed);
+    S.sbed[t] = 2; markDirty(t % S.W, (t / S.W) | 0);
+  }
+  b.sbG = (b.sbG || 0) + dt;
+  if (b.sbG >= SEED.step) {
+    b.sbG -= SEED.step;
+    for (const t of beds) {
+      const v = S.sbed[t];
+      if (v < 2 || v > SEED.ripe) continue;
+      const st = bedStage(t);
+      S.sbed[t] = v + 1;
+      if (S.sbed[t] > SEED.ripe) { S.res[t] = R_CRYSTAL; S.amt[t] = SEED.yield; S.grow[t] = 1; if (P) P.stats.bedRipe = (P.stats.bedRipe || 0) + 1; }
+      if (bedStage(t) !== st) markDirty(t % S.W, (t / S.W) | 0);
+    }
+  }
+  if (b.status && S.tick % 15 !== b.id % 15) return;
+  const n = [0, 0, 0, 0, 0];
+  for (const t of beds) n[bedStage(t)]++;
+  b.status = beds.length ? `Growing Crystal: ${n[4]} ripe, ${n[3]} sprouting, ${n[2]} seeded` + (n[1] ? `, ${n[1]} waiting for a seed Crystal` : '') : 'Preparing its first bed';
+}
+/** Seed Mast b's beds that are growing (seeded or sprouting): the field the Murmur feel (murmurPower, chargeWorth). */
+function bedsGrowing(b) { let n = 0; for (const t of bedsOf(b)) if (S.sbed[t] >= 2) n++; return n; }
+
+/** Is a stage 3 thing in this game (a seam surveyed, a bed)? */
+function t3Any() { return !!(S.seams || S.sbed); }
 
 /** The nearest rock face (see rockFace) a Quarry's worker can cut Stone from, in its owner's or no-one's land. */
 function findFace(b, radius) {
@@ -4449,7 +5032,7 @@ function findPlantSpot(b, radius) {
       const t = j * S.W + i;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
-      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
+      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone || (S.sbed && S.sbed[t])) continue;
       if (calmAt(i + 0.5, j + 0.5)) continue; // (nothing grows for mining on a Trade Post's ground: see clearCalmGround)
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t) || radTile(t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       let near = 0, blocked = false;
@@ -4475,7 +5058,7 @@ function findCropSpot(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone || calmAt(i + 0.5, j + 0.5)) continue;
+      if (!cropSoil(t) || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone || calmAt(i + 0.5, j + 0.5)) continue; // (wet ground too: IRR)
       if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t) || radTile(t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -4667,7 +5250,7 @@ function doStaff(u, t, dt) {
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
         t.wait = 3;
       }
-      if (!def.gather && !def.plant && !def.farm && !def.roadworks) return; // production happens in updateBuilding
+      if (!def.gather && !def.plant && !def.farm && !def.roadworks && !def.nursery) return; // production happens in updateBuilding
       if (foesAt(b)) { b.status = `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : 'Enemies are'} about: its worker waits inside until they've gone`; t.wait = 1; return; }
       let node;
       if (def.gather) {
@@ -4708,6 +5291,15 @@ function doStaff(u, t, dt) {
           return;
         }
         b.status = t.act === 'harvest' ? 'Harvesting energy crops' : 'Planting energy crops';
+      } else if (def.nursery) {
+        // A Tree Nursery (GROVE): gather the ripe groves' Fiber first, then plant open ground in reach (up to GROVE.most).
+        if ((b.stock.fiber || 0) >= def.out.fiber) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
+        node = groveNode(b, 'gather');
+        t.act = node >= 0 ? 'gather' : 'plant';
+        const have = grovesOf(b);
+        if (node < 0 && have < GROVE.most) node = groveNode(b, 'plant');
+        if (node < 0) { b.status = have ? `${have} grove${have === 1 ? '' : 's'} growing: it gathers their Fiber as they bear it` : 'No open ground in reach to plant'; t.wait = 3; return; }
+        b.status = t.act === 'gather' ? 'Gathering Fiber from the groves' : 'Planting a grove';
       } else if (def.roadworks) {
         // New road first: planned tiles (paid for already, and no use to anyone until they're down), then asphalt.
         const lay = nextPaveTile(u, b.owner, -1);
@@ -4768,7 +5360,7 @@ function doStaff(u, t, dt) {
       if (moveAlong(u, dt)) {
         if (t.lay >= 0) { t.phase = 'work'; t.timer = layTime(t.lay) / PAVER_LAY; return; }
         t.phase = 'work';
-        t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest * (def.dig || 1) : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
+        t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest * (def.dig || 1) : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : def.nursery ? (t.act === 'gather' ? GROVE.gatherTime : GROVE.plantTime) : 3;
       }
       return;
     case 'work': {
@@ -4808,14 +5400,21 @@ function doStaff(u, t, dt) {
           S.amt[node] = 0;
           markDirty(ni, nj);
           u.carry = RES[R_CROP].good;
-          u.carryN = 1;
-          madeGood(u.owner, u.carry, 1);
-        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
+          u.carryN = S.soil ? SOIL.yield[soilLv(node)] : 1; // (rich soil: more Fuel a crop, SOIL)
+          madeGood(u.owner, u.carry, u.carryN);
+        } else if (t.act === 'plant' && cropSoil(node) && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
           S.res[node] = R_CROP;
           S.amt[node] = 1;
           S.grow[node] = 0;
           markDirty(ni, nj);
         }
+      } else if (def.nursery) {
+        if (t.act === 'gather' && groveStage(node) === 3 && S.grvF[node] >= GROVE.fiberEvery) {
+          S.grvF[node] = 0;
+          u.carry = 'fiber'; u.carryN = 1;
+          madeGood(u.owner, 'fiber', 1);
+          const P = S.players[u.owner]; P.stats.groveFiber = (P.stats.groveFiber || 0) + 1;
+        } else if (t.act === 'plant') grovePlant(b, node);
       } else if (def.roadworks) {
         if (needsPaving(node)) {
           const want = paveWant(node);
@@ -4837,7 +5436,7 @@ function doStaff(u, t, dt) {
         if (next >= 0 && (paveWant(next) === 3 ? !expressShort(b, next) : b.charges > 0) && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
       } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node] && !calmAt(ni + 0.5, nj + 0.5)) {
         S.res[node] = def.plant;
-        S.amt[node] = RES[def.plant].amount;
+        S.amt[node] = S.soil || S.shift ? SOIL.stalk[soilLv(node)] : RES[def.plant].amount; // (richer soil, a fuller grove: SOIL)
         S.grow[node] = 0;
         markDirty(ni, nj);
         if (S.ash) scarHeal(ni, nj); // (a Grove Planter greens scarred ground again: see War scars)
@@ -4915,6 +5514,7 @@ function updateBuilding(b, dt) {
     if (def.deepcore) { deepHeld(b); deepWarn(b); } // (turned off, a raid it has already called still comes)
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
       : def.deepcore ? 'Off: not digging and burning no Fuel, its depth kept (the Murmur aren\'t drawn to it while it\'s off)'
+      : def.seamdrill ? 'Off: not drilling, and drawing no power' : def.seedmast ? 'Off: drawing no power, and its beds have stopped growing'
       : def.dome ? `Off: the dome is down and saves its Crystal (turned on, it takes ${DOME.warm} s to come up)`
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
@@ -4938,6 +5538,10 @@ function updateBuilding(b, dt) {
   else if (def.lift) updateLift(b, dt);
   else if (def.deepcore) updateDeep(b, dt);
   else if (def.atmos) updateAtmos(b, dt);
+  else if (def.compost) updateComposter(b, dt * S.players[b.owner].mult); // (stage 2: SOIL)
+  else if (def.wpump) updateWpump(b); // (stage 2: IRR)
+  else if (def.seamdrill) updateSeamDrill(b, dt * S.players[b.owner].mult); // (stage 3: SEAM)
+  else if (def.seedmast) updateSeedMast(b, dt * S.players[b.owner].mult); // (stage 3: SEED)
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -5032,24 +5636,25 @@ function updateGenerator(b, def) {
   const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
   let busy = 0;
   for (const c of S.buildings) {
-    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !(BDEFS[c.type].work || BDEFS[c.type].t3pow || (BDEFS[c.type].magterm && magPartner(c)) || mdEnd(c) || (BDEFS[c.type].mega && !BDEFS[c.type].city && !BDEFS[c.type].deepcore && !BDEFS[c.type].atmos))) continue; // (a Maglev Terminal on a line draws power too, a Mass Driver end, and a megastructure but Arrival City and the Deep Core, which takes its own Fuel: deepFeeds)
     if (BDEFS[c.type].foot ? footDist(c, b.x + 0.5, b.y + 0.5) > G.radius + 0.5 : dist2(c.x, c.y, b.x, b.y) > r2) continue;
     near.push(c);
-    if (c.working || /^Working/.test(c.status || '')) busy++;
+    if (c.working || /^Working/.test(c.status || '') || (BDEFS[c.type].t3pow && c.t3want && !c.paused)) busy++; // (a Seam Drill or Seed Mast asking for power: stage 3)
   }
   const core = deepFeeds(b) ? 'the Deep Core' : atmosFeeds(b) ? 'the Atmosphere Engine' : ''; // (a Deep Core or an Atmosphere Engine takes a Fuel a minute from it, and it runs while it does: DEEP.genFuel, ATMOS.genFuel)
   if (core && !busy) { b.powered = S.time + step + 0.1; b.working = true; b.status = `Feeding ${core}: a Fuel every ${Math.round(DEEP.genFuel / 60)} minute`; return; }
   if (!near.length) { b.status = 'Nothing in reach to power: build it among your factories'; return; }
   if (!busy) { b.status = `Idle: nothing in reach is working (${near.length} building${near.length === 1 ? '' : 's'} in reach)`; return; }
-  if (!((b.energy || 0) > 0)) {
+  if (G.heat && !thermalHot(b)) { b.status = 'Cold: no lava or hot water beside it any more'; return; } // (a Thermal Plant: no Fuel, THERMAL)
+  if (!G.heat && !((b.energy || 0) > 0)) {
     if (!(b.stock.fuel > 0)) { b.status = 'Out of Fuel: a Tanker brings it'; return; }
     bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1);
     b.energy = G.perFuel;
   }
-  b.energy -= step;
+  if (!G.heat) b.energy -= step;
   b.powered = S.time + step + 0.1;
   b.working = true;
-  b.status = `Powering ${busy} working building${busy === 1 ? '' : 's'} (${near.length} in reach)`;
+  b.status = `Powering ${busy} working building${busy === 1 ? '' : 's'} (${near.length} in reach)` + (G.heat ? ', on the heat below: no Fuel' : '');
   for (const c of near) c.boostUntil = S.time + step + 0.15;
 }
 
@@ -6104,7 +6709,14 @@ function torchFire(u, tx, ty, power, bld) {
     if (hash2(u.id, S.tick, 11) < 0.12 && !atmosRainAt(bld.x + 0.5, bld.y + 0.5, u.owner)) addFx('fire', bld.x + 0.2 + hash2(u.id, S.tick, 12) * 0.6, bld.y + 0.3 + hash2(u.id, S.tick, 13) * 0.5, { r: 0.16, life: 3, seed: S.tick });
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
-  if (hash2(u.id, S.tick, 15) < 0.25) { const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5); if (!atmosRainAt(u.x + ca * f, u.y + sa * f, u.owner)) scarBurn(u.x + ca * f, u.y + sa * f); } // (the grass it burns: see War scars; none in a foe's Engine's rain)
+  if (hash2(u.id, S.tick, 15) < 0.25) {
+    const f = 0.5 + hash2(S.tick, u.id, 16) * (R - 0.5), fx = u.x + ca * f, fy = u.y + sa * f;
+    if (!atmosRainAt(fx, fy, u.owner)) {
+      scarBurn(fx, fy);
+      // A foe's grove in the flame catches fire (GROVE).
+      if (S.grove && inMap(Math.floor(fx), Math.floor(fy))) { const gt = tIdx(Math.floor(fx), Math.floor(fy)); if (S.grove[gt] && foes(groveOwner(gt), u.owner)) groveBurn(gt, u.owner); }
+    }
+  } // (the grass it burns: see War scars; none in a foe's Engine's rain)
   if (S.time - (u.flSnd || 0) > 0.55) { u.flSnd = S.time; sfx('flame', u.x, u.y); }
   if (u.gel <= 0 && isMe(u.owner)) {
     const P = S.players[ME];
@@ -7740,7 +8352,7 @@ function eliminate(old, by, how) {
     if (isMe(old)) postMsg(ME, `${playerName(by)} captured your Command Base!`, x, y, 'lost');
     else if (!isMe(by)) postMsg(ME, `${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
   }
-  // The narrator: a rival's command core is ours (its robots answer to us now), or changed hands between two others.
+  // The narrator: a rival's command core is ours (its buildings answer to us now; its robots shut down above), or changed hands between two others.
   // (Losing our own is for the end screen.)
   if (how !== 'nuke') {
     narrate(by, 'captured', x, y, 1);
@@ -11316,7 +11928,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || def.dome || def.deepcore || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.t3pow || def.mortar || def.flak || def.minigun || def.dome || def.deepcore || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
@@ -13022,7 +13634,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (S.grove ? groveSlow(u) : 1) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain(u.x, u.y) * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -13307,21 +13919,26 @@ function placeHollowNests(rng) {
 }
 
 /**
- * Half underground: the Murmur live in the caves only (and only with the Murmur on): a nest on each of the sites cavesMap laid out inside (twin
- * pairs, west and east), CAVES.nests of them a side by Size, half the pairs (rounded up) with the Murmur Quiet. No mound: these are the
- * ordinary nests, level 1, owned by the Murmur's slot. They dig tunnels and open exits like any nest, so what grows below the caves
- * comes up through them, and out of the entrances when the wall lets them (their packs go for whoever is nearest).
+ * Half underground: the Murmur live in the caves and on the surface (only with the Murmur setting on). Inside, an ordinary nest on each of the
+ * sites cavesMap laid out in twin pairs, west and east (CAVES.nests of them by Size); outside, the same on the surface sites (S.caves.nestsOut: as
+ * many as a map of the surface's size gets, MURMUR.active's rule). Half the pairs (rounded up) with the Murmur Quiet, on each side. No mound and no
+ * tremors (those are the Hollow's). They dig tunnels and open exits like any nest, so what grows below the caves comes up through them, and out of
+ * the entrances when the wall lets them (their packs go for whoever is nearest); on the surface they work as they do on any map: night swarms,
+ * packs, their craft on Active. The mirror is west to east, so each colony meets as many nests as its twin, and an inside colony and an outside one the same.
  */
 function placeCaveNests() {
-  const sites = S.caves.nests, keep = murmurLevel() === 'quiet' ? Math.ceil(sites.length / 4) * 2 : sites.length;
-  for (const n of sites.slice(0, keep)) {
-    const t = tIdx(n.x, n.y);
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t]) continue;
-    S.res[t] = R_NONE; S.amt[t] = 0;
-    const b = addBuilding(wildOwner(), 'nest', n.x, n.y, true);
-    b.level = 1;
-    for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
-    for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+  const quiet = murmurLevel() === 'quiet';
+  for (const sites of [S.caves.nests, S.caves.nestsOut || []]) {
+    const keep = quiet ? Math.ceil(sites.length / 4) * 2 : sites.length;
+    for (const n of sites.slice(0, keep)) {
+      const t = tIdx(n.x, n.y);
+      if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t]) continue;
+      S.res[t] = R_NONE; S.amt[t] = 0;
+      const b = addBuilding(wildOwner(), 'nest', n.x, n.y, true);
+      b.level = 1;
+      for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
+      for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+    }
   }
 }
 
@@ -14338,7 +14955,8 @@ function murmurPower(e) {
   for (const b of S.buildings) {
     if (b.dead || !b.built || b.cut || b.paused || !b.working || b.owner < 0 || isWild(b.owner) || murmurCutOn(b)) continue;
     if (dist2(e.x, e.y, b.x, b.y) > 16 * 16) continue;
-    if (b.type === 'generator' || b.type === 'reactor') charge += 2;
+    if (b.type === 'generator' || b.type === 'reactor' || b.type === 'thermal') charge += 2;
+    else if (BDEFS[b.type].seedmast && bedsGrowing(b)) charge += SEED.murmur; // (a growing Crystal Seedbed: Crystal feeds on charge, and they feel it)
     else if (BDEFS[b.type].lance && b.lOn) charge += 5;
     else if (BDEFS[b.type].sunder && b.sOn) charge += 5; // (a Sundering Ray winding up: the ground itself drums)
     else if (BDEFS[b.type].city) charge += 2; // (Arrival City lit at night: working, see updateCity)
@@ -14363,7 +14981,8 @@ function chargeWorth(e) {
   if (def.deepcore && e.working) return 3; // (a Deep Core at work draws them like a Generator)
   if (def.atmos) return 6; // (an Atmosphere Engine standing: the Murmur hate it, and go for it first: atmosLure)
   if (def.gup && e.working) return 3; // (a Great Uplink transmitting: they hear the signal) // (an Orbital Lift's climber on the move, like a working Generator)
-  if (def.charger || e.type === 'generator' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
+  if (def.seedmast && e.working && bedsGrowing(e)) return 3; // (a Crystal Seedbed growing: charge in the ground, LORE)
+  if (def.charger || e.type === 'generator' || e.type === 'thermal' || e.type === 'reactor' || e.type === 'refinery' || (def.magterm && magRunning(e)) || (def.dome && e.dUp)) return 3; // (a Maglev line running draws them as a Generator does)
   if ((e.stock.crystal || 0) + (e.stock.fuel || 0) >= 10) return 2;
   return def.mil ? 0.7 : 1;
 }
@@ -14692,7 +15311,7 @@ function murmurCutPower(b) {
   if (!b || b.dead || !b.built || b.cut || b.paused || murmurCutOn(b) || calmB(b)) return false;
   const def = BDEFS[b.type];
   if (def.charger) return !chargerDry(b);
-  if (def.burner) return !!((b.energy || 0) > 0 || b.stock.fuel > 0);
+  if (def.burner) return def.burner.heat ? thermalHot(b) : !!((b.energy || 0) > 0 || b.stock.fuel > 0);
   return !!(def.magterm && magPartner(b));
 }
 
@@ -17253,7 +17872,7 @@ function fuelMaker(def) { return !!(def.out && def.out.fuel); }
 function fuelUser(def) { return (!def.store && typeUses(def, 'fuel')) || !!def.mast; }
 
 /** Can pipe carry Crude or Fuel to or from b? Oil Pumps, what uses Crude, what makes or burns Fuel, and storage. */
-function pipeEnd(b) { const d = BDEFS[b.type]; return !!(d.pump || (d.inp && d.inp.crude) || d.store || fuelMaker(d) || fuelUser(d)); }
+function pipeEnd(b) { const d = BDEFS[b.type]; return !!(d.pump || (d.inp && d.inp.crude) || d.store || fuelMaker(d) || fuelUser(d) || d.wpump); } // (a Water Pump: its water goes along the pipe, IRR)
 
 /** How much more of liquid g pipe can bring building b (Crude: a Refinery stocks PIPE_FILL, an Asphalt Plant its usual inputs; Fuel: what it asks for). */
 function pipeRoom(b, g = 'crude') {
@@ -18926,6 +19545,7 @@ function napalmImpact(m) {
   for (const t of napalmTiles(ci, cj)) {
     const i = t % S.W, j = (t / S.W) | 0, h = hash2(i, j, S.tick);
     if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; markDirty(i, j); }
+    if (S.grove && S.grove[t]) groveBurn(t, m.owner); // (a grove burns: GROVE)
     const who = soilHolder(t);
     if (scorchSoil(t, m.owner, true)) { n++; if (who >= 0) lost.set(who, (lost.get(who) || 0) + 1); }
     if (S.terrain[t] !== T_GROUND) continue;
@@ -20960,6 +21580,11 @@ function hashState() {
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (b.was !== undefined || b.hRet) { int(b.was ?? -1); num(b.hRet || 0); int(b.hBy ?? -1); } // (a fallen colony's: FALLEN)
     if (b.tf) { str(b.tf.k); int(b.tf.to); } // (an Earthworks site's job: TERRA)
+    if (b.cpT) num(b.cpT); // (a Composter's batch: SOIL)
+    if (b.wpN) int(b.wpN); // (a Water Pump's reach: IRR)
+    if (b.svR) { int(b.svR); num(b.svT); int(b.seam || 0); num(b.sdAcc || 0); } // (a Seam Drill's survey and seam: SEAM)
+    if (b.sbP !== undefined || b.sbG !== undefined) { num(b.sbP || 0); num(b.sbG || 0); } // (a Seed Mast's: SEED)
+    if (b.t3want) int(-79);
     if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
   // Army Groups: each, its order and its flag.
@@ -20982,6 +21607,10 @@ function hashState() {
   for (const s of S.allyShips || []) { int(s.id); int(s.from); int(s.to); str(s.g); int(s.n); num(s.at); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert, S.pave, S.paveMark, S.xdir]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   for (const k in S.tfTiles || {}) { const t = +k; int(t); int(S.terrain[t]); int(S.elev[t]); int(S.ramp[t]); } // (the ground Graders changed: TERRA)
+  for (const k of T2_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (soil, groves, water, the biome shift: stage 2)
+  if (t2Any()) for (const k in S.burnt || {}) int(+k); // (scorched ground: groves burn to it and Reclaim clears it)
+  for (const k of T3_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (Crystal Seedbeds: stage 3)
+  for (const e of S.seams || []) { int(e.id); int(e.n); int(e.f); } // (the seams, once a Seam Drill has surveyed: stage 3)
   for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
   for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); int(f.p ?? -1); }
   for (const t in S.drought || {}) { int(+t); int(S.drought[t]); } // (crops under a Storm Front)
@@ -24120,6 +24749,22 @@ function atmosHolds() {
   }
   for (const f of S.aeFade || []) { const k = 1 - (S.time - f.t0) / ATMOS.fade; if (k > 0) list.push({ x: f.x, y: f.y, r: f.r * k, st: f.st, id: 0, p: f.p ?? -1, on: false }); }
   ATMOS_HOLD = { of: S, tick: S.tick, list, storms };
+  return list;
+}
+/**
+ * The standing Engines raining this tick (Rain or later, with power: b.working), { x, y, r }: their ground is wet
+ * (rainWetAt). Kept apart from atmosHolds (worked out once a tick on its own) so asking it never moves when that is made.
+ */
+let RAIN_HOLD = { of: null, tick: -1, list: [] };
+function rainHolds() {
+  if (RAIN_HOLD.of === S && RAIN_HOLD.tick === S.tick) return RAIN_HOLD.list;
+  const list = [];
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].atmos || (b.aeStage || 0) < 2 || !b.working) continue;
+    const r = atmosReach(b), c = bCentre(b);
+    if (r > 0) list.push({ x: c.x, y: c.y, r });
+  }
+  RAIN_HOLD = { of: S, tick: S.tick, list };
   return list;
 }
 /** The Storm Fronts up this tick (see atmosHolds). */

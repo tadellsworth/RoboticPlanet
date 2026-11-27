@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two to four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -522,7 +522,7 @@ canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves
 frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
 list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
 
-**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two to four players; flat; the owner's idea from IDEAS.md) is half caves
+**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
 the size's (49 × 84 at Medium; an odd width, so there is a middle column to mirror about, and 1.45 times wider for four colonies), mirrored west to east
 (every tile made to its twin, the noise read at each tile's canonical column; `tools/map-symmetry-test.js` checks it for every size and player
@@ -537,8 +537,12 @@ turned over end to end, so player 0 starts inside on about half the planets and 
 fields (stalk groves, fertile soil, Stone, oil seeps) and a little Ore and Crystal (`CAVES.outside`: per thousand tiles of surface); the caves have winding
 passages, rock pillars, **plenty of Ore and Crystal** and Stone and oil (`CAVES.inside`), **no stalk groves or fertile soil**, and a small patch of Ore and Crystal just
 inside each entrance and of stalks and fertile soil just outside it. **Colonies** (`S.caves.seats`: `{ x, y, inside }`): two (one outside, one inside, on the middle
-line), three (an outside pair and one inside on the line: the outside pair share the surface and the lone colony has the whole of the caves), four (an outside and
-an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside (rounded down for three). Each
+line) or four (an outside and an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside.
+**Two or four players only** (the owner's call, Nov 2026): `SHAPE_PRESETS` `evenOnly` makes the player-count buttons (Custom Game, Observer, the lobby) refuse 3 (`playersFit`),
+the Random map pool leave this map out for three, and a 3 that arrives from a saved setting, a link or a lobby go through `snapPlayers`: it becomes **two** (the least surprising: the
+other maps do the same clamping), or **four** when three people sit in a lobby (everyone needs a place; the fourth is a computer rival). `playerCount` applies it to every game. The
+three-colony layout (an outside pair and one inside on the line) is **parked**, not removed: `cavesMap` still builds it, so an older three-player save loads and plays, and it takes one line to
+bring back (drop `evenOnly`). Each
 kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil, Stone and a little Ore and Crystal on the surface; Ore, Crystal and Stone
 inside, and the oil seeps in both), alike for every colony of that kind to the bit. **Opening stock**: on top of `START_STOCK`, a colony that starts inside lands with
 `CAVES.stock.inside` (+100 Fiber, +30 Fuel, +10 Stone, +12 Cement) and one that starts outside with `CAVES.stock.outside` (+60 Ore, +25 Crystal, +25 Alloy, +20 Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the
@@ -554,9 +558,14 @@ Atmosphere Engine or Great Uplink); `canPlace` says why. Nothing that comes down
 napalm canister or nuclear missile that is already in the air and comes down on the caves bursts on the roof (`updateMissiles`); a Lance's beam passes over them (`lanceTiles`); a plane's
 supply run won't go there (`airSuppliable`). Ringfall falls on the surface only (`cavesRingfall`: the usual number of strikes, each with its mirror), and a dust storm and a solar flare reach
 no one inside (`evSpeed`, `evDrain`). Ground armies, Mortars and Howitzers go in as anywhere. There is no wildlife in the caves (`faunaTrySpawn`). **No Trade Posts or Uplinks** (`placePosts`; Uplinks
-fall back to Capture, as in the Hollow, and there is no Great Uplink win: `noSkyShape` in js/ui.js). **The Murmur** live in the caves only, and only with the Murmur setting on (the map is
-`murmur: 'off'` by default): `placeCaveNests` puts an ordinary nest on each of the sites `cavesMap` laid out in twin pairs inside (`CAVES.nests`, 2 to 9 a side by Size; half the pairs, rounded up, with the Murmur
-Quiet), level 1, with their tunnels and exits as anywhere; no mound and no tremors (those are the Hollow's). **The rival** (`aiNoCrops`, `aiBan` in js/ai.js): a colony that starts inside builds as the Hollow's
+fall back to Capture, as in the Hollow, and there is no Great Uplink win: `noSkyShape` in js/ui.js). **The Murmur** live inside **and** outside, and only with the Murmur setting on (the map is
+`murmur: 'off'` by default; with it off neither half has any): `placeCaveNests` puts an ordinary nest (level 1) on each of the sites `cavesMap` laid out in twin pairs, west and east, inside
+(`S.caves.nests`: `CAVES.nests`, 2 to 9 pairs by Size) and on the surface (`S.caves.nestsOut`, optional in a save: the ordinary surface rule, `MURMUR.active.orbits` at most, one orbit a colony per
+`perTiles` of ground, a pair being an orbit's two nests, which comes to 2 nests on a Small two-colony map, 4 at Medium and up, and 4 on a four-colony map at Small and Medium, 8 at Large and up; the Murmur Quiet half the pairs rounded up on both sides), with
+their tunnels and exits as anywhere. The surface ones are placed like the rule's: open ground at least `MURMUR.minBase` (or a fifth of the map's span) from every Command Base, off the mouths and the ways between the colonies
+(`MURMUR.offRoute`), and relaxed a little on small maps; on the surface they behave as on any map (night swarms and packs, their craft on Active, wanderers), inside as in the caves; no mound and no tremors (those are the Hollow's).
+Each colony faces the nests of its own half, an outside one the surface ones and an inside one the cave ones, mirrored west to east, so neither start bears all of the pressure; `tools/map-symmetry-test.js` checks every nest has its
+twin and that both halves have some. **The rival** (`aiNoCrops`, `aiBan` in js/ai.js): a colony that starts inside builds as the Hollow's
 does where nothing grows (Oil Pumps for its Fuel in place of Bio Farms, the Refinery first, no Grove Planters, and nothing that flies or fires from under the roof), and expands through the mouths
 (the usual `P.short` rule: short of stalks, Outposts toward them) to the Fiber it has none of; one that starts outside builds as on any surface map and expands toward the Ore and Crystal it lacks. The map picker's card
 is a schematic from the flags; the Custom Game, the Observer and a multiplayer lobby list it like any map. Measured (rival vs rival, Normal, Balanced both, 2 players, Medium seeds 11 to 18 and Large seeds 21 to 24, 45-minute cap): all 12 decided, 6 won by the colony that started inside and 6 by the one outside (Medium 3 against 5, Large 3 against 1), games 6 to 23 minutes (14.6 on average at Medium, 11.8 at Large); three- and four-player games (Small and Medium) all ended in 10 to 22 minutes; with the Murmur Active two Small/Medium games ended in 7 and 8 minutes. The first stock tried (150 Fiber inside, 90 Ore outside) gave 6 inside wins in 8; the numbers above came out of three sweeps of the same seeds. Without a fight, a rival outside runs its Ore stock down by minute 18 and has Outposts and Mines in the caves from minute 12; one inside runs out of Fiber by minute 12 to 15 and has Outposts on the surface by minute 9 to 12, but stays Fiber-bound (a long haul home).
@@ -879,7 +888,122 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   robots on the tile step off (ships to water: `moveOff`), routes over it are dropped. The tiles changed are kept in
   `S.tfTiles` (1 or 2, see above) and hashed (`hashState`: their terrain, level and ramp; with each site's job), so a game with none hashes
   as before. Rivals don't terraform yet. Later stages (IDEAS.md): blasting cliffs, landslides, flooding. The mission
-  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten and Fill shallows.
+  **Cut and Fill** (Sea and Sky) teaches it: a Grader, then Flatten, Fill shallows and Dig channel. Stage 2 adds the Grader's Spread
+  soil (O) and Reclaim (E): see the next entry.
+- **Terraforming, stage 2: soil, plants and water** (Nov 2026; `SOIL`, `GROVE`, `IRR`, `SHIFT` in `js/defs.js`; the rules
+  in the stage 2 block of `js/sim.js`: `updateComposter`, `soilAdd`, the Nursery's Agribot in `doStaff` (`groveNode`,
+  `grovePlant`), `t2Groves`, `groveSlow`, `groveBurn`, `t2Water`, `t2Shift`, `t2Earthwork`; the cards, panels, rings and
+  drawing in `js/terraform2.js`). The player's alone: no rival builds these or plans the Grader's stage 2 jobs, and a
+  game without any of it has none of the layers and hashes as before (seeded AI-vs-AI games keep their hashes). Per-tile
+  layers, made the first time they're needed (`t2Layer`), saved as sparse layers (`SPARSE_LAYERS`) and hashed when
+  present (`T2_LAYERS`): `S.soil` (0..`SOIL.max` 200), `S.grove` (growth 1..`GROVE.mature`), `S.grvF` (a mature grove's
+  Fiber coming), `S.grvO` (who planted it, owner + 1), `S.wet` (1 wet, 2 under a sprinkler), `S.tform` (toward the next
+  biome step) and `S.shift` (steps taken); `S.burnt` is hashed too once any of them exists. On the **Terraform tab**
+  (`BUILD_KEYS.terra`, `t2Cards`) beside the Grader's tools; `BDEFS[].t2`, banned on Argos, in the Hollow and under the
+  caves' roof (`worldBan`), and the Water Pump on lava (the Cinderlands).
+  - **Composter** (`BDEFS.composter`, concept A "Drum", accent `#d6a04a`; 2 Cement, 2 Fiber; key M): Haulers fill its
+    hopper (`SOIL.hopper` 4) with `SOIL.batch` (1 Fiber, 1 Stone); it burns a batch every `SOIL.every` (15) s, and each
+    open tile within `SOIL.reach` (4) of it (`soilOpen`: ground, nothing built or laid, not a rival's) gains `SOIL.gain`
+    (10): barren below `SOIL.improving` (64), improving below `SOIL.rich` (160), rich from there; under two minutes to
+    improving, about four to rich. Rich soil becomes farmland (`S.fert`, not on scorched ground). `soilLv`: crops grow
+    `SOIL.crop` [1, 1.25, 1.5] as fast (`cropRate`, in `growStalks`) and give `SOIL.yield` [1, 1, 2] Fuel (the farm's
+    harvest), drawn 12% bigger a level (`drawResource`); a Grove Planter's stalk groves hold `SOIL.stalk` [3, 4, 5] Fiber.
+    Its panel counts the rich, improving and barren tiles in reach; placing it shows the ring and each tile's level.
+  - **Tree Nursery** (`BDEFS.nursery`, concept C "Pivot"; 3 Fiber, 2 Cement; key N; crew: an Agribot): its Agribot gathers
+    ripe groves first, then plants (`groveNode`) open ground within `GROVE.reach` (4), up to `GROVE.most` (18), never on
+    a lane (`groveLane`: every third row and column from the Nursery), farmland, scorched ground, roads, plans, pipes,
+    track, resources or a rival's land, `GROVE.plantTime` (4) s a grove. Every `GROVE.step` (2) s each grove grows a
+    step (`t2Groves`; half as fast again (`GROVE.forest` 1.5) on ground shifted to Greenreach): saplings below `GROVE.young`
+    (40 steps, 80 s), young below `GROVE.mature` (120, 4 minutes), then mature; a mature grove bears a Fiber every
+    `GROVE.fiberEvery` (45 steps, 90 s: `S.grvF`), which the Agribot gathers (`GROVE.gatherTime` 3 s) into the Nursery's
+    stock (`out.fiber` 6) for Haulers. A foe's ground robot in a grove moves at `GROVE.slow` [0.85, 0.7, 0.55] of its
+    speed by stage (`groveSlow`, in `speedMul`; the owner's and allies' at full speed; leaves swirl round it:
+    `t2SlowTell`). A rival's robots (`P.ai`; not the player's nor its allies') plan their routes round a foe's groves:
+    `routeOpts` sets `opts.grove` (only while `S.grove` exists) and `findPath` adds `GROVE.path` [0, 1, 2] a step by the
+    grove's stage (`groveCost` in `js/path.js`: saplings nothing, young 1, mature 2), so they go round where the way round
+    is short and through where there is none; with no groves on the map nothing changes (seeded AI-vs-AI games hash as
+    before). Building, a road, track or pipe on a grove clears it (`clearDecor`), and a Grader's earthworks there too.
+    Napalm and a foe's Torch flame burn it (`groveBurn`): gone, the tile scorched (`S.burnt`). Napalm and Scorch the
+    earth burn rich soil as any farmland (`scorchSoil`); Reclaim brings it back: the scorch cleared, rich soil under it
+    (`S.soil` kept) is farmland again (`t2Earthwork`).
+  - **Water Pump** (`BDEFS.wpump`, concept B "Screw Lift"; art key `wpump`, as the Oil Pump has `pump`; 3 Cement, 1 Alloy;
+    key P): only right beside water (`canPlace`), never lava. Every `IRR.every` (4) s (`t2Water`) each working pump
+    sends its water along its owner's pipe joined to it (`S.pipe`, the same network as Crude and Fuel: `pipeEnd` joins it)
+    and along canals a Grader dug (water tiles in `S.tfTiles`), up to `IRR.reach` (60) tiles: the ground within
+    `IRR.fringe` (1) of them is wet, within `IRR.spray` (2) of the pump or of a pipe's open end (`pipeSprinkler`: a
+    sprinkler, drawn with its spray) wetter. `S.wet` is made again each time (cut the pipe and it dries). Bio Farms plant
+    on wet ground (`cropSoil`, in `findCropSpot` and `fertileIn`), and crops there grow `IRR.crop` (1.2) as fast.
+    An Atmosphere Engine's rain counts as wet too (`rainWetAt`, in `wetAt`, `cropRate` and `t2Score`): the circle
+    (`atmosReach`) of a standing Engine at Rain or later with power (`b.working`), worked out once a tick from the
+    Engines (`rainHolds`), nothing stored or hashed.
+  - **The Grader's jobs:** Spread soil (`tfJob` tool 'soil', job `k: 'soil'`; key O): `SOIL.spread` (2 Fiber, 1 Stone),
+    `SOIL.spreadTime` (16) s, `SOIL.spreadGain` (64) soil; Reclaim (tool 'reclaim', `k: 'clear'`; key E): clears a crater,
+    ash, scorched soil or a grove (`t2Scarred`), `SOIL.reclaimTime` (20) s, a mature grove's Fiber out as a crate
+    (`t2Earthwork`: neither changes the ground's level, so no `terrainChanged`). An irrigation ditch is Dig channel.
+  - **The biome shift** (`t2Shift`, every `SHIFT.every` 10 s): each ground tile scores a point for improving soil, one
+    for rich, one if wet and one with `SHIFT.cover` (2) young or mature groves on and round it (`t2Score`); with
+    `SHIFT.need` (2) or more its `S.tform` rises by the score, and at `SHIFT.full` (240) it takes a step along
+    `SHIFT.chain` from its own biome (`t2BaseBiome`: the map's, or the second biome's where they blend): the Rust,
+    Cinderlands, the Bloom and Steamwells to the Long Grass, then Greenreach; the Long Grass to Greenreach; the Polar Caps
+    to the Long Grass, then Greenreach (forests, Emberwood, swamps and the Shoals don't shift). About 10 minutes a step with all four points, 20 with two. Drawn with the two-biome blend's look
+    (`t2PaintTile`: the next biome's ground texture blended in through noise, by `tform` and `shift`), its scenery taking
+    root (a decor plant drawn with the new biome's art: `t2ArtBiome` in `drawPlant`); Long Grass ground counts as improving
+    soil (`soilLv`), ground shifted to Greenreach grows groves half as fast again (`t2TileBiome`, whatever step of its chain).
+  - Drawn (looks only, `js/terraform2.js`): humus darkening the ground and wet ground greening (with a damp edge) baked
+    with the map; the groves (`grove-<stage>-<variant>`, rendered 1-tile pieces) and sprinklers drawn with the ground and
+    graded with it (`t2Ground`); the minimap's groves, irrigated and shifted land (`t2MiniColor`); the Nursery's loop at
+    4 frames a second (`WORK_FPS`). Missions: **Topsoil** (Sea and Sky, after Cut and Fill). Tests:
+    `node tools/terraform2-test.js`.
+- **Terraforming, stage 3: resources from the ground** (Nov 2026; `SEAM`, `SEED`, `THERMAL` in `js/defs.js`; the rules in
+  the stage 3 block of `js/sim.js`: `t3SeamsMake`, `seamSurvey`, `seamOf`, `updateSeamDrill`, `updateSeedMast`,
+  `bedsOf`, `bedSpotOk`, `thermalHotTile`, `thermalHeat`; the cards, panels, rings and drawing in `js/terraform3.js`).
+  The player's alone, like stage 2: no rival builds these (rivals only cope with them existing), and a game without any
+  has no seams, no bed layers and nothing new hashed (seeded AI-vs-AI games keep their hashes). On the Terraform tab
+  after stage 2's (`BDEFS[].t3`, `t3Cards`, `BUILD_KEYS.terra` I, G, T). Power (`BDEFS[].t3pow`): the Seam Drill and the
+  Seed Mast ask for it (`b.t3want`), a Generator (burning its Fuel) or a Thermal Plant in its reach counts them as busy
+  (`updateGenerator`) and boosts them, and they work while boosted (`t3Powered`: `b.boostUntil`, not cut by the Murmur).
+  - **Seam Drill** (`BDEFS.seamdrill`, concept A "Derrick", accent orchid `#d94dff`; 6 Cement, 4 Alloy, 2 Chips; key I).
+    Hidden seams (`S.seams`) don't exist until a drill first surveys: then `t3SeamsMake` makes them once from the map's
+    seed (`hash2`, no use of the game's random numbers): in each `SEAM.cell` (12) square, with chance `SEAM.chance`
+    (0.6), a seam of `SEAM.size` (3 to 6) ground tiles round a point, Crystal `SEAM.crystalShare` (0.4) of them (never
+    on Argos), holding `SEAM.ore` (60) or `SEAM.crystal` (30), up to a fifth more. Each is `{ id, x, y, g, t, n, m, f }`
+    (`f`: a bit per colony that found it), saved as is, checked by `checkSave` (ids in order, on the map, Ore or Crystal,
+    tiles, amounts, bits) and hashed (`id`, `n`, `f`). A drill surveys `SEAM.survey[0]` (4) tiles the moment it stands
+    (`b.svR`), a tile further every `SEAM.surveyEvery` (30) s of power out to `SEAM.survey[1]` (8) (`seamSurvey`: a ring
+    effect, the seams in reach found for its colony, a message), and works the nearest found unspent seam in its survey
+    (`seamOf`, `b.seam`) at `SEAM.rate` (2 Ore or 1 Crystal a minute), into its stock (`SEAM.cap` 12 of each) for
+    Haulers. A seam at 0 is worked out: grey, its mark crossed out, its owner told; the drill moves on. Slower than a
+    Mine or Tap on a deposit (the economy audit measured 3.7 Ore and 2.2 Crystal a minute), and a Generator alone
+    spends 1.5 Fuel a minute on it. Drawn (yours only: `seamFound(s, ME)`): cracks, orange or violet, inside a dashed
+    outline, baked with the map (`t3PaintTile`) and glowing at night (`t3Glow`); the survey mark, the goods' icon and
+    five pips (`seamPips`), and a drill's dashed line to its seam, over the ground after the night's grade (`t3Marks`).
+    Murmur: none of its own. Its loop: the top drive's stroke over `seamdrill-base`.
+  - **Seed Mast** (`BDEFS.seedmast`, concept B "Charge Mast", accent rose `#f78fc0`; 5 Cement, 3 Alloy, 4 Crystal; key
+    G). Grows a Crystal Seedbed within `SEED.reach` (2): with power it prepares a bed every `SEED.prepEvery` (10) s up
+    to `SEED.most` (6) (`bedNext`, `bedSpotOk`: open ground, not farmland, groves, roads, plans, pipes, track, a rival's
+    or a Trade Post's), seeds a prepared bed with `SEED.seed` (1) Crystal from its hopper (`SEED.hopper` 3, by
+    Hauler: `inp`), and grows its seeded beds a step every `SEED.step` (5) s: seeded, sprouting from `SEED.sprout`
+    (24 steps, 2 minutes), ripe after `SEED.ripe` (84, 7 minutes), when the tile holds `SEED.yield` (3) Crystal as an
+    ordinary Crystal cluster (`S.res`), which a Crystal Tap in reach gathers; gathered, the bed is prepared again and
+    seeded. Six beds net about 1.6 Crystal a minute, below one Tap on a deposit, so the late Chip and Crystal balance
+    stays the deposits' (IDEAS, the economy audit). Without power its beds starve (`S.sbS`, grey) and stop. Layers
+    (`T3_LAYERS`, sparse in saves, hashed when present): `S.sbed` (1 prepared, 2.. growing, `SEED.ripe` + 1 ripe),
+    `S.sbO` (owner + 1), `S.sbS` (starved). A bed built, paved or grown over, or hit by Ring Crystal while growing, is
+    gone (`bedStands`); groves, stalks and humus keep off beds. Masts keep `SEED.apart` (5) tiles apart (`canPlace`);
+    none on Argos (`worldBan`). Murmur (`murmurPower`): a growing field adds `SEED.murmur` (1) charge, as a Refinery;
+    `chargeWorth` 3, as a power plant. Drawn: the bed tile for its look (`seedbed-<look>-<v>`, prepared, seeded,
+    sprouting, ripe, starved; 3 variants) baked with the map in place of the cluster's sprite, its pins and tips lit at
+    night (`seedbed-<look>-glow` in the glow map); the Mast's rings light in turn (`WORK_FPS` 4).
+  - **Thermal Plant** (`BDEFS.thermal`, concept A "Cooling Tower", accent pale sulfur `#c9ef8f`; 6 Cement, 3 Alloy, 1
+    Chip; key T): a Generator (`burner`, `heat: true`) that burns no Fuel, within `THERMAL.radius` (3, a Generator's 4),
+    placed only where a hot tile touches its tile (`thermalHeat`; `thermalHotTile`: lava, `S.lava`, or water in the
+    Cinderlands or the Steamwells (`t2BaseBiome`), or a Steamwells steam vent, decor 4 or 6); gone cold (the lava
+    filled), it says so and stops. It powers factories (the third faster), Seam Drills and Seed Masts; not the
+    megastructures, the Maglev or the Mass Driver, which still want a Generator's Fuel. The Murmur count it as a
+    Generator (`murmurPower`, `chargeWorth`, `murmurCutPower`). Its plume is the shipped steam (`BUILDING_EMITTERS.thermal`).
+  - Art (ART_GUIDE Batch 37): `renderer/b/seamdrill.js`, `seedmast.js`, `thermal.js`, `seedbed.js` (shared `t3kit.js`),
+    `renderer/tools/render_t3.sh` then `install_t3.py`. Mission: **Deep Ground** (Sea and Sky, after Topsoil; the
+    Cinderlands' lava lakes). Tests: `node tools/terraform3-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -3249,8 +3373,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It lands `NUKE.flight` (30) s after it's fired (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
-  `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
-  garrison and 1 armor, unless the missile lands on it (within `NUKE.direct`, 2 tiles, of its centre): then it's
+  `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included, except on a Trade Post's ground (`calmB`) and
+  Arrival City (knocked down, `cityDown`); a Command Base survives with no
+  garrison and 1 armor, unless the missile lands on an enemy's (within `NUKE.direct`, 2 tiles, of its centre, and `foes`): then it's
   destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
   AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   **The strike as it looks** (render only, `drawNukeFlight` in `js/render.js`; the game still just counts the 30 s down,
@@ -3288,7 +3413,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     on the minimap a ringed disc (`drawRadMinimap`). With a robot selected in a zone, or the camera over one, a faint
     Geiger crackle on the Effects volume (`radGeiger`). Reduce motion: no flicker, drift or creeping ring.
 - **Megastructures** (the new-game rule, on by default; IDEAS.md "Megastructures", the owner's look A for each, built
-  Nov 2026). Late-game, one per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
+  Nov 2026). Late-game, one of each type per colony (`megaBlocked`), on the Build menu's own **Mega** tab (`BUILD_GROUPS` `mega`,
   `late`: drawn after All, key **6**; L the Lance, Y the Sundering Ray, H the Dome, C Arrival City, O the Orbital Lift, N the Atmosphere Engine, E the Deep Core, U the Great Uplink), all bigger than a tile: `def.foot` (3, 3, 2, 4, 3, 4, 3 or 3)
   is a square of tiles from the building's own tile (its north-west corner, its door) east and south (`footTiles`,
   `footClaim`, `footPlace` for placing: every tile open, level ground of yours, the buildings beside it keeping a side,
@@ -4030,7 +4155,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **,** pick idle warbots a group at a time, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert (again: the one before), **F1–F4** a camera spot (**Shift+F1–F4** keeps one),
   **H** base, **I** statistics (Economy: History), **U** robots, **Y** Economy, **[ ]** speed, **+/−** zoom, **M** minimap, **.** a co-op ping under the mouse (`coopPingHere`), **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
-  recycles it), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
+  recycles it; the incoming-nuke card's **Evacuate**, **V**, works with no panel open too: `LOOSE_SHEET_KEYS`), **Space** pause, **Shift+Space** (or **Pause**) plan while paused, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider
@@ -4769,6 +4894,31 @@ land bridge a Worker walks over to an island, a fill dragged out to open sea sto
 (and still refused past its new land, before and after a save), a canal joining two lakes that a Ferry then sails through, a robot on a
 flooding tile stepping off, a save made mid-job loading and playing on to the same hash, and the same plan twice
 giving the same hash.
+
+```bash
+node tools/terraform2-test.js
+```
+
+Terraforming, stage 2: a Composter taking the ground in its reach from barren to improving to rich (rich soil is
+farmland), crops on rich soil growing faster and an Agribot bringing 2 Fuel from one; a Tree Nursery planting groves off
+its lanes, the groves growing from saplings to young to mature and bearing Fiber the Agribot gathers, a foe's robot
+slowed in one (and its owner's not); napalm burning a grove and Reclaim clearing the scorched ground; a Water Pump's water
+along a pipe (a wet fringe, a sprinkler at its end), drying when the pipe is cut, along a dug canal, and a Bio Farm
+planting on wet desert; the biome shift taking the Rust to the Long Grass; Reclaim clearing a crater, Spread soil;
+where the buildings can't go; a save made mid-process playing on to the same hash; and the same game twice giving the
+same hash. A game without stage 2 has none of its layers.
+
+```bash
+node tools/terraform3-test.js
+```
+
+Terraforming, stage 3: no seams, beds or anything else until a Seam Drill surveys; the seams made from the map's seed
+(the same twice, the map untouched); a drill's survey finding the seams near it for its colony only; no drilling or
+deeper survey without power, a Generator's Fuel making it drill at its rate and survey further, a seam worked out going
+spent; a Seed Mast preparing and seeding its beds, sprouting with power, starving without, ripening into Crystal a
+Crystal Tap gathers and the beds seeded again; a growing field drawing the Murmur; a Thermal Plant only beside hot
+ground, powering a drill with no Fuel; no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
+seam refused; and the same game twice giving the same hash.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

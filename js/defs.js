@@ -565,6 +565,78 @@ const NAVAL_ON = true; // ships and Ports on naval maps (false switches them off
  * the work, else straight from storage as the work goes (a Wall's way); filling's always comes from storage.
  */
 const TERRA = { time: 24, stone: 4, dug: 2, fill: 8, fillTime: 40, reach: 6, dig: 3, digTime: 36, top: 4, most: 48 };
+/*
+ * Terraforming, stage 2: soil, plants and water (the player's: rivals never build these, see t2Tick in sim.js and the
+ * Terraform tab). Everything here is per tile, in layers made the first time they're needed (S.soil, S.grove, S.wet...).
+ *
+ * SOIL: a Composter (BDEFS.composter) burns a batch (`batch`, brought by Haulers to its `hopper`) every `every` s while
+ * it has one, and every open tile within `reach` of it gains `gain` soil (0 to `max`): barren below `improving`,
+ * improving below `rich`, rich from there. Rich soil is farmland (S.fert): Bio Farms plant on it. On richer soil crops
+ * grow `crop` times as fast and give `yield` Fuel each (barren, improving, rich), and a Grove Planter's stalk groves
+ * hold `stalk` Fiber. The Grader's Spread soil job (Build → Terraform) brings `spread` and adds `spreadGain` in
+ * `spreadTime` s; its Reclaim job clears a crater, ash, scorched soil or a grove in `reclaimTime` s.
+ */
+const SOIL = { reach: 4, every: 15, batch: { fiber: 1, stone: 1 }, hopper: 4, gain: 10, improving: 64, rich: 160, max: 200,
+  crop: [1, 1.25, 1.5], yield: [1, 1, 2], stalk: [3, 4, 5], spread: { fiber: 2, stone: 1 }, spreadTime: 16, spreadGain: 64, reclaimTime: 20 };
+/*
+ * GROVE: a Tree Nursery's Agribot (BDEFS.nursery) plants groves on open ground within `reach` (up to `most` of them),
+ * leaving open lanes (every third row and column from the Nursery stays clear: groveLane), `plantTime` s a grove. A grove
+ * grows a step every `step` s: saplings until `young` steps, young until `mature`, then mature (forest ground: Greenreach
+ * after a biome shift, `forest` times as fast). A mature grove bears a Fiber every `fiberEvery` steps, which the
+ * Nursery's Agribot gathers (`gatherTime` s) and Haulers take from the Nursery. A foe's robots in a grove move at `slow`
+ * of their speed (saplings, young, mature); groves burn (Torches, napalm) and can be cleared (Reclaim, or built over).
+ * A rival's robots plan their routes round a foe's groves where the way round is short: each step into one costs `path`
+ * more (saplings, young, mature; routeOpts sets opts.grove, findPath adds it). With no way round they go through.
+ */
+const GROVE = { reach: 4, most: 18, plantTime: 4, step: 2, young: 40, mature: 120, fiberEvery: 45, gatherTime: 3, slow: [0.85, 0.7, 0.55], forest: 1.5, path: [0, 1, 2] };
+/*
+ * IRR (irrigation): every `every` s each working Water Pump (BDEFS.wpump, built beside water) sends water along the
+ * pipes joined to it (its owner's) and along canals a Grader dug (water tiles in S.tfTiles), up to `reach` tiles of them.
+ * The ground within `fringe` of a watered pipe or canal is wet, and within `spray` of a pipe's end (a sprinkler) or the
+ * pump. Wet ground (S.wet) turns green, lets Bio Farms plant crops on any ground (desert too), and crops on it grow `crop`
+ * times as fast. An Atmosphere Engine's rain counts too: from Rain, while it has power, the ground in its circle is wet for
+ * crops and the biome shift (rainWetAt; worked out from the Engine, nothing stored).
+ */
+const IRR = { every: 4, reach: 60, fringe: 1, spray: 2, crop: 1.2 };
+/*
+ * SHIFT (the biome shift): every `every` s each tile scores a point for improving soil, one more for rich, one if wet
+ * and one if `cover` groves (young or mature) stand on it and round it. With `need` points or more, its terraform level
+ * (S.tform) rises by its score; at `full` the tile shifts a step along its biome's `chain` (S.shift): the Rust to the
+ * Long Grass to Greenreach (the Polar Caps thaw to the Long Grass first, then Greenreach; forests, swamps and the Shoals
+ * stay as they are). Long Grass ground counts as improving soil, Greenreach's grows groves faster. Slow: a
+ * long-game reward (about 10 to 20 minutes a step). Drawn with the two biomes' blend (biomeMixAt's look).
+ */
+const SHIFT = { every: 10, need: 2, cover: 2, full: 240, chain: { desert: ['savanna', 'jungle'], volcanic: ['savanna', 'jungle'], alien: ['savanna', 'jungle'], springs: ['savanna', 'jungle'], savanna: ['jungle'], polar: ['savanna', 'jungle'] } };
+/*
+ * Terraforming, stage 3: resources from the ground (the player's, like stage 2: rivals never build these). See the stage
+ * 3 block in sim.js and js/terraform3.js.
+ *
+ * SEAM: hidden Ore and Crystal seams under the ground, beyond the deposits on it. None exist until a Seam Drill
+ * (BDEFS.seamdrill) first surveys: then they're made from the map's seed, a seam in about `chance` of the `cell`-tile
+ * squares of the map, `size` tiles of ground, Crystal `crystalShare` of them (never on Argos), holding `ore` or `crystal`
+ * (up to a fifth more). A drill surveys out to `survey[0]` tiles the moment it stands, a tile further every `surveyEvery`
+ * s it has power, out to `survey[1]`; found seams are its colony's. It works the nearest found seam in its survey at
+ * `rate` a minute (Ore, Crystal) while it has power (a Generator burning Fuel, or a Thermal Plant, in reach), holding
+ * up to `cap` for Haulers. Slower than an Ore Mine or a Crystal Tap on a deposit: a late supplement that never moves.
+ */
+const SEAM = { cell: 12, chance: 0.6, size: [3, 6], crystalShare: 0.4, ore: 60, crystal: 30, survey: [4, 8], surveyEvery: 30, rate: { ore: 2, crystal: 1 }, cap: 12 };
+/*
+ * SEED: a Seed Mast (BDEFS.seedmast) grows Crystal Seedbeds on the open ground within `reach` (up to `most` beds): it
+ * prepares one every `prepEvery` s, seeds a prepared one with `seed` Crystal from its `hopper` (Haulers bring them),
+ * and with power grows its seeded beds a step every `step` s: seeded, sprouting from `sprout` steps, ripe at `ripe`.
+ * A ripe bed holds `yield` Crystal as a cluster that a Crystal Tap gathers; then it is prepared again. Without power
+ * its beds starve and stop. A bed's full turn is about 7 minutes: 6 beds net about 1.7 Crystal a minute, less than one
+ * Crystal Tap on a deposit (the late Chip and Crystal balance stays the deposits'). A growing field draws the Murmur a
+ * little (`murmur` charge, like a Refinery's, in murmurPower). A Mast keeps `apart` tiles from another.
+ */
+const SEED = { reach: 2, most: 6, prepEvery: 10, seed: 1, hopper: 3, step: 5, sprout: 24, ripe: 84, yield: 3, murmur: 1, apart: 5 };
+/*
+ * THERMAL: a Thermal Plant (BDEFS.thermal) is a Generator that burns no Fuel: it powers what's round it the same way
+ * (the factories a third faster, and a Seam Drill's or Seed Mast's power), within `radius` (a tile less than a
+ * Generator's), while lava, the Cinderlands' or Steamwells' hot water, or a Steamwells vent touches its tile
+ * (thermalHot). It costs more than a Generator and only stands where the ground is hot: a reward on volcanic maps.
+ */
+const THERMAL = { radius: 3 };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
@@ -798,9 +870,9 @@ const SHAPE_PRESETS = [
   { name: 'The Ring', group: 'heights', noMurmur: true, blurb: 'Out in space among the Ring\'s great asteroids: a home rock each, a rich one in the middle and stepping stones between, with empty space all round. Cross by Viaduct or Ropeway, or fly.', w: 1.15, h: 1.45, asteroids: true, flat: true,
     tip: 'The Ring: your colony stands on a home asteroid in space, with a rich rock in the middle and a chain of stepping stones between you and your rival. There is nothing in the space between: no floor, no way across on foot and no road to lay. Span a gap with a Viaduct or a Ropeway (Paths), or fly: Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers. Ring Crystal keeps craft aloft out here, so flight works as it does anywhere. Every rock has oil for your Fuel. Argos\'s ground, no weather, no Murmur.' },
   // Half underground (the owner's idea, Nov 2026): a surface half and a cave half, joined by two or three entrances (cavesMap in
-  // world.js, CAVES in defs.js). Two to four colonies, half of them starting inside the caves and half outside. Inside: the Hollow's
+  // world.js, CAVES in defs.js). Two or four colonies, half of them starting inside the caves and half outside. Inside: the Hollow's
   // look, plenty of Ore and Crystal, nothing grows, nothing flies or falls in; outside: the Biome's surface with the growing goods.
-  { name: 'Half underground', group: 'heights', blurb: 'Half caves, half surface, joined by two or three cave mouths, narrow gates or wide mouths. Half the colonies start inside (Ore and Crystal, but nothing grows, and no Missile or aircraft reaches in) and half out on the surface (farms and crops, little Ore): each has to branch out through the mouths.', w: 1.2, h: 1.5, caves: true, flat: true, players: 4,
+  { name: 'Half underground', group: 'heights', blurb: 'Half caves, half surface, joined by two or three cave mouths, narrow gates or wide mouths. Half the colonies start inside (Ore and Crystal, but nothing grows, and no Missile or aircraft reaches in) and half out on the surface (farms and crops, little Ore): each has to branch out through the mouths.', w: 1.2, h: 1.5, caves: true, flat: true, players: 4, evenOnly: true,
     tip: 'Half underground: a surface half and a cave half joined by two or three mouths in a solid wall. The caves hold the Ore and Crystal, the surface the Fiber and crops; nothing grows or is harvested in the caves, and no Missile, bomb or aircraft reaches in. Each colony starts with a stock of what its side lacks, but it runs out: expand through the mouths early.',
     tipIn: 'Half underground, starting in the caves: Ore and Crystal all round you, safe from Missiles and aircraft, but nothing grows here. Your stock of Fiber lasts a while; Fuel comes from the oil seeps (Oil Pump, then a Refinery). Push Outposts out through the cave mouths to the stalk groves and crop soil on the surface before the Fiber runs out.',
     tipOut: 'Half underground, starting on the surface: farms, crops and stalk groves, but little Ore or Crystal. Your stock of Ore and Crystal lasts a while; the caves hold plenty more. Push Outposts in through the cave mouths early, and watch the air: your rival inside cannot be bombed or hit by Missiles, but you can.' },
@@ -1651,6 +1723,36 @@ const BDEFS = {
     name: 'Earthworks', desc: 'Ground being raised, lowered, filled or dug by a Grader (Build → Terraform). When the Grader is done the site goes and the new ground stays.',
     cost: { stone: 1 }, earthwork: true, armor: 4, buildTime: 20,
   },
+  // Terraforming, stage 2 (SOIL, GROVE, IRR, SHIFT): on the Terraform tab. `t2`: the player's alone (rivals never build them).
+  composter: {
+    name: 'Composter', desc: 'A rotary drum that turns Fiber and Stone into humus and spreads it round. Haulers bring a Fiber and a Stone for each batch; every open tile in reach grows richer over time, from barren to improving to rich. Rich soil is farmland, and crops on richer soil grow faster and give more Fuel.',
+    cost: { cement: 2, fiber: 2 }, compost: true, t2: true, inp: SOIL.batch, hopper: SOIL.hopper, radius: SOIL.reach, armor: 8, buildTime: 10,
+  },
+  nursery: {
+    name: 'Tree Nursery', desc: 'An Agribot plants groves of Earth trees on open ground nearby, leaving lanes between them. They grow from saplings to young trees to a mature grove, which bears Fiber now and then for the Agribot to gather. Enemy robots crawl through them. Groves burn, and can be cleared.',
+    cost: { fiber: 3, cement: 2 }, staff: true, crew: 'agribot', nursery: true, t2: true, radius: GROVE.reach, out: { fiber: 6 }, armor: 8, buildTime: 10,
+  },
+  wpump: {
+    name: 'Water Pump', desc: 'Built beside water, it lifts it into the pipes joined to it and along canals a Grader dug. The ground beside them turns green and wet, sprinklers water round each pipe\'s end, and Bio Farms can plant crops on wet ground, even desert.',
+    cost: { cement: 3, alloy: 1 }, wpump: true, t2: true, armor: 8, buildTime: 10,
+  },
+  // Terraforming, stage 3 (SEAM, SEED, THERMAL): on the Terraform tab too, `t3`; the player's alone. `t3pow`: run on a
+  // Generator's or Thermal Plant's power (updateGenerator powers them while they ask for it).
+  seamdrill: {
+    name: 'Seam Drill', short: 'Seam',
+    desc: 'A small derrick that surveys the ground round it for hidden Ore and Crystal seams, further the longer it runs, and drills the nearest one it finds. It needs power: a Generator with Fuel or a Thermal Plant nearby. Slow and steady: 2 Ore or 1 Crystal a minute, until the seam is worked out. Haulers take what it brings up.',
+    cost: { cement: 6, alloy: 4, chip: 2 }, seamdrill: true, t3: true, t3pow: true, out: { ore: SEAM.cap, crystal: SEAM.cap }, radius: SEAM.survey[1], armor: 10, buildTime: 14,
+  },
+  seedmast: {
+    name: 'Seed Mast', short: 'Mast',
+    desc: 'Grows a Crystal Seedbed on the ground round it. It prepares up to six beds, seeds each with a Crystal Haulers bring, and charges them to grow: seeded, sprouting, then ripe Crystal that a Crystal Tap gathers. It needs power (a Generator with Fuel or a Thermal Plant nearby): without it, the beds starve and stop. Slow, but it never runs out. A growing field draws the Murmur.',
+    cost: { cement: 5, alloy: 3, crystal: 4 }, seedmast: true, t3: true, t3pow: true, inp: { crystal: SEED.seed }, hopper: SEED.hopper, radius: SEED.reach, armor: 8, buildTime: 12,
+  },
+  thermal: {
+    name: 'Thermal Plant', short: 'Thermal',
+    desc: 'Power from the heat below, with no Fuel: built right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells vent. Like a Generator, every factory, Refinery, Oil Pump and Bot Foundry within 3 tiles works a third faster while it runs, and it powers a Seam Drill or a Seed Mast.',
+    cost: { cement: 6, alloy: 3, chip: 1 }, t3: true, burner: { radius: THERMAL.radius, boost: 1 / 3, perFuel: 0, heat: true }, armor: 10, buildTime: 12,
+  },
   repair: {
     name: 'Repair Station',
     desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
@@ -1795,7 +1897,8 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal',
+  'composter', 'nursery', 'wpump', 'seamdrill', 'seedmast', 'thermal']; // (the last six on the Terraform tab, with its tools: js/terraform2.js, js/terraform3.js)
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -2550,9 +2653,9 @@ const NARRATOR = {
   road: 'Road online. Built to Accord passenger standard.',
   night: 'Street lighting active. Traffic: freight only.',
   uplink: 'Uplink secured. Listening on all channels. No response.',
-  captured: 'Command authority transferred. Their robots report for duty.',
+  captured: 'Command authority transferred. Their buildings report for duty.', // (its robots shut down: eliminate)
   // (a rival's Command Base taken by another rival, in a free-for-all: {by} and {old} are callsigns, or people's names)
-  changed: 'Command core changed hands. {old}\'s robots now report to {by}.',
+  changed: 'Command core changed hands. {old}\'s buildings now report to {by}.',
   defeat: 'Command core lost. Transferring authority. Hold position.',
   // (lost on Domination, or on the Uplinks, while the colony still stands: LORE.md, Mechanics to lore; a win ends as
   // LORE.md's player arc has it: "Continuing current directive.")
@@ -2641,6 +2744,12 @@ const FLAVOR = {
   paver: 'Every road built to passenger standard. No passengers yet.',
   grader: 'Levels the ground the Pathfinder surveyed for the arks. The survey is thirty-one years old; the ground has moved.',
   earthwork: 'Cut and fill, to the Accord grade. Somebody will want a level place to land.',
+  composter: 'Humus to the Accord soil standard, bagged and stacked. The gardens it was for are still on the plan.',
+  nursery: 'Seed stock from the Pathfinder\'s vaults, planted out on schedule. Shade for a park nobody has walked in.',
+  wpump: 'Lifts water to the fields at the rate set for a colony of four thousand. The rate has not been revised.',
+  seamdrill: 'Bores to the seams the survey filed under instrument error.',
+  seedmast: 'Ringfall restocks the planet on its own schedule. The Seedbed keeps ours.',
+  thermal: 'The Pathfinder zoned this ground for bathhouses. It runs a turbine instead.',
   express: 'Arterial, built to the standard. Speed limit posted. Nobody reads it.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',

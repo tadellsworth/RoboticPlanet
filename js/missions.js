@@ -317,7 +317,7 @@ function ocEngine(S, E, L, st) {
   b.aeSrc = 'gen';
   return b;
 }
-const aeStageGoal = (n, text, hint) => ({ kind: 'atmosStage', n, text, at: 'atmos', count: (P) => P.stats.atmosStage || 0, hint, ui: '#btn-speed' });
+const aeStageGoal = (n, text, hint, ui = '#btn-speed') => ({ kind: 'atmosStage', n, text, at: 'atmos', count: (P) => P.stats.atmosStage || 0, hint, ui });
 
 const MISSIONS = [
   // Chapter 1, First Steps. One idea at a time: your first building and road, Stone and Cement, batteries, and the first Alloy.
@@ -1451,6 +1451,86 @@ const MISSIONS = [
         count: (P) => P.stats.tffill || 0,
         hint: '<b>Terraform</b> → <b>Fill shallows</b> (<kbd>H</kbd>): drag out from the shore, then <b>Terraform</b>.',
         ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='fill'], #tf-seg [data-tf='fill'], #banner-ok" },
+      { kind: 'dug', n: 2, text: 'Dig {n} tiles of channel',
+        count: (P) => P.stats.tfdig || 0,
+        hint: '<b>Terraform</b> → <b>Dig channel</b> (<kbd>C</kbd>): drag in from the water\'s edge, then <b>Terraform</b>.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-tf='dig'], #tf-seg [data-tf='dig'], #banner-ok" },
+    ],
+  },
+
+  // Terraforming, stage 2: soil, groves and water (SOIL, GROVE, IRR, SHIFT), after the Grader's earthworks.
+  {
+    id: 'greening', name: 'Topsoil', chapter: 'Sea and Sky',
+    brief: 'The Pathfinder sowed this shore from its seed vaults; the Rust took it back. Make soil, plant a grove and water a field on the dry ground.',
+    intro: [
+      '<b>Build → Terraform</b> (<kbd>7</kbd>) also holds three buildings that work the land slowly, over the long game.',
+      'A <b>Composter</b> (<kbd>M</kbd>) turns a Fiber and a Stone a batch into humus: the ground in its ring goes from barren to improving to rich. Rich soil is farmland, and crops on it grow faster and give twice the Fuel.',
+      'A <b>Tree Nursery</b> (<kbd>N</kbd>) has an Agribot plant groves, leaving lanes. They grow from saplings to young trees to a mature grove that bears Fiber, and enemy robots crawl through them.',
+      'A <b>Water Pump</b> (<kbd>P</kbd>) goes beside water. Its water runs along the pipe joined to it and along canals a Grader digs; wet ground turns green, and Bio Farms plant on it, desert or not.',
+      'Soil, water and groves together slowly shift the land itself: the Rust to the Long Grass, then to Greenreach.',
+      'The Grader has two new jobs: <b>Spread soil</b> (<kbd>O</kbd>) and <b>Reclaim</b> (<kbd>E</kbd>), which clears craters and burned ground: rich soil napalm or a Torch burned is farmland again.',
+    ],
+    mode: 'colony', seed: 31, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 11, limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT7, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.fiber += 40; L.stock.stone += 40; L.stock.cement += 20; L.stock.alloy += 8; L.stock.chip += 4; L.stock.fuel += 10;
+      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (one for the Tree Nursery: the colony's own works its Bio Farm)
+      S.players[0].stats.startBots = S.players[0].stats.bots;
+    },
+    goals: [
+      { kind: 'built', type: 'composter', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Terraform</b> (<kbd>7</kbd>) → <b>Composter</b> (<kbd>M</kbd>), beside open ground.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='composter']" },
+      { kind: 'richSoil', n: [4, 6, 9], text: 'Enrich {n} tiles to rich soil', at: 'composter',
+        count: (P, S) => { let n = 0; if (S.soil) for (let t = 0; t < S.soil.length; t++) if (S.soil[t] >= SOIL.rich && S.owner[t] === 0) n++; return n; },
+        hint: 'Haulers feed the Composter a Fiber and a Stone a batch: tap it to watch its ring turn rich.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='composter']" },
+      { kind: 'groves', n: [2, 3, 4], text: 'Grow {n} groves to young trees', at: 'nursery',
+        count: (P, S) => { let n = 0; if (S.grove) for (let t = 0; t < S.grove.length; t++) if (S.grove[t] >= GROVE.young && S.grvO[t] === 1) n++; return n; },
+        hint: '<b>Terraform</b> (<kbd>7</kbd>) → <b>Tree Nursery</b> (<kbd>N</kbd>): its Agribot plants groves round it.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='nursery']" },
+      { kind: 'wetCrops', n: [2, 3, 4], text: 'Grow {n} crops on watered dry ground', at: 'wpump',
+        count: (P, S) => { let n = 0; if (S.wet) for (let t = 0; t < S.wet.length; t++) if (S.wet[t] && S.res[t] === R_CROP && !S.fert[t] && S.owner[t] === 0) n++; return n; },
+        hint: '<b>Water Pump</b> (<kbd>P</kbd>) by the lake, pipe out from it (Paths → Pipe), a Bio Farm by the wet ground.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='wpump'], .bcard[data-t='farm']" },
+    ],
+  },
+
+  // Terraforming, stage 3: resources from the ground (SEAM, SEED, THERMAL), on the Cinderlands, where the lakes are lava.
+  {
+    id: 'deepground', name: 'Deep Ground', chapter: 'Sea and Sky',
+    brief: 'The survey filed the readings under these lava lakes as instrument error. Drill for the seams below, grow Crystal of your own, and run a turbine on the heat.',
+    intro: [
+      'The last three buildings on <b>Build → Terraform</b> (<kbd>7</kbd>) take resources from the ground itself. All three are slow: they add to your Mines and Taps, never replace them.',
+      'A <b>Seam Drill</b> (<kbd>I</kbd>) surveys for hidden Ore and Crystal seams the moment it stands, further while it has power, and drills the nearest one: glowing cracks inside a dashed outline, its marker\'s pips counting down.',
+      'A <b>Seed Mast</b> (<kbd>G</kbd>) prepares a ring of beds, seeds each with a Crystal, and charges them to grow. Ripe Crystal is gathered by a <b>Crystal Tap</b>: build one beside the Mast. Without power the beds starve.',
+      'Both need power: a <b>Generator</b> with Fuel within 4 tiles, or a <b>Thermal Plant</b> (<kbd>T</kbd>), which burns no Fuel but only stands right beside lava or hot water.',
+    ],
+    mode: 'colony', seed: 71, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 11, limit: [0, 0, 30],
+    setup(S) {
+      kit(S, KIT7, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 40; L.stock.alloy += 20; L.stock.chip += 8; L.stock.crystal += 16; L.stock.fuel += 16; L.stock.fiber += 20;
+      preBuild(0, 'generator', L.x + 4, L.y + 2, { road: true, stock: { fuel: BDEFS.generator.fuelCap } });
+      computeTerritory();
+    },
+    goals: [
+      { kind: 'built', type: 'seamdrill', n: 1,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Terraform</b> (<kbd>7</kbd>) → <b>Seam Drill</b> (<kbd>I</kbd>), near the Generator.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='seamdrill']" },
+      { kind: 'seams', n: [1, 1, 2], text: 'Find a hidden seam and drill {n} from it', at: 'seamdrill',
+        count: (P) => ((P.stats.seams || 0) ? (P.stats.seamOre || 0) + (P.stats.seamCrystal || 0) : 0),
+        hint: 'Keep the Generator fuelled: with power the Seam Drill surveys further and drills the seam it finds.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='seamdrill']" },
+      { kind: 'bedRipe', n: [2, 3, 4], text: 'Grow {n} beds of Crystal', at: 'seedmast',
+        count: (P) => P.stats.bedRipe || 0,
+        hint: '<b>Terraform</b> → <b>Seed Mast</b> (<kbd>G</kbd>) by the Generator, a <b>Crystal Tap</b> beside it.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='seedmast'], #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
+      { kind: 'thermal', n: 1, text: 'Power a building with a Thermal Plant', at: 'thermal',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'thermal' && b.working).length,
+        hint: '<b>Terraform</b> → <b>Thermal Plant</b> (<kbd>T</kbd>) beside a lava lake, a factory within 3 tiles.',
+        ui: "#btn-build, #build-tabs [data-g='terra'], .bcard[data-t='thermal']" },
     ],
   },
 
@@ -1624,7 +1704,8 @@ const MISSIONS = [
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by the hull: warbots carry its crates home.',
         ui: '#btn-attack, #ar-hold' },
       AE_BUILT,
-      aeStageGoal(2, 'Reach stage 2 of the Engine, Rain', 'Two <b>Generators</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by it, fed: 6 minutes of power. Speed up: <b>1×</b>.'),
+      aeStageGoal(2, 'Reach stage 2 of the Engine, Rain', 'Two <b>Generators</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) by it, fed: 6 minutes of power. Speed up: <b>1×</b>.',
+        "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator'], #btn-speed"),
       { kind: 'atmosFarms', n: [4, 5, 6], text: 'Sow the seed: {n} Bio Farms in the calm', at: 'atmos', count: (P, S) => aeFarms(S),
         hint: '<b>Build</b> → <b>Gather</b> (<kbd>1</kbd>) → <b>Bio Farm</b> (<kbd>F</kbd>) on the wet ground round the Engine.',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='farm']" },
@@ -1654,7 +1735,8 @@ const MISSIONS = [
     },
     goals: [
       AE_BUILT,
-      aeStageGoal(3, 'Reach stage 3 of the Engine, Green', 'Keep both Generators fed: 16 minutes of power. Ring it with <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).'),
+      aeStageGoal(3, 'Reach stage 3 of the Engine, Green', 'Keep both Generators fed: 16 minutes of power. Ring it with <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>).',
+        "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret']"),
       { kind: 'bloomBack', n: [4, 6, 8], text: 'Push the Bloom back {n} tiles', at: 'atmos', count: (P) => P.stats.atmosWither || 0,
         hint: 'At Green the Bloom withers back a tile a minute. Keep the power on: tap the Engine to see its stage.',
         ui: '#btn-speed' },
@@ -2131,7 +2213,7 @@ const MISSIONS = [
         ui: '#sh-tgive, #sh-tget, #sh-tgo' },
       { kind: 'escort', n: 1, text: 'Turn on Escort at the Terminal', at: 'terminal',
         count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].terminal && b.escort) ? 1 : 0),
-        hint: 'Tap the Terminal → <b>Escort</b> (<kbd>E</kbd>): two warbots from the nearest garrison ride with each convoy.',
+        hint: 'Tap the Terminal → <b>Escort</b> (<kbd>O</kbd>): two warbots from the nearest garrison ride with each convoy.',
         ui: '#sh-escort' },
       { kind: 'looted', n: [3, 5, 6], text: 'Carry home {n} crates of loot',
         count: (P) => P.stats.looted || 0,
@@ -2207,7 +2289,7 @@ const MISSIONS = [
     intro: [
       'A <b>Nuclear race</b>: an Ore Mine beside green Uranium digs it first.',
       'A <b>Nuclear Reactor</b> enriches 2 Uranium into 1; a Nuclear Silo needs 6 for a missile.',
-      'A nuclear missile flattens everything round where it lands. A direct hit destroys a Command Base.',
+      'A nuclear missile wrecks almost everything round where it lands. A direct hit destroys an enemy Command Base.',
       'Its fallout lingers: a green ring of radiation for minutes, where robots sicken, work slows and nothing is built. A Reactor a rival destroys leaks too.',
       'If one ever comes for you, press <b>Evacuate</b> (<kbd>V</kbd>) on the warning card.',
       'This mission ends with your launch. In free play, Custom Game → Rules switches the race on or off.',
@@ -2353,7 +2435,8 @@ const MISSIONS = [
     },
     goals: [
       AE_BUILT,
-      aeStageGoal(4, 'Reach stage 4 of the Engine, the Garden', 'Keep both Generators fed: 28 minutes of power in all. Guard it at night; the Murmur hate it.'),
+      aeStageGoal(4, 'Reach stage 4 of the Engine, the Garden', 'Keep both Generators fed: 28 minutes of power. At night, <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by it.',
+        '#btn-attack, #ar-hold'),
       { kind: 'greened', n: [25, 32, 40], text: 'Green {n}% of the valley\'s land', at: 'atmos', count: (P, S) => S.mission.greenPct || 0,
         hint: 'Stage 3 and 4 ground counts. Guard its Generators: <b>Pulse Turrets</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>T</kbd>) by them.',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret']" },

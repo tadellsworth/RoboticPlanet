@@ -2080,6 +2080,85 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 37: Terraforming stage 3, the Seam Drill, Seed Mast, Thermal Plant and the Crystal Seedbed (installed; seams drawn in code)
+
+Stage 3 of terraforming (Nov 2026; README, "Terraforming, stage 3") went through Claude Design: the concept canvas
+https://claude.ai/artifact/Hcjo7wWok4Xri35aFSt5kJ showed three concepts for each building, the hidden seams step by step,
+the seed field's stages and the geothermal ground. The owner said "your picks for all": **Seam Drill concept A
+"Derrick"**, **Seed Mast concept B "Charge Mast"** (it grows a **Crystal Seedbed**), **Thermal Plant concept A
+"Cooling Tower"**. Rendered with `renderer/` as stage 2 was (the 57° view on the shared pad, 512 px, `B3D` framing; both
+teams, the third and fourth recoloured from the rival's, `recolorArt`; morning, evening and night), each with an
+8-frame working loop of only its moving parts (`part=work`) at every time of day. Scenes: `renderer/b/seamdrill.js`,
+`seedmast.js`, `thermal.js`, `seedbed.js` (shared parts in `t3kit.js`: the Deep Core's red lattice steel, labelled
+hoppers, lava, steam, Ring Crystal and grown Crystal); `renderer/tools/render_t3.sh` renders them all (about 150
+renders, half an hour on three renderers), `renderer/tools/install_t3.py` installs them as WebP.
+
+**Accents.** Every existing building accent was checked (the render jobs' list, ART_GUIDE's, the four team colours,
+lava and Ring Crystal), measured as distance in Lab colour space:
+- **Seam Drill: orchid `#d94dff`**, the canvas's: the widest gap on the wheel, between the Lab's lilac and the Bio
+  Farm's pink, and it echoes the Deep Core's violet shaft glow.
+- **Seed Mast: rose `#f78fc0`** (rose quartz), not the canvas's indigo `#5c6bff`, which sat beside the Refinery's blue
+  `#5b8cff` and the Crystal Tap's `#8f7bff`. The saturated hues are all taken; this pale rose is the farthest of any
+  candidate from every accent and team colour (nearest: the Vermilion team and the Bio Farm, both well off), and it
+  reads beside the lilac Crystal it grows. The seed pins on the bed tiles carry it too.
+- **Thermal Plant: pale sulfur `#c9ef8f`**, not the canvas's `#e4ff3a`, which was too near the Generator's `#ffe23d` and
+  the Chip Fab's lime. It keeps the Steamwells' sulfur idea, paler and greener than any yellow, cool against lava.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `seamdrill@0`, `@1`, `seamdrill-base@0`, `@1` (+ times of day) | The Deep Core's headframe in miniature: a slim red lattice mast over a raised shaft collar, its orchid glow in the bore, a crown block, a pipe rack, a driller's cabin, a core tray of banded cores, ORE and CRY hoppers. `-base`: without the top drive and string | `seamdrill-base` under the loop while it drills (as the Nursery's) |
+| `seamdrill-work-0`…`7` (+ times of day) | The yellow top drive feeding the string down the mast and hoisted back, the tool joints turning, the bore's glow brightest as it bottoms out | Over it while it works, 8 a second |
+| `seedmast@0`, `@1` (+ times of day) | A slim mast with three emitter rings in a round bed of seed pins and grown Crystal sprigs, guy wires, a capacitor bank, a transformer, a seed-stock kiosk | As any building |
+| `seedmast-work-0`…`7` (+ times of day) | The rings lit in turn low to high with arcs down to the pins under them, then a beat with all three low | Played at 4 a second (`WORK_FPS`) |
+| `thermal@0`, `@1` (+ times of day) | A squat hyperbolic cooling tower (its mouth glowing faintly from the heat below at night), a turbine hall, a heat well cut through the pad showing magma under a grating, a wellhead and insulated pipes. No plume in the art | As any building; its plume is the game's steam from the tower's mouth (`BUILDING_EMITTERS.thermal`, from the render's `plume` mark), only while it runs |
+| `thermal-work-0`…`7` (+ times of day) | The turbine hall's windows lit in turn, the wellhead breathing steam | Over it while it works |
+| `seedbed-0-1`…`seedbed-4-3` | A Crystal Seedbed, one tile (12.5 units across), 256 px, on a shadow catcher, seen like the plants (orthographic, 70°): a raked dark bed in a steel edging ruled in a 3 × 3 grid, a seed pin in each square with a rose cap. Look 0 prepared, 1 seeded (caps bright, seed grit glinting), 2 sprouting, 3 ripe (a cluster of grown Crystal in each square), 4 starved (grey, no glow); three variants | Baked with the map (`t3PaintTile`) in place of everything else on the tile, its ripe Crystal too (the cluster is a plain Crystal resource for the Taps): graded with the ground, 1.25 tiles across, the variant from the tile's hash |
+| `seedbed-0-glow`…`3-glow` | Its night light: the pins' caps and the Crystal tips, from the night render's glow pass, softened, 128 px | In the night glow map (`t3Glow`) |
+
+**Grown Crystal** came out nearly white-lilac by day on the canvas. Toned down (`t3kit.js`): by day a deeper lilac
+`#6a50d8` with less reflection and dim tips, so it reads as Crystal at once; still clearly not Ring Crystal (`#5440e6`
+in one wild cluster): lighter, in a ruled grid, on lit pins. At night the canvas's brighter lilac `#7b5cf0` and lit tips.
+
+Drawn in code (`js/terraform3.js`), to the canvas's look: a found seam's cracks (short random walks from the tile's
+hash, orange `#ff8a3d` for Ore, violet `#b084ff` for Crystal, dimmer as it's worked down) inside a dashed outline along
+the seam's edge, the ground a touch darker, baked with the map and glowing at night; the survey mark (the goods' own
+icon in a dark ring, five pips under it; grey and crossed out once worked out) and a drill's dashed orchid line to its
+seam, over the ground after the night's grade; the survey ring as the shared ring effect. While placing: the drill's
+survey (now and at its farthest) and the power ring, the Mast's bed squares, the hot tiles beside a Thermal Plant. The
+minimap shows found seams in their goods' colour and beds dark violet.
+
+### Batch 36: Terraforming stage 2, the Composter, Tree Nursery, Water Pump and groves (installed; soil, water and the shift drawn in code)
+
+Stage 2 of terraforming (Nov 2026; README, "Terraforming, stage 2") went through Claude Design: the concept canvas
+https://claude.ai/artifact/1bsbpFiHTePyrnikd7Mxgn showed three concepts for each building, the groves, the soil, the
+irrigation, the biome shift and the Grader's new jobs. The owner said "do your picks": **Composter concept A "Drum"**,
+**Tree Nursery concept C "Pivot"**, **Water Pump concept B "Screw Lift"**. Rendered with `renderer/` like the other
+buildings (the 57° view on the shared pad, 512 px, `B3D` framing; both teams, the third and fourth recoloured from the
+rival's, `recolorArt`; morning, evening and night), each with an 8-frame working loop of only its moving parts
+(`part=work`, the rest depth only: `renderer/b/worklib.js`) at every time of day. Scenes: `renderer/b/composter.js`,
+`nursery.js`, `wpump.js`, `grove.js`, `sprinkler.js` (shared parts in `t2kit.js`); `renderer/tools/render_t2.sh`
+renders them all (about 140 renders, 40 minutes), `renderer/tools/install_t2.py` installs them as WebP. Drawn by
+`js/terraform2.js` and the usual building code.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `composter@0`, `@1` (+ times of day) | A long rotary drum on roller cradles, fed by a conveyor from a hopper of straw, spilling humus onto a heap; a vent stack over a biofilter, a control hut, bagged humus on pallets. Its accent is an earthy amber (`#d6a04a`), not the Chip Fab's lime | As any building |
+| `composter-work-0`…`7` (+ times of day) | The drum turning one rib's pitch a loop (seamless: seven ribs, no hatch on it) and the steam off the stack and the heap | Over it while it composts, 8 a second |
+| `nursery@0`, `@1`, `nursery-base@0`, `@1` (+ times of day) | A round bed of saplings in rings, older at the rim, a centre pivot; a seed store and pump skid. `-base`: without the boom | `nursery-base` under the loop while it works (as the Oil Pump's `pump-base`) |
+| `nursery-work-0`…`7` (+ times of day) | The pivot's two-armed boom on wheeled towers, sweeping half a turn a loop, its drop sprinklers misting | Played at 4 a second (`WORK_FPS`): a full sweep every 4 s |
+| `wpump@0`, `@1` (+ times of day) | An Archimedes screw in an open trough lifting water from a sump on the water side to a header tank; pipes out of the front; a drive house, a kiosk. Key `wpump` (the Oil Pump has `pump`) | As any building |
+| `wpump-work-0`…`7` (+ times of day) | The screw's flights turning a full turn a loop, the spill into the tank | Over it while it works |
+| `grove-1-1`…`grove-3-4` | A grove, one tile (14 world units across: the crowns reach a little past it), 256 px, on a shadow catcher, seen like the plants (orthographic, 70°): stage 1 staked saplings with mulch rings and guards, 2 young trees, 3 mature broadleaves and spruce; four variants of which trees stand where. Re-cut from the canvas's 3 × 3 groves | `t2Ground`, with the ground (graded for the time of day with it, so no re-lit versions): 1.4 tiles across, the variant from the tile's hash; a mature grove bearing Fiber shows pale seed tufts |
+| `sprinkler` | An impact sprinkler head on a riser, a brass collar, a stake with an orange flag, 128 px | At a watered pipe's open end (`pipeSprinkler`), with its spray in code: a jet sweeping round, drops falling in a ring (not on Saver) |
+
+Drawn in code (`js/terraform2.js`), baked with the map: humus darkening barren ground as it enriches, with crumbs
+(rich soil is drawn as the fertile soil it becomes); wet ground greening with tufts and a darker damp edge; the biome
+shift blending the next biome's own ground texture in through noise (the two-biome blend's look, `biomeMixAt`), its
+scenery (the new biome's plant art) taking root. Leaves swirl round a robot slowed in a foe's grove (`t2SlowTell`).
+The Grader's Spread soil and Reclaim use its existing work frames and the Earthworks' ground (`tfSiteGround`: humus or
+fresh earth laid across from its side) with their own glyphs (furrows, a sprout). The minimap shows groves dark green,
+watered ground green and shifted land its new biome's colour.
+
 ### Batch 35: the Grader and the Earthworks (installed; the ground and the plans drawn in code)
 
 Stage 1 of terraforming (Nov 2026; README, "Terraforming, stage 1") needed a new robot and a new kind of site. Their

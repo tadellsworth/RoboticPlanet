@@ -634,7 +634,7 @@ function setMenuMode(v) {
 function menuPlayers() {
   const m = UI.menu, want = clamp(Math.round(m.players) || 2, 2, 4);
   if (m.mode !== 'versus') return 2;
-  return m.shapeRnd ? want : clamp(want, minPlayers(m.shape || 0), maxPlayers(m.shape || 0));
+  return m.shapeRnd ? want : snapPlayers(m.shape || 0, clamp(want, minPlayers(m.shape || 0), maxPlayers(m.shape || 0)));
 }
 /** A team game: four colonies, two against two (the Teams choice, with four players)? */
 function menuTeams() { return UI.menu.mode === 'versus' && !!UI.menu.teams && menuPlayers() === 4; }
@@ -1127,8 +1127,9 @@ function syncMenu() {
     mark(btn, v === menuPlayers());
     if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
     btn.textContent = mps ? String(v) : btn.dataset.lbl; // (multiplayer: how many colonies, people and computers together)
-    btn.disabled = v > room || (!m.shapeRnd && v < minPlayers(shape));
+    btn.disabled = v > room || (!m.shapeRnd && (v < minPlayers(shape) || !playersFit(shape, v)));
     btn.dataset.info = v === 2 ? '2 players: you and one rival colony, landing at the far end of the planet.'
+      : !m.shapeRnd && v === 3 && !playersFit(shape, 3) ? `${SH.name} takes two or four colonies, not three (for now).`
       : modeInfo('versus', v) + (v <= room ? (m.shapeRnd || v >= minPlayers(shape) ? '' : ` (Not on ${SH.name}: it is for ${minPlayers(shape)} or more.)`)
         : v === 4 ? ` (Not on ${SH.name}: it has room for ${room === 3 ? 'three' : 'two'}. Pick a map type marked “3–4 players”.)` : ` (Not on ${SH.name}: pick a map type marked “3 players” or “3–4 players”.)`);
     if (mps) btn.dataset.info = `${v} colonies: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
@@ -1497,7 +1498,7 @@ function openPicker(kind, ctx = menuPickCtx()) {
     for (const g of groups.concat(other)) {
       if (!g.list.length) continue;
       h += `<section class="pgroup" aria-label="${g.name}"><h3>${g.name}</h3><div class="pgrid">` + g.list.map((i) => {
-        const P = SHAPE_PRESETS[i], badges = (maxPlayers(i) > 2 ? `<span class="badge ffa">${minPlayers(i) === maxPlayers(i) ? maxPlayers(i) : `${Math.max(3, minPlayers(i))}–${maxPlayers(i)}`.replace('3–3', '3')} players${minPlayers(i) > 2 ? ' only' : ''}</span>` : '') + (P.naval && !P.river ? '<span class="badge naval">Naval</span>' : '');
+        const P = SHAPE_PRESETS[i], badges = (P.evenOnly ? '<span class="badge ffa">2 or 4 players</span>' : maxPlayers(i) > 2 ? `<span class="badge ffa">${minPlayers(i) === maxPlayers(i) ? maxPlayers(i) : `${Math.max(3, minPlayers(i))}–${maxPlayers(i)}`.replace('3–3', '3')} players${minPlayers(i) > 2 ? ' only' : ''}</span>` : '') + (P.naval && !P.river ? '<span class="badge naval">Naval</span>' : '');
         return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''), '', P.blurb);
       }).join('') + '</div></section>';
     }
@@ -1586,7 +1587,7 @@ function pickerKey(e) {
 
 /** A map type at random with room for `want` players (Random, in Custom Game and Observer mode). */
 function randomShape(want) {
-  const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
+  const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => playersFit(i, want));
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
 }
 function randomBiomeFor(shape, needsMurmur = false) {
@@ -2621,7 +2622,9 @@ const BUILD_KEYS = {
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'r', silo: 'i', nukesilo: 'n' },
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
   // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
-  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c' },
+  // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P);
+  // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T).
+  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5', mega: '6', terra: '7' };
 /**
@@ -2705,11 +2708,11 @@ const SHEET_KEYS = {
   'ar-strike': ['e', 'Strike: pick a target'],
   'sh-tgo': ['g', 'Start or change a trade route'],
   'sh-tstop': ['x', 'Stop trade route'],
-  'sh-escort': ['e', 'Toggle trade escort'],
+  'sh-escort': ['o', 'Toggle trade escort'], // (O, not E: E is Repair, on the same panel when the Terminal is damaged)
   'sh-mlink': ['l', 'Link Mooring Masts'],
   'sh-munlink': ['l', 'Unlink Mooring Masts'],
   'sh-magline': ['l', 'Plan a Maglev line'],
-  'sh-magrebuild': ['l', 'Rebuild a Maglev line'],
+  'sh-magrebuild': ['b', 'Rebuild the missing Terminal'], // (B, not L: L is Add a line, on the same panel)
   'sh-lf-security': ['z', 'Call down Security'],
   'sh-lf-crew': ['x', 'Call down Crew'],
   'sh-lf-alloy': ['c', 'Call down Alloy'],
@@ -2734,16 +2737,25 @@ function markSheetKeys() {
   for (const id in SHEET_KEYS) { const el = $(id); if (el && !el.dataset.key) el.dataset.key = SHEET_KEYS[id][0].toUpperCase(); }
   const d = $('sh-demolish') || $('sh-recycle'); if (d && !d.dataset.key) d.dataset.key = 'Del';
 }
-/** The open panel's button for key k, if it's showing and can be pressed. */
+/**
+ * SHEET_KEYS buttons that live outside the panels (the incoming-nuke card's Evacuate): their key works with no panel
+ * open too, and with one open when that panel has no button of its own on the key (nor the build menu's tab a card on it).
+ */
+const LOOSE_SHEET_KEYS = new Set(['nk-evac']);
+/** The open panel's button for key k, if it's showing and can be pressed (else a loose one's: LOOSE_SHEET_KEYS). */
 function sheetKeyButton(k) {
-  if (!UI.sheetKind || UI.sheetKind === 'build') return null;
-  if (k === 'delete' || k === 'backspace') { const d = $('sh-demolish') || $('sh-recycle'); return d && !d.disabled && d.offsetParent ? d : null; }
+  const open = !!UI.sheetKind && UI.sheetKind !== 'build';
+  if (k === 'delete' || k === 'backspace') { if (!open) return null; const d = $('sh-demolish') || $('sh-recycle'); return d && !d.disabled && d.offsetParent ? d : null; }
+  let loose = null;
   for (const id in SHEET_KEYS) {
     if (SHEET_KEYS[id][0] !== k) continue;
     const el = $(id);
-    if (el && !el.disabled && !el.hidden && el.offsetParent) return el;
+    if (!el || el.disabled || el.hidden || !el.offsetParent) continue;
+    if (LOOSE_SHEET_KEYS.has(id)) { loose = loose || el; continue; }
+    if (open) return el;
   }
-  return null;
+  if (loose && UI.sheetKind === 'build' && Object.values(BUILD_KEYS[UI.buildTab] || {}).includes(k)) return null;
+  return loose;
 }
 /** A building's key and the build-menu tab it's on ({ tab, key }), or null. */
 function buildKeyOf(t) {
@@ -6649,9 +6661,11 @@ function onMapTap(i, j, wx, wy) {
       }
       if (def.farm) extra = ` <span class="ok">${fertileIn(i, j, def.radius)} fertile tiles in reach.</span>`;
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
-      if (def.burner) {
+      if (def.t2 && typeof t2PlaceText === 'function') extra = t2PlaceText(type, i, j); // (stage 2: js/terraform2.js)
+      if (def.t3 && typeof t3PlaceText === 'function') extra = t3PlaceText(type, i, j); // (stage 3: js/terraform3.js)
+      if (def.burner && !def.burner.heat) {
         let n = 0;
-        for (const c of S.buildings) if (!c.dead && c.owner === ME && BDEFS[c.type].work && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
+        for (const c of S.buildings) if (!c.dead && c.owner === ME && (BDEFS[c.type].work || BDEFS[c.type].t3pow) && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
         extra = n ? ` <span class="ok">It would power ${n} building${n === 1 ? '' : 's'} in reach.</span>` : ' <span class="err">Nothing in reach to power: put it among your factories.</span>';
       }
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
@@ -8863,9 +8877,11 @@ function refreshBuildingSheet(b) {
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)}</span></div>`);
     }
     if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
+    if (def.t2 && typeof t2Panel === 'function') parts.push(...t2Panel(b, mine)); // (Composter, Tree Nursery, Water Pump: js/terraform2.js)
+    if (def.t3 && typeof t3Panel === 'function') parts.push(...t3Panel(b, mine)); // (Seam Drill, Seed Mast, Thermal Plant: js/terraform3.js)
     if (def.farm) {
       const crops = reachableRes(b.x, b.y, def.radius, R_CROP), ripe = countResIn(b.x, b.y, def.radius, R_CROP, true, S.zone[tIdx(b.x, b.y)]);
-      parts.push(`<div class="kv"><span>Fertile soil in reach</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);
+      parts.push(`<div class="kv"><span>${S.wet ? 'Fertile or wet ground in reach' : 'Fertile soil in reach'}</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);
       parts.push(`<div class="kv"><span>Crops planted</span><span>${crops}${crops ? ` (${ripe} ripe)` : ''}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.out.fuel}`)}</span></div>`);
     }
@@ -8889,7 +8905,7 @@ function refreshBuildingSheet(b) {
     } else if (mine && b.built && fuelMaker(def) && buildingPipes(b).length) {
       parts.push(`<div class="kv"><span>Fuel goes</span><span>${b.pipedFuel ? 'by pipe, to storage and what burns it' : 'by pipe to what burns it; a Tanker takes the rest'}</span></div>`);
     }
-    if (def.inp && mine && !def.pump) {
+    if (def.inp && mine && !def.pump && !def.compost) {
       const ins = Object.keys(def.inp).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.hopper || INPUT_CAP}`, !(b.stock[g] > 0))).join(''); // (what it keeps on hand: a Smelter keeps 6)
       const outs = def.make ? Object.keys(def.make).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)).join('') : '';
       const recipe = Object.keys(def.inp).map((g) => GOOD[g].name).join(' + ') + ' → ' + (def.make ? Object.keys(def.make).map((g) => GOOD[g].name).join('') : 'a new bot');

@@ -294,6 +294,28 @@ const ART_MANIFEST = {
   // a stroke, drawn over the pump without its beam ('pump-base') while it pumps.
   ...Object.fromEntries(['smelter', 'refinery', 'pump'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
   'pump-base@0': B3D('buildings/pump-base@0.webp'), 'pump-base@1': B3D('buildings/pump-base@1.webp'),
+  // Terraforming, stage 2 (ART_GUIDE Batch 36: renderer/b/composter.js, nursery.js, wpump.js, installed by
+  // tools/install_t2.py): the Composter (concept A "Drum"), the Tree Nursery (concept C "Pivot") and the Water Pump
+  // (concept B "Screw Lift"; its key is wpump, as the Oil Pump's is pump), each with its working loop (the drum, the
+  // boom over the Nursery without it, 'nursery-base', and the screw), at every time of day.
+  ...Object.fromEntries(['composter', 'nursery', 'wpump'].flatMap((b) => [0, 1].map((t) => [`${b}@${t}`, B3D(`buildings/${b}@${t}.webp`)]))),
+  'nursery-base@0': B3D('buildings/nursery-base@0.webp'), 'nursery-base@1': B3D('buildings/nursery-base@1.webp'),
+  ...Object.fromEntries(['composter', 'nursery', 'wpump'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
+  // The groves a Tree Nursery plants, one tile each, at their three stages (1 saplings, 2 young, 3 mature) in four
+  // variants (renderer/b/grove.js), and a sprinkler head at a watered pipe's end (b/sprinkler.js): drawn with the
+  // ground and graded with it (js/terraform2.js).
+  ...Object.fromEntries([1, 2, 3].flatMap((g) => [1, 2, 3, 4].map((v) => [`grove-${g}-${v}`, `resources/grove-${g}-${v}.webp`]))),
+  sprinkler: 'resources/sprinkler.webp',
+  // Terraforming, stage 3 (ART_GUIDE Batch 37: renderer/b/seamdrill.js, seedmast.js, thermal.js, seedbed.js, installed by
+  // tools/install_t3.py): the Seam Drill (concept A "Derrick"), the Seed Mast (concept B "Charge Mast") and the Thermal
+  // Plant (concept A "Cooling Tower"), each with its working loop (the top drive over the drill without it,
+  // 'seamdrill-base'; the mast's rings; the turbine hall's windows), at every time of day; the Crystal Seedbed's tile for
+  // its five looks in three variants (drawn with the ground, js/terraform3.js) and its night glow.
+  ...Object.fromEntries(['seamdrill', 'seedmast', 'thermal'].flatMap((b) => [0, 1].map((t) => [`${b}@${t}`, B3D(`buildings/${b}@${t}.webp`)]))),
+  'seamdrill-base@0': B3D('buildings/seamdrill-base@0.webp'), 'seamdrill-base@1': B3D('buildings/seamdrill-base@1.webp'),
+  ...Object.fromEntries(['seamdrill', 'seedmast', 'thermal'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
+  ...Object.fromEntries([0, 1, 2, 3, 4].flatMap((g) => [1, 2, 3].map((v) => [`seedbed-${g}-${v}`, `resources/seedbed-${g}-${v}.webp`]))),
+  ...Object.fromEntries([0, 1, 2, 3].map((g) => [`seedbed-${g}-glow`, `resources/seedbed-${g}-glow.webp`])),
   // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
   // graded with the light at dusk and night like other smoke.
   'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },

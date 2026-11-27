@@ -39,6 +39,14 @@ function tileCost(t, dx, dy, offMul, lane) {
   return (S.res[t] ? 1.5 : 1) * offMul;
 }
 
+/** What stepping into tile t's grove costs player p's robot on top of the going: GROVE.path by its stage if a foe planted it, else 0. */
+function groveCost(t, p) {
+  const o = S.grvO ? S.grvO[t] - 1 : -1;
+  if (o < 0 || o === p || !foes(o, p)) return 0;
+  const g = S.grove[t];
+  return GROVE.path[g < GROVE.young ? 0 : g < GROVE.mature ? 1 : 2];
+}
+
 const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]];
 
 /**
@@ -53,6 +61,8 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
  * opts.coverMap: the same from a map of its own (1 where a gun reaches): the Murmur's on Active (murmurGunMap).
  * opts.rad: tiles in a radiation zone cost RAD.path more (a rival's army on the march); with `avoidFor` set they always do.
+ * opts.grove: a player id (a rival's robot): tiles of a foe's grove cost GROVE.path more by its stage (groveCost), so it
+ *   goes round where the way round is short and through where there is none. Unset (and nothing) with no groves.
  * opts.safe: a danger map (dangerMap): a goods carrier's way round enemy guns, or none. Tiles a gun covers (bit 1) are
  *   closed, but for the first SAFE_POCKET tiles out of the cover it starts in (see safeRoute).
  * opts.maxExpanded: bound a speculative route search. Actual movement uses the full search.
@@ -74,6 +84,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const rad = (opts && opts.rad) || (avoidFor !== undefined && avoidFor >= 0) ? (S.rads && S.rads.length && typeof radMap === 'function' ? radMap() : null) : null; // (radiation: robots that don't fight, and a rival's army, go round)
   const safe = (opts && opts.safe) || null, pkS = _pf.pkS, pkD = _pf.pkD;
   const cover = opts && opts.coverMap ? opts.coverMap : opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
+  const grv = opts && opts.grove !== undefined && S.grove ? opts.grove : -1;
   const W = S.W, H = S.H, N = W * H, ov = anyOverpass();
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -127,6 +138,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
     if (avoidFor !== undefined) { const o = S.owner[t]; if (o >= 0 && o !== avoidFor) e += 6; if (guns && guns[t]) e += DANGER_COST; }
     if (cover && (cover[t] & 1)) e += COVER_COST;
     if (rad && rad[t]) e += RAD.path;
+    if (grv >= 0 && S.grove[t]) e += groveCost(t, grv);
     return e;
   };
   let expanded = 0;
@@ -171,6 +183,8 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (cover && (cover[nt] & 1)) ng += COVER_COST * dir[2];
       // Radiation: robots that don't fight (and a rival's army) go round a zone where the way round is short, in if sent there.
       if (rad && rad[nt]) ng += RAD.path * dir[2];
+      // A foe's grove: a rival's robots go round it where the way round is short (GROVE.path), through it where not.
+      if (grv >= 0 && S.grove[nt]) ng += groveCost(nt, grv) * dir[2];
       if (stamp[nt] !== gen || ng < g[nt]) {
         stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
         if (safe) pocket(cur, nt);
