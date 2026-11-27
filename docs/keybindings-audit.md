@@ -217,3 +217,14 @@ Panel button shortcuts take precedence over map bindings (`js/ui.js:3047`); for 
 | Arrow keys, Home, End, Escape, Tab | Map and biome picker | Navigate cards, close, or cycle focus | js/ui.js:1553 |
 | Left/Right, Escape | Lore guide | Turn pages; close enlarged atlas first | js/ui.js:4243 |
 | Escape | Save and cloud dialogs | Close the active dialog | js/qol.js:381, js/cloud.js:111 |
+| Any non-modifier key | End-result animation | Skip to the end screen | js/ui.js:11276 |
+| Any key | Opening briefing | Close briefing and start | js/ui.js:149 |
+| Tab, Shift+Tab | Modal screen | Cycle focus within the screen | js/ui.js:2371 |
+| Arrow keys | Graphics, time of day, war scars or menu-background settings | Choose a radio option | js/ui.js:179 |
+| Arrow keys | Feedback type | Move among feedback categories | js/feedback.js:97 |
+| Escape | Records | Close the Records screen | js/goals.js:732 |
+| Enter | Multiplayer code | Join the lobby | js/mpui.js:71 |
+| Enter | Multiplayer lobby chat | Send message | js/polish3.js:433 |
+| Enter, Escape | Army Group name field | Save name, or leave the field | js/ui.js:10952 |
+| Enter, Escape | Blueprint name field | Finish editing the name | js/blueprint.js:138 |
+| Enter | Workforce preset name field | Finish editing the name | js/workforce.js:297 |
