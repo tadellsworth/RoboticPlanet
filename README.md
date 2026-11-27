@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -521,6 +521,44 @@ but for the canyon-wall art of Argos under an asteroid's southern rim, two tiles
 canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves; reduced motion holds everything still; no planet tilt,
 frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
 list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
+
+**Orbital platforms** (`SHAPE_PRESETS` `orbital`, under Heights and depths, two players; flat, `noMurmur`; the owner's idea from IDEAS.md) is a map of
+Accord station decks high over the planet, joined by **drawbridges** that a colony raises and lowers from **control boxes**. `orbitalMap`
+(js/world.js, called first by `generateMap`) lays it out point-symmetric to the tile (`tools/map-symmetry-test.js`). The map is 1.2 × the
+size's in each direction (Medium 48 × 68). **Decks**: rectangles with their corners cut, level ground, the space between them `T_CHASM` that
+`voidTile` treats as on The Ring (`ringShape` is true for both maps: nothing is built on it or laid across it; a Viaduct or Ropeway still
+spans it, and aircraft, Airships and Missiles fly over). Small and Medium have **five decks** (a home deck at each end, a big middle deck, and a
+side deck to each side of it, each over or under a home deck) and six bridges; Large and up have **seven** (the same homes and a tall middle
+deck, and two side decks on each side) and eight bridges (`ORBITAL` in js/defs.js; `S.orb`: `plats`, `br`, `bx`, `ver`).
+**Bridges**: a strip of three tiles across a gap of `g` tiles (4 to 7, by map height). Down, its tiles are ground (walkable, pathable, plated with
+hazard edges); up, `T_CHASM`. The terrain is the truth for walking, so paths, zones and territory need nothing special: `orbFlip` changes the
+tiles, calls `terrainChanged` and drops the paths of bots that crossed it. Nothing is built, dropped or terraformed on a strip, and no road, rail
+or pipe goes on it (`orbTile`; `canRoad`, `canPlace`, `tfWhere`, `airdropBlocked`), or it would stay walkable when raised. Every bridge starts **down**.
+**The order** `bridgeSet` (last in js/orders.js; `orbSet`): the colony holding either control box of the bridge, with the bridge idle and
+out of its rest, orders it up or down. **Raise**: a warning of `ORBITAL.warn` (4) s (the bridge is still walkable; lamps and the deck flash amber and the panel
+counts down), then the leaf swings up over `lift` (3) s and the tiles are void from that moment. A raise is **called off** if any robot on foot
+(any colony's) is on the strip at the end of the warning (and refused at the order if one is: `orbOccupied`, a robot's centre within `pad`
+0.35 tiles of the strip): no robot is ever lost to a raise, and a bridge that comes up drops the route of any bot that planned to cross it.
+**Lower**: the leaf swings down over `lift` s and the tiles become ground at the end of it. After any move the bridge rests `cool` (20) s (8 s
+after a called-off raise). **Control boxes** (`S.orb.bx`, two per bridge, one on each deck at each end, on clear ground beside the head): held by
+the colony with more armed robots (`isArmy`, on foot) within `reach` (4) tiles than any other; with none near, by the colony whose land it stands
+in; a tie, or no land, leaves it as it was (`orbBoxes`, once a second). Each colony starts holding the boxes on its own home deck, the rest are no
+one's. So you can always raise your own end, and the other end is yours only where you hold it. **Panel**: tap a bridge or a box: its state, who holds
+each box, and Raise or Lower (disabled with the reason), and Hold a box with warbots. The minimap shows a square at each box in the holder's colour
+and a red stripe on a raised bridge; a message says when a bridge moves or a box changes hands; `sfx('bridge')`.
+**Look and rules**: `newGame` sets the biome to Lunar (Argos's rules: no Murmur, no weather, no Arrival City or Atmosphere Engine), no dust storm, no
+plants on the decks (`S.decor` cleared). The look is js/orbital.js (display only): `orbitalSky` (space and stars above the planet's curved limb, the
+planet far below with ocean, land, two layers of cloud and a cloud shadow, a low sun; the horizon moves with the view), `orbDeckPaint` (plating,
+seams, rivets, kerb and railing, baked with the ground), `orbVoidPaint` (the hull under a deck's southern edge), `orbitalBridges` (the swinging
+leaves, corner lamps, the RAISING / LOWERING word) and `drawOrbBox`. **Economy**: as The Ring's: the standard colony's starter fields (Stalk, fertile
+soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`) with an
+oil seep or two each (`ORBITAL.oil`), Ore, Crystal, Stalk and Stone `ORBITAL.mul` (1.25) richer, each home deck topped up to `ORBITAL.stone` Stone. No
+road crosses a bridge, so goods between decks go by Workers on foot over a lowered bridge or by Viaduct (a Viaduct is a road, and spans a raised bridge).
+**The rival** (`aiBridges`, `AI_BRIDGE`, js/ai.js): lowers a raised bridge of its own once 45 to 90 s have passed (by level) and the enemy
+warbots near it are fewer than 3, at once if its home deck is cut off from yours, and never shuts itself in; Medium and up raise a bridge
+of theirs (nothing on it) when three or more of your warbots stand on its far deck within 16 tiles and outnumber its own on the near deck, none of its own is out there,
+at most two of its bridges are up, and not before minute 4. It crosses by the bridges (they start down) and flies as on The Ring (`aiAir` is
+allowed here too).
 
 **Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
