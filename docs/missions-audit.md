@@ -15,6 +15,8 @@ The hints contain 273 explicit bold-label/keyboard-key pairs. A static compariso
 
 An additional headless smoke check initialized every mission at Settler, Colonist and Warlord (144 starts), checked that its goal-state count matched its definition, and advanced three simulation ticks. All 144 starts completed without an exception. This verifies startup only: it does not prove that the goals can be reached or completed, or that their controls are accessible.
 
+For the 40 standard `built` goals without custom counters, a separate Colonist-level startup check compared each requested building against world bans and the mission's war, nuclear, megastructure, Great Uplink, lab and naval availability flags. None were blocked by those checks. This does not assess custom goals, placement and resource feasibility, or other difficulty levels.
+
 The Earthworks mission includes Flatten and Fill shallows goals (`js/missions.js:1444`). Mass Driver, Express and Workforce have explicit mission goals as well. A full mechanic-by-mechanic coverage comparison and goal reachability audit remain open.
 
 **Medium — nuclear blast description.** Chain Reaction says a nuclear missile flattens everything around its landing point. The blast has exceptions, including buildings on Trade Post ground and Arrival City (`js/sim.js:10813`), as well as the separate Command Base rules. Describe the normal destruction without saying everything is flattened and explain relevant exceptions. This is introductory text, not evidence that the launch goal itself is broken.
