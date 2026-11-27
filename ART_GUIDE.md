@@ -2080,6 +2080,46 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 39: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
+
+On Half underground (README, Half underground) the gaps in the wall between the surface and the caves were plain square
+notches: the sand met the cave floor at a hard line and nothing said "a way through". They went through Claude Design (Nov
+27 2026): the canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs showed three concepts, each at a narrow gate and
+a wide mouth, both ways the map faces, day to night, its kit and in-game screenshots with robots passing: **A, Rock
+Arch** (natural: layered rock cheeks and a span over the gap), **B, Accord Portal** (cast pylons, a lit, striped lintel, an
+apron, a stencilled ADIT 3 / UNSURVEYED BEYOND THIS MARK plate) and **C, Collapsed Breach** (tilted roof slabs, roots,
+rubble ramps, a fallen block). The owner said to go with my pick: **A** is installed (it belongs with the Hollow's stone,
+keeps the gap's floor clear, and adds no lore; B's adit would be new history, and "breach" already means the Hollow's
+shafts).
+
+**How it is made.** `renderer/b/cavemouth.js` (`c=arch|portal|breach`, `face=s|n`, `part=all|floor|rock|lip|key`, `w=` a
+gap closed up for the heroes, `nokey=1`) renders one wall section in the terrain's own projection: straight down for the
+ground, one map tile = 2 world units = 64 px after compose, so the pieces sit on the tile grid exactly, with heights shifted
+up the screen by cot 57° (the buildings' camera angle) so faces looking south show as on a building. The frame is 30 × 10
+tiles, the line where the roof begins across its middle, the cheeks' inner faces 7 tiles either side of the middle. The
+cheeks are heightfields over the wall's band, highest at the gap and fading into the flat wall over six tiles (vertex alpha),
+in the Hollow's own rock texture lifted; the span is a swept section with drips and Bloom knots. A shadow catcher keeps the
+shadows. `face=s` is the map with the surface south of the wall, `face=n` north (cavesMap turns half the seeds over end to
+end); the mouths always run east to west, so there is no other orientation. `renderer/tools/render_mouths.sh <out> arch`
+renders the ten layers (about a minute and a half), `renderer/tools/install_mouths.py <out> arch ../art` downsamples them,
+fades the lip's ends into the cheeks, crops each and prints `MOUTH_ART` (the crops' places) for `js/mouths.js`.
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `mouth-floor-<s|n>-hollow` | What lies flat: scree along the wall's foot, the cheeks' and the span's shadows | With the ground, before its grade (`mouthsFloor`): graded like the tile under it |
+| `mouth-rock-<s|n>-hollow` | The cheeks: the wall rising either side of the gap | After the ground's grade, under the robots (`mouthsUnder`), in the caves' light (`CAVE_LIGHT`, a copy made once), as the wall is |
+| `mouth-lip-<s|n>-hollow` | The span over the gap, its roof faded back into the caves | Over the robots (`mouthsOver`), caves' light: robots pass under it for about a tile |
+| `mouth-key-<s|n>-hollow` | The keystone: a hanging lobe with a Bloom knot (4 × 4 tile frame) | Over the join of the two halves |
+| `mouth-glow-<s|n>-hollow`, `mouth-keyglow-<s|n>-hollow` | The Bloom knots' light, bloomed | Added, at 45 % by day and full at night |
+
+Every layer is drawn cut at the middle and closed up: the strip's left part up to w/2 tiles past the left cheek's face, its
+right part from w/2 tiles before the right one, so a gap of any width (1 to 13 tiles) gets the same art. Drawn in code: **the
+throat** (a dark gradient over the floor under the span and into the caves), a shade over a column whose surface ground runs
+on past the mouth's line (the wall's middle wanders a row across a wide mouth; the mouth's line is the one furthest out),
+**daylight** falling in onto the cave floor by day and **the caves' violet glow** spilling out onto the surface after dark (both
+off on Graphics Saver), and on the **minimap** a pale violet bar across the wall at each mouth. Looks only: `cavesMap`, `S.cave`
+and what can pass are untouched. All of it ends `-hollow`, so it loads only with the Hollow's art (`LAZY_BIOMES`).
+
 ### Batch 38: Terraforming stage 4, the earthworks, the Sluice and the Sap Head (installed; floods, grooves and saps drawn in code)
 
 Stage 4 of terraforming (Nov 2026; README, "Terraforming, stage 4") went through Claude Design: the concept canvas

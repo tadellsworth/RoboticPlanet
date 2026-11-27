@@ -4297,7 +4297,7 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Fiber's Stalks have no art: each is a clump
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 39): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
 of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
 a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
 then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),

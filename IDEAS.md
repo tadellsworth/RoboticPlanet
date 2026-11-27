@@ -310,6 +310,9 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   asteroid with a cave); more than two starting kinds (a colony on the wall's top); whether an inside colony should get a Ropeway kit; the
   rival's early mouth rush on a long game (it expands through the mouths when it runs short, a few minutes after the opening stock is
   spent: it could go sooner); a mission that teaches the caves (none yet).
+  **The cave mouths' look** (Nov 27 2026; ART_GUIDE Batch 39, canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs): the Rock Arch is installed, my pick as the owner asked. Open: whether you prefer B (an Accord adit, which would add
+  history LORE.md doesn't have: vanguards surveying under the roof) or C; a different look per mouth size (an arch for narrow gates, a broken roof for wide mouths); the wall's own long faces are still
+  flat rock tiles away from the mouths (the cheeks fade into them over six tiles: a ridge along the whole wall would be the next step); and units are drawn in the surface's light inside the throat.
 
 ## Passenger Town, the city map (built Nov 22 2026; the owner's decisions Nov 23 2026)
 
