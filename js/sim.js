@@ -13864,6 +13864,8 @@ function updateEvents() {
     postMsg(ME, endless ? `A dust storm is blowing in (${EVENT_WARN}s), and this one will not blow over: bots will slow down and Missiles will be grounded for the rest of the game.`
       : type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
       : type === 'meteor' ? (S.hollow ? `Ringfall in ${EVENT_WARN}s! It falls through the breaches: pieces of the Ring will crater roads under the shafts of daylight, and leave rich Ore and Crystal there.`
+        : S.orb ? `Ringfall in ${EVENT_WARN}s! Pieces of the Ring are streaking in past the decks: those that hit will crater roads (never a drawbridge) and leave rich Ore and Crystal; the rest burn up in the void.`
+        : ringShape() ? `Ringfall in ${EVENT_WARN}s! The Ring is shedding pieces among its rocks: those that hit will crater roads and leave rich Ore and Crystal; the rest burn up in the void.`
         : `Ringfall in ${EVENT_WARN}s! Pieces of the Ring will crater roads, but leave rich Ore and Crystal where they land.`)
         : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Fuel Stations fuelled.`, undefined, undefined, 'warn');
     sfx('alert');
@@ -13949,6 +13951,7 @@ function ringfallHits(alone) {
 function meteorPlan(rng, t0, dur) {
   if (S.hollow) return hollowRingfall(rng, t0, dur);
   if (S.caves) return cavesRingfall(rng, t0, dur);
+  if (ringShape()) return spaceRingfall(rng, t0, dur);
   const W = S.W, H = S.H, alone = S.mode === 'colony', { mine, copies } = fairShare();
   const L = getE(S.players[0].lander), hits = [], n = ringfallHits(alone);
   for (let k = 0; k < n; k++) {
@@ -14005,12 +14008,56 @@ function cavesRingfall(rng, t0, dur) {
   return hits;
 }
 
+/**
+ * Ringfall in open space (The Ring, Orbital platforms): the pieces come in among the rocks or decks, and only the ones on a
+ * course for ground are planned (the rest burn up in the void: drawn only, see drawEvent). The usual number of strikes on
+ * each colony's share (fairShare: here always the half turn), half of them near player 0's Command Base, each one with its
+ * twin. A strike lands only where ringfallSpaceOk holds for both: on solid ground clear of the edge, off the drawbridges and
+ * their control boxes, off a Trade Post's ground, so what it leaves can be reached and mined.
+ */
+function spaceRingfall(rng, t0, dur) {
+  const W = S.W, H = S.H, alone = S.mode === 'colony', { mine, copies } = fairShare();
+  const L = getE(S.players[0].lander), hits = [], n = ringfallHits(alone);
+  for (let k = 0; k < n; k++) {
+    let x = -1, y = -1;
+    for (let tries = 0; tries < 80 && x < 0; tries++) {
+      let i, j;
+      if (L && k % 2 === 0) { const a = rng() * Math.PI * 2, r = 4 + rng() * (14 + tries / 8); i = Math.round(L.x + dcos(a) * r); j = Math.round(L.y + dsin(a) * r); } else { i = Math.floor(rng() * W); j = Math.floor(rng() * H); }
+      if (inMap(i, j) && mine(i, j) && copies(i, j).every(([a, b]) => ringfallSpaceOk(a, b))) { x = i; y = j; }
+    }
+    if (x < 0) continue;
+    const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
+    for (const [i, j] of copies(x, y)) hits.push({ x: i, y: j, at, roll, done: 0 });
+  }
+  return hits;
+}
+/**
+ * Can a piece of the Ring come down on tile (i, j) in open space (spaceRingfall)? Ground with ground all round it (no
+ * sliver at the edge of a rock or deck), not on a drawbridge's strip nor beside one (its crater would reach the strip), not
+ * on a control box nor beside one, and not on a Trade Post's ground.
+ */
+function ringfallSpaceOk(i, j) {
+  if (!inMap(i, j) || S.terrain[tIdx(i, j)] !== T_GROUND || calmAt(i + 0.5, j + 0.5)) return false;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    const a = i + di, b = j + dj;
+    if (!inMap(a, b)) return false;
+    const t = tIdx(a, b);
+    if (Math.abs(di) + Math.abs(dj) === 1 && S.terrain[t] !== T_GROUND) return false;
+    if (orbTile(t)) return false;
+  }
+  if (S.orb && S.orb.bx.some((b) => Math.abs(b.x - i) <= 1 && Math.abs(b.y - j) <= 1)) return false;
+  return true;
+}
+/** Is tile t a control box's (Orbital platforms)? No deposit lies there. */
+function orbBoxTile(t) { return !!(S.orb && S.orb.bx.some((b) => b.y * S.W + b.x === t)); }
+
 /** A meteor lands on tile (h.x, h.y). */
 function meteorImpact(E, h) {
   const cx = h.x + 0.5, cy = h.y + 0.5, owner = S.owner[tIdx(h.x, h.y)];
   if (domeCatch(cx, cy, -1, 'meteor')) return; // (a Shield Dome takes the piece of the Ring)
+  const space = ringShape(); // (The Ring, Orbital platforms: no air, so no smoke; a spray of dust instead)
   addFx('boom', cx, cy, { r: 1.7 });
-  addFx('smoke', cx, cy, { r: 1 });
+  addFx(space ? 'spacedust' : 'smoke', cx, cy, space ? { r: 1.4, life: 1.4 } : { r: 1 });
   addFx('crater', cx, cy, { life: 6 });
   if (isMe(owner)) {
     sfx('boom', cx, cy);
@@ -14022,7 +14069,7 @@ function meteorImpact(E, h) {
     const i = h.x + di, j = h.y + dj;
     if (Math.abs(di) + Math.abs(dj) > 1 || !inMap(i, j)) continue;
     const t = tIdx(i, j);
-    if (!S.road[t] || S.bAt[t] || crossTile(t)) continue;
+    if (!S.road[t] || S.bAt[t] || crossTile(t) || orbTile(t)) continue;
     const o = wayOwner(t); // whose road it is (one out past its owner's border is still theirs)
     wreckRoad(t, o, '');
     if (o >= 0) { wrecked.push([o, i, j]); E.cratered[o] = (E.cratered[o] || 0) + 1; }
@@ -14042,12 +14089,12 @@ function meteorImpact(E, h) {
   spots.sort((a, b) => a[0] - b[0]);
   let placed = S.caves ? 99 : 0; // (Half underground: a strike on the surface leaves its crater but no Ore or Crystal there)
   for (const [, i0, j0] of spots) {
-    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i0, j0)) continue;
+    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : S.orb ? ORBITAL.ringfall : 3) || !inMap(i0, j0)) continue;
     // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
     let t = tIdx(i0, j0);
     if (calmAt(i0 + 0.5, j0 + 0.5)) { if (S.terrain[t] !== T_GROUND || (t = calmSpill(t)) < 0) continue; }
     const i = t % S.W, j = (t / S.W) | 0;
-    if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) continue;
+    if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t] || orbTile(t) || orbBoxTile(t)) continue;
     if (wrecked.some(([, wi, wj]) => wi === i && wj === j)) continue;
     S.res[t] = r; S.amt[t] = amt;
     if (S.grow) S.grow[t] = 1;
@@ -14080,6 +14127,7 @@ function drizzleOk(t) {
   if (calmAt(i + 0.5, j + 0.5)) return false; // (a Trade Post's ground)
   if (S.uplinks && S.uplinks.some((u) => Math.abs(u.x - i) <= 1 && Math.abs(u.y - j) <= 1)) return false;
   if (S.wrecks && S.wrecks.some((w) => w.tiles.includes(t))) return false;
+  if (S.orb && (orbTile(t) || orbBoxTile(t))) return false; // (Orbital platforms: never on a drawbridge or a control box)
   return true;
 }
 
@@ -14121,7 +14169,9 @@ function drizzlePlan(rng) {
   const { mine, copies } = fairShare();
   const L = getE(S.players[0].lander);
   const ok = (list) => list.every(([i, j]) => inMap(i, j) && drizzleOk(tIdx(i, j)));
-  for (let tries = 0; tries < DRIZZLE_TRIES; tries++) {
+  // (The Ring and Orbital platforms: most of the ring round the base is void, so it looks three times as long, further out)
+  const most = DRIZZLE_TRIES * (ringShape() ? 3 : 1);
+  for (let tries = 0; tries < most; tries++) {
     let i, j;
     if (L) {
       const a = rng() * Math.PI * 2, d = DRIZZLE_NEAR[0] + rng() * (DRIZZLE_NEAR[1] - DRIZZLE_NEAR[0] + tries);

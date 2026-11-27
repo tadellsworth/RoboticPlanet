@@ -339,8 +339,8 @@ function generateMap(seed, W, H, cfg) {
   field(bx - 6 + jit(), by - 2 + jit(), 2.5, R_STALK, 0.85 * stampDens, true);
   field(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens, true);
   field(bx + 6 + jit(), by + jit(), 1.8, R_BOULDER, 0.8 * stampDens, true);
-  field(bx - 4 + jit(), by - 5, 1.3, R_ORE, 0.9 * stampDens, true);
-  field(bx + 4 + jit(), by - 5, 1.3, R_CRYSTAL, 0.9 * stampDens, true);
+  const oreX = bx - 4 + jit(); field(oreX, by - 5, 1.3, R_ORE, 0.9 * stampDens, true);
+  const crysX = bx + 4 + jit(); field(crysX, by - 5, 1.3, R_CRYSTAL, 0.9 * stampDens, true);
   field(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens, true);
   field(bx, by - 7.5, 2.0, F_FERTILE, 0.85, true);
   // Richer fields just beyond the starting border reward expanding with Outposts. (In a corner
@@ -433,6 +433,32 @@ function generateMap(seed, W, H, cfg) {
       placed++;
     }
   }
+
+  // The starter Ore and Crystal fields hold at least HOME_FIELD tiles each: a small random stamp can come to a tile, and on
+  // maps whose richer fields beyond lie over water, down a mesa or out of reach that was all a colony had at home. Laid
+  // once every other field is down (a later one can stamp over part of a starter field): the free tiles nearest the
+  // field's middle, on the landing terrace's level and off the landing zone, within 3 tiles, else 4.5. The twins follow
+  // with the map's symmetry (see symmetrize below).
+  const floorField = (cx, cy, type, min) => {
+    for (const R of [3, 4.5]) {
+      let have = 0;
+      const c = [], seen = new Set();
+      for (let j = Math.floor(cy - R); j <= Math.ceil(cy + R); j++) {
+        for (let i = Math.floor(cx - R); i <= Math.ceil(cx + R); i++) {
+          const d2 = dist2(i, j, cx, cy), t = i < 1 || j < 1 || i >= W - 1 || j >= H - 1 ? -1 : src4(i, j);
+          if (d2 > R * R || t < 0 || seen.has(t)) continue;
+          seen.add(t);
+          if (res[t] === type) have++;
+          else if (terrain[t] === T_GROUND && !res[t] && !fert[t] && elev[t] === baseLevel && !nearHome(i, j, 3.9)) c.push([d2, t]);
+        }
+      }
+      c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      for (let k = 0; k < c.length && have < min; k++, have++) res[c[k][1]] = type;
+      if (have >= min) return;
+    }
+  };
+  floorField(oreX, by - 5, R_ORE, HOME_FIELD);
+  floorField(crysX, by - 5, R_CRYSTAL, HOME_FIELD);
 
   // 3) Player 0 base: a flat landing zone.
   field(bx, by, 3.4, -1, 0, true);
@@ -3659,8 +3685,10 @@ function newGame(opts) {
   mapEventsStart(m);
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
   if (m.orbital) S.orb = orbInit(m.orbital, m.bases); // (Orbital platforms: its decks, drawbridges and control boxes: orbitalMap)
+  const preRes = S.res.slice(), preAmt = S.amt.slice(); // (what the town or the yard cuts at home is laid again beside it: homeFieldFloor)
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   if (SHAPE_PRESETS[settings.shape].walker) walkerSetup(m.bases); // (the Walking Factory: its yard and loop round the middle)
+  if (!opts.layout && !['hollow', 'caves', 'orbital', 'asteroids'].some((k) => SHAPE_PRESETS[settings.shape][k])) homeFieldFloor(m.bases, settings, preRes, preAmt); // (what a later layer cut from the starter fields: see homeFieldFloor)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
@@ -3743,6 +3771,82 @@ function newGame(opts) {
   const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || (S.caves && S.caves.seats[ME] ? (S.caves.seats[ME].inside ? SH.tipIn : SH.tipOut) : SH.tip));
   if (tip && L0) postMsg(ME, tip, L0.x, L0.y, 'info');
   return S;
+}
+
+/**
+ * The starter fields' floor, once every layer of the map is down (generateMap's floorField lays it; a later layer can cut
+ * a starter field again: Canyon maze's walls, the Walking Factory's yard, Passenger Town's streets). First, the Ore and
+ * Crystal that the town or the yard cut within HOME_CUT_R tiles of a Command Base (`pre`, `preAmt`: the map before them;
+ * Passenger Town's streets run over a colony's second fields, out in front of its base) are laid again just outside, as
+ * many tiles as rich, round the free tiles nearest where they lay. Then each colony's home, within HOME_FIELD_R tiles of
+ * its Command Base, holds at least HOME_FIELD Ore and HOME_FIELD Crystal tiles: short of that, the field nearest the base
+ * grows by the free tiles nearest it (open ground on the base's level, off the landing zone, the town and the yard). Laid
+ * on player 0's home and copied onto each twin with the map's symmetry (the half turn, the quarter turns, Long Haul 2v2's
+ * mirrors); three colonies on a turned map are each made up on their own (the turn is rounded, so tile for tile does not
+ * hold), to the same count.
+ */
+const HOME_FIELD_R = 9, HOME_CUT_R = 16;
+function homeFieldFloor(bases, st, pre, preAmt) {
+  const W = S.W, H = S.H, N = W * H, sh = SHAPE_PRESETS[st.shape || 0] || {}, quad = quadMap(st), h4 = haul4Map(st);
+  const np = quad || h4 ? 4 : st.players === 3 ? 3 : 2;
+  const mir = (t) => N - 1 - t, lr = (t) => t - (t % W) + (W - 1 - (t % W)), tb = (t) => (H - 1 - ((t / W) | 0)) * W + (t % W), r4 = (t) => (t % W) * W + (W - 1 - ((t / W) | 0));
+  const orbit = (t) => h4 ? [t, lr(t), mir(t), tb(t)] : np === 2 || sh.twin ? [t, mir(t)] : quad ? [t, r4(t), r4(r4(t)), r4(r4(r4(t)))] : [t];
+  const free = (t, e) => {
+    const i = t % W, j = (t / W) | 0;
+    if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1 || S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.elev[t] !== e) return false;
+    if ((S.tidal && S.tidal[t]) || (S.fault && S.fault[t]) || (S.lava && S.lava[t]) || (S.ford && S.ford[t])) return false;
+    if (bases.some((b) => b && dist2(i, j, b.x, b.y) <= 3.9 * 3.9)) return false; // (the landing zone)
+    return !(S.town && townIn(i, j)) && !(S.walker && walkerYard(i, j));
+  };
+  const amtOf = (r) => clamp(Math.round(RES[r].amount * (RESOURCE_PRESETS[st.rich ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH]).amount * (sh.haulRich || 1)), 1, 255);
+  const homes = np === 3 ? bases.slice(0, 3) : [bases[0]];
+  for (const b of homes) {
+    if (!b) continue;
+    const e = S.elev[b.y * W + b.x];
+    // What the town or the yard cut (only theirs: the map's own fields are as generateMap laid them).
+    for (const r of pre ? [R_ORE, R_CRYSTAL] : []) {
+      const lost = [];
+      for (let t = 0; t < N; t++) if (pre[t] === r && S.res[t] !== r && dist2(t % W, (t / W) | 0, b.x, b.y) <= HOME_CUT_R * HOME_CUT_R) lost.push(t);
+      if (!lost.length) continue;
+      const cx = lost.reduce((a, t) => a + (t % W), 0) / lost.length, cy = lost.reduce((a, t) => a + ((t / W) | 0), 0) / lost.length;
+      const amt = Math.round(lost.reduce((a, t) => a + preAmt[t], 0) / lost.length), c = [];
+      for (let t = 0; t < N; t++) {
+        const i = t % W, j = (t / W) | 0;
+        if (dist2(i, j, b.x, b.y) > (HOME_CUT_R + 2) * (HOME_CUT_R + 2) || !orbit(t).every((u) => free(u, e))) continue;
+        c.push([dist2(i, j, cx, cy), t]);
+      }
+      c.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+      let laid = 0;
+      for (let k = 0; k < c.length && laid < lost.length; k++) {
+        if (!orbit(c[k][1]).every((u) => free(u, e))) continue;
+        for (const u of orbit(c[k][1])) { S.res[u] = r; S.amt[u] = amt; if (S.grow) S.grow[u] = 1; }
+        laid++;
+      }
+    }
+    for (const r of [R_ORE, R_CRYSTAL]) {
+      let have = 0, near = -1, nd = Infinity;
+      for (let j = Math.max(0, b.y - HOME_FIELD_R); j <= Math.min(H - 1, b.y + HOME_FIELD_R); j++) for (let i = Math.max(0, b.x - HOME_FIELD_R); i <= Math.min(W - 1, b.x + HOME_FIELD_R); i++) {
+        const d = dist2(i, j, b.x, b.y);
+        if (d > HOME_FIELD_R * HOME_FIELD_R || S.res[j * W + i] !== r) continue;
+        have++;
+        if (d < nd) { nd = d; near = j * W + i; }
+      }
+      if (have >= HOME_FIELD) continue;
+      // (no field at home at all: the standard starter spot, up and to the side of the base)
+      const fx = near >= 0 ? near % W : b.x + (r === R_ORE ? -4 : 4), fy = near >= 0 ? (near / W) | 0 : b.y - 5, c = [];
+      for (let j = fy - 4; j <= fy + 4; j++) for (let i = fx - 4; i <= fx + 4; i++) {
+        if (i < 0 || j < 0 || i >= W || j >= H || dist2(i, j, b.x, b.y) > HOME_FIELD_R * HOME_FIELD_R) continue;
+        const t = j * W + i;
+        if (orbit(t).every((u) => free(u, e))) c.push([dist2(i, j, fx, fy), t]);
+      }
+      c.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+      for (let k = 0; k < c.length && have < HOME_FIELD; k++) {
+        if (!orbit(c[k][1]).every((u) => free(u, e))) continue;
+        for (const u of orbit(c[k][1])) { S.res[u] = r; S.amt[u] = near >= 0 ? S.amt[near] : amtOf(r); if (S.grow) S.grow[u] = 1; } // (as rich as the field it joins)
+        have++;
+      }
+    }
+  }
 }
 
 /** The biome of the current game. */

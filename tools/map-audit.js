@@ -8,7 +8,7 @@
 //   node tools/map-audit.js --ai 12            ...and a 12-minute computer-only game on each
 //   node tools/map-audit.js --only "The Ring"  one map type (a part of its name; "=Islands" for exactly that name)
 //   node tools/map-audit.js --json out.json    the full results as JSON too
-//   node tools/map-audit.js --strict           ...and count the thin starter fields of the maps in THIN as failures too
+//   (--strict is accepted and changes nothing: every map is held to the starter-field floor now)
 // Exits non-zero when a check fails (an exception, a start off the ground, a colony that cannot reach another by the
 // map's crossing, a home with too few Ore or Crystal tiles in walking reach (HOME_FLOOR), a stalled rival or a crash).
 'use strict';
@@ -17,21 +17,17 @@ const path = require('node:path');
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const aiMin = +opt('--ai', 0), only = opt('--only', ''), jsonOut = opt('--json', ''), seeds = opt('--seeds', '11,21,37').split(',').map(Number);
-const sizes = opt('--sizes', '0,2').split(',').map(Number), strict = args.includes('--strict');
+const sizes = opt('--sizes', '0,2').split(',').map(Number);
 // The starter fields: every colony's home has at least this many Ore and Crystal tiles (deposit tiles, not their amounts) in
 // walking reach within HOME_R tiles of its Command Base: the starter field and the richer one just beyond the border (Standard's
 // lies 13.5 tiles out). A map can ask for more: Orbital platforms guarantees its fields' size (ORBITAL.field), so a wiped field
 // shows up there at once. Colonies whose map puts none at home are skipped (Half underground's surface colonies: their Ore and
 // Crystal come through the cave mouths).
-const HOME_R = 16, HOME_FLOOR = { ore: 3, crystal: 2 };
-const FLOOR_OF = { 'Orbital platforms': { ore: 8, crystal: 8 }, 'The Ring': { ore: 6, crystal: 6 } };
-// Maps whose starter fields are the generic small random stamps (generateMap's `field`), which a seed can leave at a tile or
-// two: the floor on them is the owner's open call (IDEAS.md, map audit follow-ups). Their thin homes are listed, not failed
-// (--strict fails them).
-// (Found by a sweep of seeds 1 to 8, 11, 21, 37, 99, 123 on Small to Immense, Nov 27 2026: on these a seed's two Ore or Crystal fields
-// come to 1 or 2 tiles within 16; every other map type held the floor on every case.)
-const THIN = new Set(['Ring valley', 'Oases', 'Crossroads', 'Lakes', 'Four Isles', 'Long Haul 2v2', 'Passenger Town', 'Fault line',
-  'Canyon maze', 'River delta', 'The Dam', 'The Walking Factory']);
+const HOME_R = 16, HOME_FLOOR = { ore: 4, crystal: 4 }; // (HOME_FIELD: the starter field alone holds that many)
+const FLOOR_OF = { 'Orbital platforms': { ore: 8, crystal: 8 }, 'The Ring': { ore: 6, crystal: 6 }, 'The Hollow': { ore: 3, crystal: 3 } }; // (the Hollow's own home fields hold 3: hollowMap)
+// (Every map holds the floor now: each colony's starter Ore and Crystal fields have at least HOME_FIELD tiles, defs.js. Before
+// that, a sweep of seeds 1 to 8, 11, 21, 37, 99, 123 on Small to Immense found twelve map types whose small random stamps a seed
+// could leave at a tile or two; they were listed as THIN rather than failed until the floor went in, Nov 27 2026.)
 const modules = ['util', 'defs', 'world', 'path', 'sim', 'ai', 'missions', 'orders', 'landmarks', 'city', 'walker', 'dam'];
 const source = modules.map((name) => readFileSync(path.join(__dirname, '..', 'js', name + '.js'), 'utf8')).join('\n');
 
@@ -236,7 +232,7 @@ const api = new Function('sfx', 'PROGRESS', source + `
 `)(() => {}, args.includes('--progress') ? (s, ms) => console.error('    ' + Math.round(s / 60) + ' min at ' + Math.round(ms / 1000) + ' s') : null);
 
 const results = [];
-let failures = 0, thinCases = 0;
+let failures = 0;
 const pick = api.SHAPE_PRESETS.map((p, k) => [p, k]).filter(([p]) => !only || (only[0] === '=' ? p.name === only.slice(1) : p.name.toLowerCase().includes(only.toLowerCase())));
 for (const [preset, shape] of pick) {
   const row = { map: preset.name, cases: [], ai: [] };
@@ -252,7 +248,7 @@ for (const [preset, shape] of pick) {
           try { r = api.audit(opts); } catch (e) { r = { problems: ['exception: ' + e.stack.split('\n').slice(0, 3).join(' | ')] }; }
           r.label = label; r.size = size; r.seed = seed; r.teams = teams; r.np = players;
           row.cases.push(r);
-          if (r.thin && r.thin.length) { if (THIN.has(preset.name) && !strict) { console.log('THIN ' + label + ': ' + r.thin.join('; ')); thinCases++; } else r.problems.push(...r.thin); }
+          if (r.thin && r.thin.length) r.problems.push(...r.thin);
           if (r.problems.length) { failures++; console.log('PROBLEM ' + label + ': ' + r.problems.join('; ')); }
         }
       }
@@ -282,6 +278,5 @@ for (const [preset, shape] of pick) {
   results.push(row);
 }
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify(results, null, 1));
-if (thinCases) console.log(thinCases + ' thin starter-field cases on maps in THIN (the owner\'s open call; --strict fails them)');
 console.log(failures ? failures + ' problem cases' : 'no problems');
 process.exitCode = failures ? 1 : 0;

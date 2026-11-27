@@ -316,6 +316,20 @@ Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it)
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
 Planetary budget. Matches with three or four colonies can use Immense.
+**Starter fields** (every map, Nov 27 2026): each colony's starter Ore field and starter Crystal field hold at least
+`HOME_FIELD` (4) tiles. The plain stamp (`field` in `generateMap`, a 1.3-tile radius) comes to one to five tiles, and on maps whose
+richer fields beyond lie over water, down a mesa or out of walking reach (Oases, Crossroads, Ring valley, Lakes, Passenger
+Town and others) a seed could leave a home with a tile or two. `floorField` makes each up from the free tiles nearest its middle
+(on the landing terrace's level, off the landing zone) once every other field is down, before the map is mirrored or turned, so
+the twins match tile for tile; `homeFieldFloor` (in `newGame`) does it again for whatever a later layer cut (Canyon maze's
+walls, the Walking Factory's yard, Passenger Town's streets), copied with the map's symmetry (three colonies on a turned map each
+on their own, to the same count). Before that, it lays again just outside the town or the yard the Ore and Crystal they cut within
+`HOME_CUT_R` (16) tiles of a base, as many tiles and as rich: Passenger Town's streets ran over the second fields out in front of
+each base (on Small for two, seed 7, the Ore within 16 tiles went from 10 to 2). A
+field that already holds 4 is left alone; the richer fields beyond are untouched. The Ring (`RING.field`, 4) and Orbital
+platforms (`ORBITAL.field.home`, 5) lay their own; the Hollow's (3, `hollowMap`) and Half underground's inside colonies' are
+their own too, and its surface colonies have no Ore or Crystal by design. `tools/map-audit.js` fails any home with fewer than 4
+Ore or 4 Crystal tiles in walking reach within 16 tiles (more on The Ring and Orbital platforms).
 With Planetary events enabled, Immense Ringfall targets up to nine sites per colony's share, and Planetary up to
 eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
 type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
@@ -506,7 +520,10 @@ Plane drops, Airships and Masts, Vulcan Bombers, Missiles. There are no ships or
 (the canyon wall under each rim) and rules hold: silent (no Murmur, which `noMurmur` also says), no weather, no Arrival City or Atmosphere Engine
 (`worldBan`), no Crystal from the Deep Core; the new-game Biome row reads *set by the map: The Ring* (`biomeForced` in js/ui.js,
 the Observer's setup too). Planetary events run but **no dust storm** (`updateEvents`; the Endless dust storm challenge does nothing there);
-Ringfall, solar flares and the Wren come. **Economy**: Argos's, with **more oil** than any other map (`RING.oil`: three fields of four
+Ringfall, solar flares and the Wren come. Ringfall here is the Ring shedding pieces among its own rocks (`spaceRingfall`, see Planetary
+events): the usual strikes, all on solid rock clear of the edge, so its deposits can be mined; the misses burn up over the void
+(drawn only). Measured over 30 seeds before and after (Nov 27 2026): every strike was already on ground and each colony got
+about 17 deposit tiles an event, as on Standard, but 1 strike in 5 came down on an asteroid's edge tile; now none does. **Economy**: Argos's, with **more oil** than any other map (`RING.oil`: three fields of four
 seeps on each home asteroid, two of three on the middle rock (and its twin) and one of three on every side and resource rock, at
 least ten times a standard map's) so Fuel (Oil Pump, Refinery) is never short; the starter fields are the standard colony's (the same
 offsets from the Command Base) and richer ones lie further out, the Ore and Crystal ones each made up to `RING.field` (4) tiles where the asteroid's
@@ -580,7 +597,11 @@ the other decks to `deck` (4), from the free tiles nearest the field where the r
 `orbitalMap`; before Nov 27 2026 a Small home deck could have one Ore tile, or none). Crags keep 13 tiles from each Command Base, and a bridge head's
 clear ground is 3 tiles deep and 2 either side of the strip (the control boxes stand on it). On Small the side and middle decks are nearly all
 bridge heads and the post's middle, so their fields are few. A
-lowered bridge's road joins the two decks' road networks, so Haulers and trucks cross on it; raised, it is cut, and goods cross by Viaduct (which spans a raised bridge).
+lowered bridge's road joins the two decks' road networks, so Haulers and trucks cross on it; Ringfall comes in past the decks
+(`spaceRingfall`): never on or beside a drawbridge's strip or a control box (before Nov 27 2026, 1 strike in 15 on Small fell on a
+lowered bridge and cratered its road, which no one re-laid, and now and then one hit a box), nor on a deck's edge tile, and each
+strike leaves up to `ORBITAL.ringfall` (4) tiles, not 3: the decks are crowded (about 22 tiles a colony an event against
+Standard's 17); raised, it is cut, and goods cross by Viaduct (which spans a raised bridge).
 **The rival** (`aiBridges`, `AI_BRIDGE`, js/ai.js): lowers a raised bridge of its own once 45 to 90 s have passed (by level) and the enemy
 warbots near it are fewer than 3, at once if its home deck is cut off from yours, and never shuts itself in; Medium and up raise a bridge
 of theirs (nothing on it) when three or more of your warbots stand on its far deck within 16 tiles and outnumber its own on the near deck, none of its own is out there,
@@ -3452,7 +3473,12 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   again, most with a 20 s warning. **Dust
   storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Ringfall** (a meteor
   shower, pieces of the planet's Ring; type `'meteor'`):
-  `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
+  `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`; in open space,
+  The Ring and Orbital platforms, `spaceRingfall`: only pieces on a course for ground are planned, each on solid ground clear of
+  the edge (`ringfallSpaceOk`: ground all round, no drawbridge strip or control box within a tile, no Trade Post ground, for
+  the strike and its twin), half of them near the base; each strike on Orbital platforms leaves up to `ORBITAL.ringfall` (4)
+  tiles; drawn streaking in long and low from the backdrop, white-hot, with misses burning up over the void, `drawSpaceRingfall`,
+  and a ring of dust in place of smoke, fx `spacedust`), each
   cratering roads (re-planned at once if the Cement allows), denting buildings and bots (never below 1 armor) and
   leaving a rich Ore or Crystal deposit (Uranium sometimes in a Nuclear race; a piece that would lie on a Trade Post's
   ground lies just off it instead, `calmSpill`); it ends "Ringfall over. Fresh Ore and
@@ -3476,7 +3502,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   a spot `DRIZZLE_NEAR` (10–30, further the more tries it takes) tiles from player 0's Command Base, copied onto every
   colony's share as Ringfall's are (`fairShare`, which `meteorPlan` uses too), every copy on open ground no colony holds
   (`drizzleOk`: bare ground, no road, rail, pipe, plan, building, ramp, fertile soil, lava, ford, tide or fault, off a
-  Trade Post's ground, an Uplink or a wreck), or none falls this time. None in the Hollow (`drizzleOn`):
+  Trade Post's ground, an Uplink or a wreck; on Orbital platforms never a drawbridge's strip or a control box), or none falls this time (on The Ring and Orbital platforms
+it looks three times as long, `DRIZZLE_TRIES` × 3, since most of the ground round a base is void: on The Ring, a quarter
+hour in, one drizzle in eight found no spot before, one in sixty now). None in the Hollow (`drizzleOn`):
   it's underground, where only Ringfall reaches, through the breaches. It leaves `DRIZZLE_TILES` (2) tiles of Ore or Crystal (half and half) at
   `DRIZZLE_RICH` (0.4) times a Ringfall deposit's amount each, or in a Nuclear race now and then (`DRIZZLE_URANIUM`, 10%) a
   single tile of Uranium; no damage, no crater, no war scar, and a Shield Dome doesn't stop it (it never lands in a

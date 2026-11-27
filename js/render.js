@@ -7984,7 +7984,8 @@ function drawEvent(ctx, ox, oy, z) {
     ctx.fillStyle = `rgba(255,214,120,${0.1 * fade * pulse})`;
     ctx.fillRect(0, 0, R.w, R.h);
     ctx.restore();
-  } else if (E.type === 'meteor' && E.hits) {
+  } else if (E.type === 'meteor' && E.hits && ringShape()) drawSpaceRingfall(ctx, ox, oy, z, E, now);
+  else if (E.type === 'meteor' && E.hits) {
     for (const h of E.hits) {
       const dt = h.at - now;
       if (h.done || dt > 3) continue;
@@ -8031,6 +8032,53 @@ function drawEvent(ctx, ox, oy, z) {
       }
     }
   }
+}
+
+/**
+ * Ringfall in open space (The Ring, Orbital platforms; see spaceRingfall): each piece streaks in from far out over the
+ * backdrop, low and long, white-hot with nothing to slow it, onto its marked spot. Others miss: they cross the void beside
+ * the rocks or decks and burn up before they reach anything (drawn only, from the event's number: nothing lands).
+ */
+function drawSpaceRingfall(ctx, ox, oy, z, E, now) {
+  const IN = 2.4; // (seconds a piece shows on its way in)
+  const streak = (hx, hy, dx, dy, len, a, head, burn) => {
+    const tx = hx - dx * len, ty = hy - dy * len, g = ctx.createLinearGradient(hx, hy, tx, ty);
+    g.addColorStop(0, burn ? `rgba(255,190,120,${0.9 * a})` : `rgba(240,248,255,${a})`); g.addColorStop(0.35, `rgba(170,205,255,${0.45 * a})`); g.addColorStop(1, 'rgba(120,150,255,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = Math.max(2, z * 0.14); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.lineCap = 'butt';
+    if (head > 0) fxGlow(ctx, hx, hy, z * head, burn ? '#ffb070' : '#dff0ff', 0.9 * a);
+  };
+  ctx.save();
+  for (const h of E.hits) {
+    const dt = h.at - now;
+    if (h.done || dt > 3) continue;
+    const x = ox + (h.x + 0.5) * z, y = oy + (h.y + 0.5) * z;
+    ctx.globalAlpha = 0.5 + 0.4 * Math.sin(R.time * 12);
+    ctx.strokeStyle = '#ff5a3d'; ctx.lineWidth = 2;
+    ctx.setLineDash([z * 0.15, z * 0.1]);
+    ctx.beginPath(); ctx.arc(x, y, z * (0.6 + dt * 0.2), 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    if (dt > IN) continue;
+    // (from far off to the side and above: a long flat run in over the backdrop)
+    const k = dt / IN, dx = E.dir * 0.82, dy = -0.57, far = k * z * 22;
+    streak(x + dx * far, y + dy * far, -dx, -dy, z * (3 + 4 * (1 - k)), Math.min(1, (1 - k) * 3), 0.45 + 0.25 * (1 - k), false);
+  }
+  // The misses: a few pieces a second crossing the void, burning out before they reach anything.
+  const t = now - E.t0, span = E.t1 - E.t0;
+  if (t > 0 && t < span) {
+    const W = S.W, H = S.H;
+    for (let q = 0; q < 40; q++) {
+      const t0 = hash2(E.n || 1, q, 91) * (span - 2), life = 1.2 + hash2(q, E.n || 1, 13) * 0.8, u = (t - t0) / life;
+      if (u < 0 || u > 1) continue;
+      const i = Math.floor(hash2(q, 7, (E.n || 1) * 3) * W), j = Math.floor(hash2(q, 11, (E.n || 1) * 5) * H);
+      if (S.terrain[j * W + i] !== T_CHASM) continue; // (only where it falls clear of every rock and deck)
+      const ex = ox + (i + 0.5) * z, ey = oy + (j + 0.5) * z, dx = E.dir * 0.82, dy = -0.57, far = (1 - u) * z * 14;
+      streak(ex - dx * (z * 2) + dx * far, ey - dy * (z * 2) + dy * far, -dx, -dy, z * (2 + 3 * (1 - u)), Math.min(1, (1 - u) * 1.5) * Math.min(1, u * 5), u > 0.75 ? 0.3 * (1 - u) * 4 : 0.2, u > 0.6);
+    }
+  }
+  ctx.restore();
 }
 
 /**
@@ -10222,6 +10270,20 @@ function drawEffects(ctx, ox, oy, z) {
           ctx.globalAlpha = 0.45 * (1 - k2);
           ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.5 - k2 * z * 0.2, z * (0.12 + k2 * 0.18), 0, Math.PI * 2); ctx.fill();
         }
+        break;
+      }
+      case 'spacedust': {
+        // Ringfall in open space (The Ring, Orbital platforms): no air for smoke, so the strike flings a sharp ring of grey
+        // dust and grit straight out, which settles back as it fades.
+        const n = 14, rr = z * (f.r || 1) * (0.35 + 1.25 * Math.sqrt(k));
+        ctx.fillStyle = fxDim('#b9b4ad');
+        for (let q = 0; q < n; q++) {
+          const a = (q / n) * Math.PI * 2 + hash2(q, Math.floor(f.x * 5), 41) * 0.4, d = rr * (0.8 + 0.3 * hash2(q, Math.floor(f.y * 5), 17));
+          ctx.globalAlpha = 0.7 * (1 - k);
+          ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.6, Math.max(1, z * 0.07 * (1 - k * 0.5)), 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 0.28 * (1 - k); ctx.strokeStyle = fxDim('#d8d2c8'); ctx.lineWidth = Math.max(1, z * 0.1);
+        ctx.beginPath(); ctx.ellipse(x, y, rr, rr * 0.6, 0, 0, Math.PI * 2); ctx.stroke();
         break;
       }
       case 'crater': {

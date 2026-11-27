@@ -3059,9 +3059,22 @@ Partly done (Nov 27 2026): the floor on the starter fields is in for **Orbital p
 the start: its home deck is short and the bridge heads, rim and crags wiped the stamps, down to one Ore tile or none on
 Small; now each home Ore and Crystal field holds at least 5 tiles, the soil 8, and every other deck has an Ore and a
 Crystal field of 4) and **The Ring** (the asteroid's edge could leave one Crystal tile; now 4 a field). `tools/map-audit.js`
-now fails a home with fewer than 3 Ore or 2 Crystal tiles within 16 tiles (more on those two maps). Still open, the
-owner's call: the generic maps' small random stamps, which a seed can still leave at a tile or two. The audit lists
-them as THIN rather than failing (`--strict` fails them): Ring valley, Oases, Crossroads, Lakes, Four Isles, Long Haul
-2v2, Passenger Town, Fault line, Canyon maze, River delta, The Dam and The Walking Factory. Also seen: on Orbital
+now fails a home with fewer than 3 Ore or 2 Crystal tiles within 16 tiles (more on those two maps).
+
+Done (Nov 27 2026, the owner: "yeah do that new check for other maps"): **Starter fields: give the starter Ore and
+Crystal fields a minimum size.** On every map each colony's starter Ore field and starter Crystal field hold at least
+`HOME_FIELD` (4) tiles (`floorField` in `generateMap`, where the starter fields are stamped, before the map is mirrored or
+turned; `homeFieldFloor` in `newGame` again for what a later layer cut: Canyon maze's walls, the Walking Factory's yard,
+Passenger Town's streets).
+Fields that already hold 4 are left as they are, and the fields beyond are untouched. The THIN list (Ring valley, Oases,
+Crossroads, Lakes, Four Isles, Long Haul 2v2, Passenger Town, Fault line, Canyon maze, River delta, The Dam and The
+Walking Factory: 71 thin homes over seeds 1 to 8, 11, 21, 37, 99, 123 on Small to Immense) is empty, and
+`tools/map-audit.js` now fails any home with fewer than 4 Ore or 4 Crystal tiles in walking reach (what `--strict` did; the
+flag is accepted and changes nothing). Passenger Town's town did cut a colony's second fields (the Ore and Crystal beyond
+the border lie out in front of the base, under the streets: on Small for two, seed 7, the Ore within 16 tiles went from 10 to 2);
+what the town or the Walking Factory's yard cuts within 16 tiles of a base is now laid again just outside it, as many tiles
+and as rich (`homeFieldFloor`). Open, the owner's
+call: 4 is a little under Standard's full stamp (5); raise `HOME_FIELD` to 5 if starts still feel lean (it would enrich
+most seeds by a tile or two). The Hollow keeps its own 3 a field. Also seen: on Orbital
 platforms a Trade Post off a deck's middle moves the fields on its ground (`clearCalmGround`) into a straight line of
 tiles, out to the deck's rim.

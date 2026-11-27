@@ -1168,6 +1168,12 @@ const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (sh
 const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold this much more (half the fields fall in the canyons)
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
 /**
+ * The fewest tiles each colony's starter Ore field and starter Crystal field hold at home, on every map (generateMap's
+ * floorField; The Ring's RING.field and Orbital platforms' ORBITAL.field.home are their own). A plain stamp there comes to
+ * one to five tiles; where it comes short, the free ground nearest its middle makes up the rest.
+ */
+const HOME_FIELD = 4;
+/**
  * The Ring (SHAPE_PRESETS asteroids: ringMap in world.js, the space backdrop in js/ring.js). Two colonies, each on a home
  * asteroid, a rich rock in the middle, a chain of stepping stones between, and resource rocks beside them, in empty space:
  * the space between is `T_CHASM` that nothing can cross or build on (no Sky bridge: `voidTile`), so a crossing is a
@@ -1199,8 +1205,10 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  *   field   the fewest tiles a field holds: `home` for each of the home deck's two Ore and two Crystal fields, `soil` for its
  *           fertile soil, `deck` for the Ore and Crystal fields on the other decks (each has at least one of each). Where the rim,
  *           a bridge head or a crag takes part of a field, the free tiles nearest it make up the rest (orbitalMap's `field`)
+ *   ringfall  deposit tiles each Ringfall strike leaves (3 elsewhere): the decks are crowded, so it comes a little richer, as in
+ *           the Hollow. A strike never lands on or beside a drawbridge or a control box (spaceRingfall in sim.js)
  */
-const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 } };
+const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 }, ringfall: 4 };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }
 /**
