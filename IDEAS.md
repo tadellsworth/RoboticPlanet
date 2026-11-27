@@ -3054,3 +3054,14 @@ From `docs/map-audit-nov27.md` (owner's call on each): a Fuel source in walking 
 no oil seep either colony can walk to on Small); a floor on the starter Ore and Crystal fields (a seed can leave one
 tile of each, or none); Trade Posts and Uplinks on walkable ground on maps meant to be walked; the Small-map Trade Post
 gap; the starter Crystal under the Dam's ramp feet on Small; a start tip for Standard and Long haul.
+
+Partly done (Nov 27 2026): the floor on the starter fields is in for **Orbital platforms** (the owner found no Ore at
+the start: its home deck is short and the bridge heads, rim and crags wiped the stamps, down to one Ore tile or none on
+Small; now each home Ore and Crystal field holds at least 5 tiles, the soil 8, and every other deck has an Ore and a
+Crystal field of 4) and **The Ring** (the asteroid's edge could leave one Crystal tile; now 4 a field). `tools/map-audit.js`
+now fails a home with fewer than 3 Ore or 2 Crystal tiles within 16 tiles (more on those two maps). Still open, the
+owner's call: the generic maps' small random stamps, which a seed can still leave at a tile or two. The audit lists
+them as THIN rather than failing (`--strict` fails them): Ring valley, Oases, Crossroads, Lakes, Four Isles, Long Haul
+2v2, Passenger Town, Fault line, Canyon maze, River delta, The Dam and The Walking Factory. Also seen: on Orbital
+platforms a Trade Post off a deck's middle moves the fields on its ground (`clearCalmGround`) into a straight line of
+tiles, out to the deck's rim.

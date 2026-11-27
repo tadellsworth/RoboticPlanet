@@ -1176,8 +1176,10 @@ const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or 
  *   mul    Ore, Crystal, Stalk and Stone on the asteroids hold this much more than usual (small rocks, few fields)
  *   oil    seep fields on each side: on the home asteroid, on each resource rock, and in the middle (both sides' share)
  *   stone  Stone each home asteroid holds at the start (HOME_STONE, topped up near the base)
+ *   field  the fewest tiles each of the home asteroid's two Ore and two Crystal fields holds (the free tiles nearest a field make
+ *          up what the asteroid's edge took: ringMap's `field`)
  */
-const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, stone: HOME_STONE };
+const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, stone: HOME_STONE, field: 4 };
 /**
  * Orbital platforms (SHAPE_PRESETS orbital: orbitalMap in world.js, the rules in sim.js (orbSet, orbTick), the look in js/orbital.js).
  * Five to seven Accord station decks in the high atmosphere, the space between them `T_CHASM` that nothing can build on or
@@ -1194,8 +1196,11 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  *   pad     tiles round the strip that a robot's centre counts as on it
  *   mul, oil, stone  as RING's: the decks are small, so deposits are a little richer, every deck has an oil seep or two for Fuel,
  *           and each home deck is topped up to `stone` Stone
+ *   field   the fewest tiles a field holds: `home` for each of the home deck's two Ore and two Crystal fields, `soil` for its
+ *           fertile soil, `deck` for the Ore and Crystal fields on the other decks (each has at least one of each). Where the rim,
+ *           a bridge head or a crag takes part of a field, the free tiles nearest it make up the rest (orbitalMap's `field`)
  */
-const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE };
+const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 } };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }
 /**

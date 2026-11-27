@@ -2771,18 +2771,38 @@ function ringMap(seed, W, H, cfg) {
     c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
   };
+  // A field sure of its size (as orbitalMap's): the stamp, then, where the rim or the asteroid's edge took part of it, the free
+  // tiles nearest its middle (within 4 tiles, else 6) until it holds `min` (RING.field).
+  const field = (x, y, rad, type, fill, min) => {
+    stamp(x, y, rad, type, fill);
+    for (const R of [4, 6]) {
+      let have = 0;
+      const c = [];
+      for (let j = Math.max(half, Math.floor(y - R)); j <= Math.min(H - 2, Math.ceil(y + R)); j++) {
+        for (let i = Math.max(1, Math.floor(x - R)); i <= Math.min(W - 2, Math.ceil(x + R)); i++) {
+          const t = id(i, j), d2 = dist2(i, j, x, y);
+          if (d2 > R * R) continue;
+          if (res[t] === type) have++; else if (free(t)) c.push([d2, t]);
+        }
+      }
+      c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      for (let k = 0; k < c.length && have < min; k++, have++) for (const u of [c[k][1], mir(c[k][1])]) { res[u] = type; fert[u] = 0; }
+      if (have >= min) return;
+    }
+  };
   // The landing zone: open ground (no crags, no deposits) round each Command Base.
   for (let j = by - 4; j <= by + 4; j++) for (let i = bx - 4; i <= bx + 4; i++) { const t = id(i, j); if (terrain[t] === T_ROCK) for (const u of [t, mir(t)]) terrain[u] = T_GROUND; }
-  // The home asteroid: the standard colony's starter fields, then the richer ones out beyond, and oil.
+  // The home asteroid: the standard colony's starter fields, then the richer ones out beyond, and oil. The Ore and Crystal fields
+  // each hold at least RING.field tiles (the asteroid's edge can cut a plain stamp down to a tile).
   stamp(bx - 6, by - 2, 2.5, R_STALK, 0.85 * stampDens);
   stamp(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens);
   stamp(bx + 6, by, 1.8, R_BOULDER, 0.8 * stampDens);
-  stamp(bx - 4, by - 5, 1.3, R_ORE, 0.9 * stampDens);
-  stamp(bx + 4, by - 5, 1.3, R_CRYSTAL, 0.9 * stampDens);
+  field(bx - 4, by - 5, 1.3, R_ORE, 0.9 * stampDens, RING.field);
+  field(bx + 4, by - 5, 1.3, R_CRYSTAL, 0.9 * stampDens, RING.field);
   stamp(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens);
   stamp(bx - 1, by - 6.5, 2.0, 'fert', 0.85);
-  stamp(bx + 9, by - 3.5, 1.6, R_ORE, 0.8 * stampDens);
-  stamp(bx - 10, by + 2.5, 1.5, R_CRYSTAL, 0.8 * stampDens);
+  field(bx + 9, by - 3.5, 1.6, R_ORE, 0.8 * stampDens, RING.field);
+  field(bx - 10, by + 2.5, 1.5, R_CRYSTAL, 0.8 * stampDens, RING.field);
   for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, RING.oil.home)) oil(bx + dx, by + dy, 4);
   stamp(bx - 8, by + 6, 1.4, R_BOULDER, 0.75 * stampDens);
   // The middle rock, in the bottom half (the top half is its twin): ore, crystal and oil round a clear centre for the Trade Post.
@@ -3214,9 +3234,10 @@ function orbitalMap(seed, W, H, cfg) {
   for (let t = 0; t < N; t++) if (rim[t]) { near[t] = 1; orth(t, (u) => { near[u] = 1; }); }
   const mark = (arr, x0, y0, x1, y1) => { for (let j = Math.max(0, y0); j <= Math.min(H - 1, y1); j++) for (let i = Math.max(0, x0); i <= Math.min(W - 1, x1); i++) arr[id(i, j)] = 1; };
   for (const s of br) {
-    // a head's ground: 4 tiles into each deck, 3 tiles either side of the strip
-    if (s.ax === 'v') { mark(bare, s.x0 - 3, s.y0 - 4, s.x1 + 3, s.y0 - 1); mark(bare, s.x0 - 3, s.y1 + 1, s.x1 + 3, s.y1 + 4); }
-    else { mark(bare, s.x0 - 4, s.y0 - 3, s.x0 - 1, s.y1 + 3); mark(bare, s.x1 + 1, s.y0 - 3, s.x1 + 4, s.y1 + 3); }
+    // a head's ground: 3 tiles into each deck, 2 tiles either side of the strip (the control boxes stand on it; any more and the
+    // small decks would be all heads, with no room for a field)
+    if (s.ax === 'v') { mark(bare, s.x0 - 2, s.y0 - 3, s.x1 + 2, s.y0 - 1); mark(bare, s.x0 - 2, s.y1 + 1, s.x1 + 2, s.y1 + 3); }
+    else { mark(bare, s.x0 - 3, s.y0 - 2, s.x0 - 1, s.y1 + 2); mark(bare, s.x1 + 1, s.y0 - 2, s.x1 + 3, s.y1 + 2); }
   }
   for (const r of plats) if (r.kind !== 'home' && r.id <= r.tw) { const cx = Math.round((r.x0 + r.x1) / 2), cy = Math.round((r.y0 + r.y1) / 2); mark(bare, cx - 2, cy - 2, cx + 2, cy + 2); mark(bare, W - 1 - cx - 2, H - 1 - cy - 2, W - 1 - cx + 2, H - 1 - cy + 2); } // (a deck's middle, and its twin's turned half round)
   // The control boxes: one on each deck at each end of a bridge, on clear ground just beside the head.
@@ -3232,14 +3253,14 @@ function orbitalMap(seed, W, H, cfg) {
     const pick = cand.find(([i, j]) => i > 0 && j > 0 && i < W - 1 && j < H - 1 && terrain[id(i, j)] === T_GROUND && !rim[id(i, j)] && !near[id(i, j)]) || cand.find(([i, j]) => terrain[id(i, j)] === T_GROUND);
     if (pick) bx.push({ id: bx.length, br: s.id, end, x: pick[0], y: pick[1], owner: -1 });
   }
-  // A few crags, away from the rim, the heads, the middles and the bases.
+  // A few crags, away from the rim, the heads, the middles and the bases (and the home deck's fields round them).
   const base = { x: Math.floor(W / 2), y: yA0 + Math.round(hh * 0.56) };
   base.y = Math.min(base.y, H - M - 6);
   const bxx = base.x, byy = base.y;
   for (let t = 0; t < N; t++) {
     if (terrain[t] !== T_GROUND || near[t] || bare[t] || rim[t]) continue;
     const i = t % W, j = (t / W) | 0, m = Math.min(t, mir(t)), mi = m % W, mj = (m / W) | 0;
-    if (dist2(i, j, bxx, byy) < 100 || dist2(i, j, W - 1 - bxx, H - 1 - byy) < 100) continue;
+    if (dist2(i, j, bxx, byy) < 169 || dist2(i, j, W - 1 - bxx, H - 1 - byy) < 169) continue; // (13 tiles: the home deck's fields stay clear)
     if (fbm(mi / 6.5, mj / 6.5, sH, 3) > TPR.rock + 0.05) terrain[t] = T_ROCK;
   }
   for (let t = 0; t < N; t++) if (bx.some((b) => id(b.x, b.y) === t) && terrain[t] === T_ROCK) terrain[t] = T_GROUND;
@@ -3261,18 +3282,44 @@ function orbitalMap(seed, W, H, cfg) {
     c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
   };
+  // A field sure of its size: the stamp, then, where the rim, a bridge head, a crag or another field took part of it, the free
+  // tiles nearest its middle (within 4 tiles, else 6) until it holds `min` (ORBITAL.field). The home deck is short and its top edge
+  // carries the bridge heads, so a plain stamp there could come to one tile or none.
+  const field = (x, y, rad, type, fill, min, jmin) => {
+    stamp(x, y, rad, type, fill, jmin);
+    for (const R of [4, 6]) { // (out to 6 tiles where a bridge head covers all the ground within 4)
+      let have = 0;
+      const c = [];
+      for (let j = Math.max(jmin || 0, Math.floor(y - R)); j <= Math.min(H - 2, Math.ceil(y + R)); j++) {
+        for (let i = Math.max(1, Math.floor(x - R)); i <= Math.min(W - 2, Math.ceil(x + R)); i++) {
+          const t = id(i, j), d2 = dist2(i, j, x, y);
+          if (d2 > R * R) continue;
+          if (type === 'fert' ? fert[t] : res[t] === type) have++; else if (free(t) && free(mir(t))) c.push([d2, t]);
+        }
+      }
+      c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      for (let k = 0; k < c.length && have < min; k++) {
+        if (!free(c[k][1])) continue;
+        for (const u of [c[k][1], mir(c[k][1])]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+        have++;
+      }
+      if (have >= min) return;
+    }
+  };
   // The landing zone: open ground round each Command Base.
   for (let j = byy - 4; j <= byy + 4; j++) for (let i = bxx - 4; i <= bxx + 4; i++) { const t = id(i, j); if (terrain[t] === T_ROCK) for (const u of [t, mir(t)]) terrain[u] = T_GROUND; }
-  // The home decks: the standard colony's starter fields, then the richer ones out beyond, and oil.
+  // The home decks: the standard colony's starter fields, then the richer ones out beyond, and oil. Ore and Crystal first, each
+  // at least ORBITAL.field.home tiles, so the Stalk and soil beside them can't crowd them out; the fertile soil at least `soil`.
+  const FH = ORBITAL.field.home;
+  field(bxx - 4, byy - 5, 1.5, R_ORE, 0.9 * stampDens, FH);
+  field(bxx + 4, byy - 5, 1.5, R_CRYSTAL, 0.9 * stampDens, FH);
+  field(bxx + 9, byy - 3.5, 1.7, R_ORE, 0.85 * stampDens, FH);
+  field(bxx - 10, byy + 2.5, 1.6, R_CRYSTAL, 0.85 * stampDens, FH);
   stamp(bxx - 6, byy - 2, 2.5, R_STALK, 0.85 * stampDens);
   stamp(bxx - 4, byy + 4, 1.4, R_STALK, 0.8 * stampDens);
   stamp(bxx + 6, byy, 1.8, R_BOULDER, 0.8 * stampDens);
-  stamp(bxx - 4, byy - 5, 1.3, R_ORE, 0.9 * stampDens);
-  stamp(bxx + 4, byy - 5, 1.3, R_CRYSTAL, 0.9 * stampDens);
   stamp(bxx + 2, byy + 4, 1.2, R_BOULDER, 0.7 * stampDens);
-  stamp(bxx - 1, byy - 6.5, 2.0, 'fert', 0.85);
-  stamp(bxx + 9, byy - 3.5, 1.6, R_ORE, 0.8 * stampDens);
-  stamp(bxx - 10, byy + 2.5, 1.5, R_CRYSTAL, 0.8 * stampDens);
+  field(bxx - 1, byy - 6.5, 2.0, 'fert', 0.85, ORBITAL.field.soil);
   for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, ORBITAL.oil.home)) oil(bxx + dx, byy + dy, 4);
   stamp(bxx - 8, byy + 6, 1.4, R_BOULDER, 0.75 * stampDens);
   // The other decks: fields scattered over them (the more the bigger), best-candidate spaced, Ore, Crystal and Stone in turn, and oil.
@@ -3282,7 +3329,7 @@ function orbitalMap(seed, W, H, cfg) {
     const area = (x1 - x0 + 1) * (y1 - y0 + 1), n = clamp(Math.round(area / 34), 3, 36), sites = [], types = [R_ORE, R_CRYSTAL, R_BOULDER, R_ORE, R_CRYSTAL, R_BOULDER, R_ORE, R_CRYSTAL];
     const pickSite = (minD) => {
       let best = null, bs = -1;
-      for (let k = 0; k < 14; k++) {
+      for (let k = 0; k < 30; k++) {
         const x = x0 + rng() * (x1 - x0), y = y0 + rng() * (y1 - y0), t = id(Math.round(x), Math.round(y));
         if (!free(t) || !free(mir(t))) continue;
         let d = Infinity; for (const s of sites) d = Math.min(d, dist(x, y, s[0], s[1]));
@@ -3293,11 +3340,12 @@ function orbitalMap(seed, W, H, cfg) {
     const oils = r.kind === 'mid' ? ORBITAL.oil.mid : ORBITAL.oil.deck + Math.floor(area / 420);
     for (let k = 0; k < oils; k++) { const s = pickSite(4); if (s) { sites.push(s); oil(s[0], s[1], 3, jmin); } }
     for (let k = 0; k < n; k++) {
-      const s = pickSite(4.2);
+      const s = pickSite(4.2) || (k < 2 ? pickSite(0) : null); // (the first Ore and Crystal fields always find a place)
       if (!s) continue;
       sites.push(s);
       const type = types[k % types.length];
-      stamp(s[0], s[1], type === R_BOULDER ? 1.5 : 1.7, type, 0.85, jmin);
+      if (type === R_BOULDER) stamp(s[0], s[1], 1.5, type, 0.85, jmin);
+      else field(s[0], s[1], 1.7, type, 0.85, ORBITAL.field.deck, jmin);
     }
   };
   for (const r of plats) {
