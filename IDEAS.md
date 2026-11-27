@@ -41,6 +41,22 @@ Open questions:
 - Space art loads with the rest on every map (about 0.5 MB a time of day); it could load only for the two space maps.
 - Phase 2: the Graveyard map (the Arbiter), capital ships (the canvas's Tender and Line), more derelict kinds.
 
+## Clear ground (built Nov 27 2026: calls made, open questions for the owner)
+
+The owner asked for a small tool to have a Worker clear a resource, instead of laying a road over it and taking the
+road up. Built as Paths → **Clear ground** (Shift+C). Calls made:
+
+- **Where:** Paths, beside Ramps, not the Terraform tab: Workers do the job, not Graders. Every plain letter is taken
+  (W A S D pan), so it's Shift+C, as the other late Paths tools are Shift and a letter.
+- **Nothing comes back**, not even a boulder's Stone (a Worker never gathers; clearing must not beat mining). Open
+  question: should a boulder drop its last Stone as a crate?
+- **Not cleared:** a Bio Farm's crops and a Seed Mast's beds (they're meant to be there), and decor (trees, rocks), which
+  never blocked building. Open question: should Clear also pull up crops?
+- **Who:** free Workers, after planned road, inside the Road crew limit (the Workforce row is now "Paving and clearing").
+  Open question: a crew limit of its own?
+- **Free**, and no warning beyond the red tint and the "destroys N Ore" note. Open question: confirm before destroying
+  a rich Ore or Crystal field?
+
 ## Terraforming stage 5: big projects and greening (built Nov 27 2026: calls made, open questions for the owner)
 
 Built from the owner's picks on the stage 5 canvas (https://claude.ai/artifact/VHV4A3euU7amL1QHzfrif1): the Reservoir
@@ -1314,7 +1330,20 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
 
 ## Held for later
 
-- **Terrain detail view: see the routes through the terrain** (the owner, Nov 2026: for later). So a player can tell at a
+- **Terrain routes view: what next** (v1 built Nov 27 2026: `js/routes.js`, Shift+R or ROUTES on the minimap; see
+  README "Terrain routes"). Open questions and the next steps:
+  - **What-if preview (next):** while placing a Wall line, a Ramp, a Viaduct, a turret or an earthwork, show how the
+    routes and back doors would change (work `rtAnalyse` out on the plan as if built: walls and earthworks as buildings
+    on the plan's tiles, a Ramp as `S.ramp`, a Viaduct as a link), and a "routes it closes / opens" line in the banner.
+    Needs a way to run `findPath` against a planned state without touching `S` (a small overlay of extra blocked or
+    joined tiles passed in the options).
+  - Ships carry no army yet: the sea routes show where a landing could come once they do (and the AI's beach landings
+    by ferry, `AI_BEACH`, are not drawn as routes). Airships and aircraft drops (Drop Outposts) as air origins.
+  - Should a gate's warning be its own (a narrow gap on a route with nothing covering it) as well as the entry's?
+  - The minimap could show the routes and back doors too (a red dot at each), and a message when a new back door opens
+    (a cliff levelled, a Ramp or Viaduct built by the rival).
+  - Diagonal gaps (two cliffs meeting at a corner) are not found as gates yet; only gaps across a row or a column.
+- **Terrain detail view: see the routes through the terrain** (the owner, Nov 2026; v1 built, see above). So a player can tell at a
   glance which cliffs, ramps and gaps let an enemy walk round to the base, and so that no enemy robots can sneak round a
   cliff into it unseen. An overlay, like the traffic map and the goods-flow overlay (a toggle, `Shift+T` style, and a
   button on the phone), over the terrain:

@@ -6698,7 +6698,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS', 'ewK', 'ewO', 'ewH', 'fld', 'caveIn', 'rsvBank']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
+const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'clr', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS', 'ewK', 'ewO', 'ewH', 'fld', 'caveIn', 'rsvBank']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; clr: ground marked to clear, owner + 1, see clearWhy; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -7029,6 +7029,7 @@ function checkSave(o) {
     if (u.task?.type === 'avenge' && (!BOTS[u.type].wild || !(Number.isSafeInteger(u.task.target) && u.task.target >= 0) || !(Number.isSafeInteger(u.task.n) && u.task.n > 0) ||
       (u.task.g != null && u.task.g !== 1) || (u.task.wall != null && !(Number.isSafeInteger(u.task.wall) && u.task.wall >= 0)) ||
       ['x', 'y'].some((k) => u.task[k] != null && !Number.isInteger(u.task[k])) || (u.task.until != null && !Number.isFinite(u.task.until)))) bad();
+    if (u.task?.type === 'clear' && (!BOTS[u.type].build || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !['go', 'work'].includes(u.task.phase) || !Number.isFinite(u.task.prog))) bad(); // (Paths → Clear: clearing a tile)
     if (u.task?.type === 'dammend' && (!(o.dam && Number.isInteger(u.task.d) && o.dam.d && o.dam.d[u.task.d]) || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) || !['go', 'mend'].includes(u.task.phase))) bad(); // (The Dam: shoring one up)
     if (u.task?.type === 'ewshoot' && (!BOTS[u.type].army || !(Number.isInteger(u.task.tile) && u.task.tile >= 0 && u.task.tile < o.W * o.H) ||
       !(Number.isInteger(u.task.go) && u.task.go >= -1 && u.task.go < o.W * o.H) || !(Number.isFinite(u.task.acc) && u.task.acc >= 0 && u.task.acc < 1) ||
@@ -7092,7 +7093,8 @@ function checkSave(o) {
   // The Sundering Ray's ripples and their marks (S.sunders, see sunderFire): numbers on the map, a blow's kind, owners.
   if (o.sunders != null && !(Array.isArray(o.sunders) && o.sunders.length <= 4 * SUNDER.keep && o.sunders.every((w) => obj(w) && ['id', 'x0', 'y0', 'x1', 'y1', 't', 'at', 'f', 'b'].every((k) => Number.isFinite(w[k])) &&
     (w.m === 'deep' || w.m === 'quake') && owner(w.o) && (w.done === 0 || w.done === 1) && [w.x0, w.x1].every((x) => x >= -1 && x <= o.W + 1) && [w.y0, w.y1].every((y) => y >= -1 && y <= o.H + 1)))) bad();
-  for (const k of ['crkN', 'sunderSeq']) if (o[k] != null && !(Number.isSafeInteger(o[k]) && o[k] >= 0)) bad();
+  if (o.clr != null && Array.isArray(o.clr) && !o.clr.every((v, n) => n % 2 === 0 || (Array.isArray(o.players) && v <= o.players.length))) bad(); // (ground marked to clear: an owner + 1)
+  for (const k of ['crkN', 'sunderSeq', 'clrN']) if (o[k] != null && !(Number.isSafeInteger(o[k]) && o[k] >= 0)) bad();
   // Orbital Lift cables coming down (S.liftFalls, see liftFall): numbers, a direction, owners, the anchor on the map.
   if (o.liftFalls != null && !(Array.isArray(o.liftFalls) && o.liftFalls.length <= 64 && o.liftFalls.every((f) => obj(f) && ['id', 't', 'k', 'sp', 'n', 'ax', 'ay'].every((k) => Number.isFinite(f[k])) &&
     Number.isInteger(f.d) && f.d >= 0 && f.d < 8 && owner(f.o) && Number.isFinite(f.by) && f.ax >= 0 && f.ay >= 0 && f.ax < o.W && f.ay < o.H && f.n >= 0 && f.n <= o.W + o.H))) bad();
@@ -7216,6 +7218,7 @@ function deserializeGame(json) {
   o.fires = Array.isArray(o.fires) ? o.fires : [];
   o.wrecks = o.wrecks || []; // (saves from before aircraft wrecks stayed: none)
   for (const k of SPARSE_LAYERS) o[k] = Array.isArray(o[k]) ? sparseIn(o[k], o.W * o.H) : null; // (War scars: made below for a save from before)
+  if (o.clr) { let n = 0; for (let t = 0; t < o.clr.length; t++) if (o.clr[t]) n++; o.clrN = n; } // (ground marked to clear: counted afresh)
   o.roadVer = (o.roadVer || 0) + 1;
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);

@@ -1650,7 +1650,7 @@ function audioTick(dt) {
     const t = u.task;
     if (u.path && u.moved) { moving++; if (BOTS[u.type].truck) trucks++; }
     if (t && t.type === 'build' && t.phase === 'work') welders.push(u);
-    else if (t && t.type === 'pave' && t.phase === 'work') spreaders.push(u);
+    else if (t && (t.type === 'pave' || t.type === 'clear') && t.phase === 'work') spreaders.push(u);
     else if (t && t.type === 'staff' && t.phase === 'work' && u.type === 'paver') pavers.push(u);
     if (BOTS[u.type].truck) {
       // Air brakes when a truck pulls up hard; the horn when it's been stuck in a jam a while.

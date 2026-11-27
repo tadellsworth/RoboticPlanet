@@ -353,6 +353,16 @@ const ORDERS = {
     for (const t of L(d.rail)) { const w = queueRail(p, t); if (w) { out.railWhy = out.railWhy || w; } else out.rails++; }
     for (const t of L(d.pipeDel)) if (S.pipe[t] === p + 1 || S.pipePlan[t] === p + 1) { takeUpPipe(p, t); out.pipesUp++; }
     for (const t of L(d.pipe)) if (!queuePipe(p, t)) out.pipes++;
+    // Clear ground: resource tiles marked for free Workers to clear (clearWhy), or their marks called off.
+    out.cleared = 0; out.unclear = 0; out.clearWhy = '';
+    for (const t of L(d.clearDel)) if (S.clr && S.clr[t] === p + 1) { setClr(t, -1); out.unclear++; }
+    for (const t of L(d.clear).slice(0, CLEAR.most)) {
+      if (S.clr && S.clr[t] === p + 1) continue;
+      const w = clearWhy(p, t);
+      if (w) { out.clearWhy = out.clearWhy || w; continue; }
+      setClr(t, p);
+      out.cleared++;
+    }
     settlePlans(); // pay for what we can now, oldest plans first; the rest waits for the goods
     return out;
   },
