@@ -2063,6 +2063,7 @@ const MISSIONS = [
     intro: [
       'This rival is a <b>Herald</b> (a rusher): its clock stopped a day before Arrival, so it attacks early. Others are Wardens, Salvagers, Architects and Stewards.',
       'A belt of crags with a few narrow channels: wall them and cover them with guns. Messages from your <b>Scouts</b> say when it masses or marches (Go shows where).',
+      '<b>Terrain routes</b> (Shift+R, or <b>ROUTES</b> on the minimap) shows the channels as yellow gates and the Herald\'s way in: a red <b>!</b> is a back door nothing of yours covers yet.',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'Stalks or boulders where a wall should go? <b>Paths → Clear ground</b> (<kbd>Shift</kbd>+<kbd>C</kbd>): drag over them and free Workers clear the ground. The resource is lost.',
       'An Outpost can Hold inside or Go out and fight. Tap a turret → <b>Aim</b> to pick its target. Mortar Pits, Disruptors and the Keep are in Defend too.',
@@ -2097,8 +2098,8 @@ const MISSIONS = [
       // (A Gate counts: it's what a wall line gets where it crosses a road.)
       { kind: 'walls', n: [4, 6, 8], text: 'Build {n} Walls',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && (b.type === 'wall' || b.type === 'gate')).length,
-        hint: '<b>Walls</b> (<kbd>X</kbd>): draw two rows across each channel, then <b>Build</b>. The outer row goes up first.',
-        ui: "#btn-road, #banner-seg [data-v='wall'], #build-walls, #banner-ok" },
+        hint: '<b>Walls</b> (<kbd>X</kbd>): draw two rows across each channel, then <b>Build</b>. <kbd>Shift</kbd>+<kbd>R</kbd> shows the gaps.',
+        ui: "#btn-road, #banner-seg [data-v='wall'], #build-walls, #banner-ok, #mm-routes" },
       { kind: 'mannedBunker', n: 1, text: 'Man a Bunker with 2 warbots', at: 'bunker',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'bunker' && b.garrison.length >= 2).length,
         hint: '<b>Build</b> → <b>Defend</b> → <b>Bunker</b> (<kbd>U</kbd>) behind a wall; tap its site → <b>Lay road</b>. Once built, tap it → <b>Station here</b> (<kbd>V</kbd>).',

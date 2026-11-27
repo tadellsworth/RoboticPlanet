@@ -7364,6 +7364,7 @@ function render(dtReal) {
   if (typeof UI !== 'undefined' && UI.inGame) sampleGoodsFlow(); // (always, so the map has the last minute when it's turned on)
   if (R.goodsMap && R.mode === 'road') drawGoodsFlow(ctx, ox, oy, z, v0, v1);
   if (typeof ecMapOn === 'function' && ecMapOn()) ecDrawFlow(ctx, ox, oy, z, v0, v1); // (the Economy panel open: the goods on the move, js/economy.js)
+  if (typeof RT !== 'undefined' && RT.on) routesGround(ctx, ox, oy, z); // (Terrain routes, Shift+R: the walkable ground, cliffs, ramps and gates, js/routes.js)
   if (R.routePreview) {
     // The road a building's "Lay road" button would pave.
     ctx.strokeStyle = '#ffd166';
@@ -7681,6 +7682,7 @@ function render(dtReal) {
   if (R.workerView || (typeof wfMapOn === 'function' && wfMapOn())) drawWorkerView(ctx, ox, oy, z); // (and while the Workforce panel is open: js/workforce.js)
   if (typeof ecMapOn === 'function' && ecMapOn()) ecDrawStates(ctx, ox, oy, z); // (the Economy panel open: each building's state, js/economy.js)
   if (typeof ecDrawJoin === 'function') ecDrawJoin(ctx, ox, oy, z); // (Join the roads: the gap between two road networks, js/economy.js)
+  if (typeof RT !== 'undefined' && RT.on) routesOver(ctx, ox, oy, z); // (Terrain routes: the approach routes and their back doors, js/routes.js)
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.mur && S.mur.husks) drawHarrowDeathFx(ctx, ox, oy, z); // (a Harrow's death: its shards, the dust of its fall, its core bursting)
@@ -9116,6 +9118,7 @@ function drawAim(ctx, ox, oy, z) {
   if (BDEFS[silo.type].lance) { const sp = R.aim || R.aimHover; if (sp && !lanceAimBlocked(silo, sp.i, sp.j)) drawLanceLine(ctx, ox, oy, z, silo, sp.i, sp.j, true); return; }
   if (BDEFS[silo.type].sunder) { drawSunderAim(ctx, ox, oy, z, silo); return; }
   if (BDEFS[silo.type].atmos) { drawStormAim(ctx, ox, oy, z, silo); return; }
+  if (BDEFS[silo.type].lvl) { drawRanges(ctx, silo.type, silo.x, silo.y, ox, oy, z, silo.owner); return; } // (a Leveller's aim: its reach and the hill under the pointer or tapped, t5Ranges in js/terraform5.js; not a missile's reticle)
   const nuke = !!BDEFS[silo.type].nukeSilo;
   const md = nuke ? { range: NUKE.range, splash: NUKE.radius } : BDEFS.silo.missile;
   const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;

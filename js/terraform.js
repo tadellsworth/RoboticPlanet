@@ -556,10 +556,47 @@ function tfPlanTile(ctx, x, y, z, k, prog, owed, mine, dir, work) {
   ctx.restore();
 }
 
+/**
+ * The tile the pointer is on in the Terraform mode, before a drag paints it: the mouse's, or a finger's that is down
+ * and has not yet moved (a touch has no hover); -1 if none. Looks only.
+ */
+function tfPointer() {
+  const g = typeof INPUT !== 'undefined' && INPUT.gesture;
+  if (g && g.type === 'single' && !g.painting && !g.moved && !g.panOnly && typeof _tileAt === 'function') { const p = _tileAt(g.sx, g.sy); return inMap(p.i, p.j) ? tIdx(p.i, p.j) : -1; }
+  return g && g.type !== 'single' ? -1 : R.hover;
+}
+
+/**
+ * The marker under the pointer (tfDrawPlan): where the tool would go before you press. The tile's job as a plan tile
+ * would be drawn (its outline, tint and glyph), crossed out in red where it is refused; Flatten's start tile in white;
+ * a sap's or a ridge's start, a white tile outline. A tile already in the plan is left to the plan.
+ */
+function tfDrawPointer(ctx, ox, oy, z, F) {
+  const t = tfPointer();
+  if (t < 0 || F.list.includes(t)) return;
+  const x = ox + (t % S.W) * z, y = oy + ((t / S.W) | 0) * z;
+  ctx.save();
+  const box = (col) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, z * 0.07); ctx.setLineDash([z * 0.12, z * 0.08]); ctx.strokeRect(x + z * 0.04, y + z * 0.04, z * 0.92, z * 0.92); ctx.setLineDash([]); };
+  if (F.tool === 'sap' || F.tool === 'ridge' || (F.tool === 'flatten' && F.start < 0)) { box('#ffffff'); ctx.restore(); return; }
+  const J = tfJob(ME, F.tool, t, tfTarget(), F.prev ? F.prev.plan : new Map());
+  if (J.why && J.same) { box('rgba(232,226,212,0.8)'); ctx.restore(); return; }
+  if (J.why) {
+    ctx.strokeStyle = 'rgba(255,90,90,0.85)'; ctx.lineWidth = Math.max(1.2, z * 0.04); ctx.setLineDash([z * 0.12, z * 0.09]);
+    ctx.strokeRect(x + z * 0.16, y + z * 0.16, z * 0.68, z * 0.68); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x + z * 0.25, y + z * 0.25); ctx.lineTo(x + z * 0.75, y + z * 0.75); ctx.moveTo(x + z * 0.75, y + z * 0.25); ctx.lineTo(x + z * 0.25, y + z * 0.75); ctx.stroke();
+    ctx.restore(); return;
+  }
+  const k = F.tool === 'flatten' ? 'flatten' : J.k, dir = J.k === 'dig' ? tfSide(t, (u) => tfWet(u, F.prev && F.prev.plan) && u !== t) : null;
+  tfPlanTile(ctx, x, y, z, k, 0, false, true, dir, false);
+  ctx.restore();
+}
+
 /** The plan being made (the Terraform mode): each tile's job as it will be placed, refused tiles crossed out. */
 function tfDrawPlan(ctx, ox, oy, z, inView) {
   const F = typeof UI !== 'undefined' && UI.tf;
-  if (R.mode !== 'terra' || !F || !F.prev || F.tool === 'sap' || F.tool === 'ridge') return; // (a sap's route: t4Marks; a ridge: t5Marks)
+  if (R.mode !== 'terra' || !F) return;
+  tfDrawPointer(ctx, ox, oy, z, F);
+  if (!F.prev || F.tool === 'sap' || F.tool === 'ridge') return; // (a sap's route: t4Marks; a ridge: t5Marks)
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const [t, J, , same] of F.prev.rows) {

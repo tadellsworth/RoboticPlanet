@@ -182,7 +182,7 @@ function t5Outline(ctx, ts, ox, oy, z, col, fa, dash) {
 }
 
 /** Placing (or a selected) Reservoir or Leveller: the basin it fills, or its reach, and its Generators' reach (drawRanges). */
-let _t5Basin = { k: '', B: null };
+let _t5Basin = { k: '', B: null }, _t5Hill = { k: '', H: null };
 function t5Ranges(ctx, type, x, y, ox, oy, z, owner) {
   const c = bCentre({ type, x, y }), cx = ox + c.x * z, cy = oy + c.y * z;
   if (BDEFS[type].rsv) {
@@ -204,9 +204,15 @@ function t5Ranges(ctx, type, x, y, ox, oy, z, owner) {
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,205,110,0.7)'; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(cx, cy, (LVL.powReach + 1.5) * z, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-  if (R.mode === 'aim' && R.aim) {
-    const b = getE(UI.aimSilo), H = b && BDEFS[b.type].lvl ? lvlHill(b, tIdx(R.aim.i, R.aim.j)) : null;
-    if (H && H.ts) t5Outline(ctx, new Set(H.ts), ox, oy, z, T5_COL.lvl, 0.28, false);
+  const sp = R.mode === 'aim' ? R.aim || R.aimHover : null; // (the hill tapped, or under the pointer; a spot it can't cut: outlined in red)
+  if (sp && inMap(sp.i, sp.j)) {
+    const b = getE(UI.aimSilo), t = tIdx(sp.i, sp.j);
+    if (b && BDEFS[b.type].lvl) {
+      const k = `${b.id},${t},${Math.floor(R.time || 0)}`; // (looked up again each second: the ground changes as it cuts)
+      if (_t5Hill.k !== k) _t5Hill = { k, H: lvlHill(b, t) };
+      if (_t5Hill.H.ts) t5Outline(ctx, new Set(_t5Hill.H.ts), ox, oy, z, T5_COL.lvl, R.aim ? 0.28 : 0.18, !R.aim);
+      else t5Outline(ctx, new Set([t]), ox, oy, z, '#ff5a5a', 0.35, false);
+    }
   }
 }
 
