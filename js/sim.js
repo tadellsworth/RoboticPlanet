@@ -14110,6 +14110,7 @@ function orbFlip(k, up) {
     const t = j * W + i;
     S.terrain[t] = up ? T_CHASM : T_GROUND;
     S.dirtyTiles.push(t);
+    setRoad(i, j, !up, -1); // (a lowered bridge carries a road, whoever's land it is on; a raised one none, so nothing can drive over it)
   }
   S.orb.ver++;
   terrainChanged();
@@ -14159,6 +14160,8 @@ function orbBoxes() {
     else if (was === ME) postMsg(ME, `${own >= 0 ? playerName(own) + ' took' : 'You lost'} the control box of the ${orbName(b.br)} bridge (its ${orbDeckName(b.end ? O.br[b.br].b : O.br[b.br].a)} end).`, b.x + 0.5, b.y + 0.5, 'bad');
   }
 }
+/** A new game's lowered bridges carry a road (see orbFlip): laid once the map's layers are made. */
+function orbRoads() { for (const B of S.orb.br) if (!B.up) for (let j = B.y0; j <= B.y1; j++) for (let i = B.x0; i <= B.x1; i++) setRoad(i, j, true, -1); }
 /** The orbital state a new game starts with, from the generator's decks, bridges and boxes: every bridge down, a colony's own home-deck boxes its own, the rest no one's. */
 function orbInit(o, bases) {
   // (a box on a colony's home deck, the one its Command Base stands on, starts as its own; the others are no one's)

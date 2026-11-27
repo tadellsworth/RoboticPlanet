@@ -1296,7 +1296,7 @@ function paintTile(ctx, i, j, other, blend) {
   }
   if (terr === T_GROUND && (S.soil || S.wet || S.tform || S.shift) && !S.ramp[t] && typeof t2PaintTile === 'function') t2PaintTile(ctx, i, j, x, y, t); // (soil, water, the biome shift: js/terraform2.js)
   if (terr === T_GROUND && S.crater && (S.ash[t] || S.crater[t] || scarSpill(i, j) || scarBlight(i, j) >= 2) && !S.ramp[t] && !pillarAt(t)) paintScars(ctx, i, j, x, y, t); // (War scars: craters, scorch and ash)
-  if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
+  if (S.road[t] && !(R.orbital && orbTile(t))) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); } // (a bridge's own plating is its road)
   if (S.rail && S.rail[t]) {
     if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true);
     else if (!S.road[t] && terr === T_ROCK) drawRailTunnel(ctx, i, j, x, y, t);

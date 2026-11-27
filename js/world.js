@@ -3668,6 +3668,7 @@ function newGame(opts) {
   clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
   S.decor = makeDecor();
   if (S.orb) S.decor.fill(0); // (no plants on a station's decks)
+  if (S.orb) orbRoads(); // (and the lowered bridges carry roads)
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
   if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = S.town.x0; i <= S.town.x1; i++) if (townIn(i, j)) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
@@ -4984,7 +4985,7 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
-  if (orbTile(t)) return false; // (a drawbridge's strip: no road on it, or it would stay walkable when raised)
+  if (orbTile(t)) return false; // (a drawbridge's strip carries its own road while it is down: orbFlip)
   if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
