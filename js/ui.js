@@ -1266,11 +1266,11 @@ function shapePickRow(row, rnd, shape, np, when = 'when you land') {
   row.setAttribute('aria-label', `Map type: ${rnd ? 'Random' : SH.name}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'shape:' + (rnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, rnd ? null : SH));
 }
-/** Does map type `shape` set its own look, whatever the biome picked? 'hollow' (The Hollow), 'ring' (The Ring: Argos's), or false. */
-function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : false) : false; }
+/** Does map type `shape` set its own look, whatever the biome picked? 'hollow' (The Hollow), 'ring' (The Ring: Argos's), 'orbital' (Orbital platforms: Argos's rules), or false. */
+function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : P.orbital ? 'orbital' : false) : false; }
 /** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`forced`: 'hollow' or 'ring', the map type sets its own look). */
 function biomePickRow(row, rnd, biome, forced, when = 'when you land') {
-  const ring = forced === 'ring', hollow = !!forced && !ring;
+  const ring = forced === 'ring' || forced === 'orbital', hollow = !!forced && !ring, mapName = forced === 'orbital' ? 'Orbital platforms' : 'The Ring';
   if (ring) { rnd = false; biome = BIOME_ORDER.indexOf('lunar'); }
   const bk = BIOME_ORDER[biome];
   row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : biomeName(biome);
@@ -1283,8 +1283,8 @@ function biomePickRow(row, rnd, biome, forced, when = 'when you land') {
   }
   // (The Ring is on Argos's ground, in space: its look and its rules.)
   if (ring) {
-    row.querySelector('.m-pick-meta').textContent = 'set by the map: The Ring';
-    row.dataset.info = `The Ring is on Argos's ground, whatever the biome: ${BIOMES.lunar.desc} (The biome you pick here is for other maps.)`;
+    row.querySelector('.m-pick-meta').textContent = `set by the map: ${mapName}`;
+    row.dataset.info = `${mapName} has Argos's rules (no Murmur, no weather), whatever the biome: ${BIOMES.lunar.desc} (The biome you pick here is for other maps.)`;
   }
   row.setAttribute('aria-label', `Biome: ${rnd ? 'Random' : biomeName(biome)}. Change`);
   drawThumbOnce(row.querySelector('canvas'), 'biome:' + (rnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, rnd ? null : bk));
@@ -1707,6 +1707,20 @@ function drawShapeThumb(cv, P) {
     rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
     for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
     crags = 0;
+  } else if (P.orbital) {
+    // Orbital platforms: station decks over the planet's curve (a cloudy blue below, the dark of space above), a home deck at each end,
+    // a middle deck and a side deck each side, the bridges between them (dashes) with their control boxes (dots).
+    const gr = ctx.createLinearGradient(0, y0, 0, y0 + mh); gr.addColorStop(0, '#060b18'); gr.addColorStop(0.35, '#16386b'); gr.addColorStop(1, '#2c6aa8');
+    ctx.fillStyle = gr; ctx.fillRect(x0, y0, mw, mh);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'; for (const [u, v, rx] of [[0.2, 0.55, 0.12], [0.75, 0.7, 0.14], [0.55, 0.42, 0.09], [0.3, 0.85, 0.1], [0.85, 0.5, 0.07]]) { ctx.beginPath(); ctx.ellipse(X(u), Y(v), U * rx, U * rx * 0.34, 0, 0, 7); ctx.fill(); }
+    ctx.fillStyle = 'rgba(214,226,255,0.7)'; for (let k = 0; k < 14; k++) ctx.fillRect(X(rnd()), Y(rnd() * 0.3), Math.max(1, U * 0.012), Math.max(1, U * 0.012));
+    const deck = (u, v, rx, ry) => { for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) blob(uu, vv, rx, ry, '#6c7a90', '#a9b6c8', true); };
+    const bridge = (u0, v0, u1, v1) => { for (const [a, b, c, d] of [[u0, v0, u1, v1], [1 - u0, 1 - v0, 1 - u1, 1 - v1]]) line([[a, b], [c, d]], '#f2d27a', Math.max(1.5, U * 0.04), [U * 0.03, U * 0.025]); };
+    bridge(0.5, 0.56, 0.5, 0.77); bridge(0.18, 0.58, 0.18, 0.77); bridge(0.3, 0.46, 0.42, 0.46);
+    deck(0.5, 0.88, 0.34, 0.075); deck(0.15, 0.62, 0.11, 0.07);
+    blob(0.5, 0.5, 0.16, 0.12, '#6c7a90', '#a9b6c8', true);
+    for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.86, 2], [0.5, 0.58, 3], [0.14, 0.62, 0], [0.45, 0.46, 2]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.024), 0, 7); ctx.fill(); } }
+    crags = 0;
   } else if (P.caves) {
     // Half underground: the caves dark in the top half (Ore and Crystal dots, rock pillars), the surface below (green fields), the wall
     // between with its middle gate and its two side mouths.
@@ -1951,7 +1965,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.orbital && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2118,10 +2132,10 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
   const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
-    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
+    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const caveMask = m.cave || null; // (Half underground: the caves are the Hollow's look over their tiles)
   const other = caveMask ? biomeLook('hollow')?.mm : p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
@@ -2623,8 +2637,9 @@ const BUILD_KEYS = {
   mega: { lance: 'l', sunder: 'y', dome: 'h', city: 'c', lift: 'o', atmos: 'n', deepcore: 'e', gup: 'u' }, // (the Deep Core: E, for dEep; D pans; the Sundering Ray: Y, for raY: S pans too; the Atmosphere Engine: N, for eNgine: A pans)
   // The Terraform tab's tools (not buildings: tf-<tool>, see TF_TOOLS_UI in js/terraform.js): Raise, Lower, Flatten, fill sHallows, dig Channel.
   // Then stage 2: Spread sOil, rEclaim, and its buildings: the CoMposter (M), the Tree Nursery (N), the Water Pump (P);
-  // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T).
-  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't' },
+  // and stage 3's: the Seam drIll (I), the Seed Mast (G, for Grow: S pans), the Thermal Plant (T); stage 4's: the Earth banK (K),
+  // the Fire Trench (X, as Walls), Dragon's Teeth (Z), caVe in (V), the slUice (U) and the Sap Head (Q).
+  terra: { 'tf-raise': 'r', 'tf-lower': 'l', 'tf-flatten': 'f', 'tf-fill': 'h', 'tf-dig': 'c', 'tf-soil': 'o', 'tf-reclaim': 'e', composter: 'm', nursery: 'n', wpump: 'p', seamdrill: 'i', seedmast: 'g', thermal: 't', 'tf-bank': 'k', 'tf-trench': 'x', 'tf-teeth': 'z', 'tf-cave': 'v', sluice: 'u', saphead: 'q' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', mega: '5', terra: '6' };
 /**
@@ -2673,6 +2688,8 @@ const SHEET_KEYS = {
   'sh-squake': ['q', 'Sundering Ray: Quake'],
   'sh-sstop': ['c', 'Stand down the Sundering Ray'],
   'sh-storm': ['f', 'Atmosphere Engine: Storm Front'],
+  'sh-sluice': ['o', 'Open or shut the Sluice'],
+  'sh-sap': ['t', 'Plan the sap'],
   'sh-stormoff': ['c', 'Call the storm off'],
   'rl-recall': ['c', 'Call back a rally'],
   'sh-land': ['l', 'Choose the beach'],
@@ -6658,6 +6675,7 @@ function onMapTap(i, j, wx, wy) {
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
       if (def.t2 && typeof t2PlaceText === 'function') extra = t2PlaceText(type, i, j); // (stage 2: js/terraform2.js)
       if (def.t3 && typeof t3PlaceText === 'function') extra = t3PlaceText(type, i, j); // (stage 3: js/terraform3.js)
+      if (def.t4 && typeof t4PlaceText === 'function') extra = t4PlaceText(type, i, j); // (stage 4: js/terraform4.js)
       if (def.burner && !def.burner.heat) {
         let n = 0;
         for (const c of S.buildings) if (!c.dead && c.owner === ME && (BDEFS[c.type].work || BDEFS[c.type].t3pow) && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
@@ -6887,6 +6905,7 @@ function onMapTap(i, j, wx, wy) {
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
+  if (inMap(i, j) && S.orb && orbTapped(i, j, wx, wy) >= 0) { sfx('click'); openBridgeSheet(orbTapped(i, j, wx, wy)); return; } // (a drawbridge or one of its control boxes: Orbital platforms)
   if (inMap(i, j) && typeof lmAt === 'function' && lmAt(tIdx(i, j))) { sfx('click'); lmSheet(lmAt(tIdx(i, j))); return; } // (a landmark: js/landmarks.js)
   if (inMap(i, j) && S.town && typeof townSheet === 'function' && townRuinAt(tIdx(i, j))) { sfx('click'); townSheet(townRuinAt(tIdx(i, j))); return; } // (a building of Passenger Town: js/city.js)
   if (inMap(i, j) && S.walker && typeof walkerSheet === 'function' && walkerAtTap(i, j, wx, wy)) { sfx('click'); walkerSheet(); return; } // (the Walking Factory: js/walker.js)
@@ -7972,7 +7991,7 @@ function sheetCols() {
  */
 const SHEET_EYEBROW = { build: 'Construction', army: 'Command · Army', air: 'Command · Air', agroup: 'Army group', agsel: 'Command · Army', pop: 'Command · Robots', wf: 'Command · Workforce',
   econ: 'Command · Economy', msgs: 'Command · Log', goals: 'Command · Goals', bp: 'Construction · Blueprints', ally: 'Command · Ally', bot: 'Unit', rally: 'Command · Army',
-  move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral' };
+  move: 'Command · Army', res: 'Survey', soil: 'Survey', road: 'Paths', post: 'Neutral', uplink: 'Neutral', bridge: 'Orbital platforms' };
 function sheetEyebrow(kind, id) {
   const head = $('sheet-body').querySelector('.sheet-title'), h3 = head && head.querySelector('h3');
   if (!h3 || head.querySelector('.sh-eye')) return;
@@ -8019,6 +8038,7 @@ function sheetSpot() {
   if (k === 'rally') { const r = rallyById(id); return r ? { x: r.x, y: r.y } : null; }
   if (k === 'agroup') { const g = agById(id), r = g && rallyById(g.flag); return r ? { x: r.x, y: r.y } : null; }
   if (k === 'move' || k === 'res' || k === 'road' || k === 'soil' || k === 'post' || k === 'uplink') return { x: (id % S.W) + 0.5, y: ((id / S.W) | 0) + 0.5 };
+  if (k === 'bridge') { const B = S.orb && S.orb.br[id]; return B ? { x: (B.x0 + B.x1 + 1) / 2, y: (B.y0 + B.y1 + 1) / 2 } : null; } // (Orbital platforms: the middle of the bridge)
   return null;
 }
 
@@ -8491,6 +8511,7 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-saim-hint"></p><button class="btn" id="sh-sstop" hidden>Stand down (the blow is lost)</button>
         <button class="btn" id="sh-suser" aria-pressed="false">Use Reactor: Off</button><p class="hint" id="sh-suser-hint"></p>`;
     }
+    if (def.t4 && b.built && b.owner === ME && typeof t4Buttons === 'function') html += t4Buttons(b); // (the Sluice's Open, the Sap Head's Plan sap: js/terraform4.js)
     if (def.atmos && b.built && b.owner === ME) {
       html += `<button class="btn primary big" id="sh-storm">Storm Front</button>
         <p class="hint" id="sh-storm-hint"></p><button class="btn" id="sh-stormoff" hidden>Call the storm off</button>`;
@@ -8563,6 +8584,7 @@ function openBuildingSheet(b) {
     if ($('sh-sdeep')) $('sh-sdeep').onclick = () => { sfx('click'); startAim(b, 'deep'); };
     if ($('sh-squake')) $('sh-squake').onclick = () => { sfx('click'); startAim(b, 'quake'); };
     if ($('sh-storm')) $('sh-storm').onclick = () => { sfx('click'); startAim(b); };
+    if (typeof t4Bind === 'function') t4Bind(b); // (stage 4: js/terraform4.js)
     if ($('sh-stormoff')) $('sh-stormoff').onclick = () => { sfx('click'); act('atmosStormOff', [b.id], () => { toast('The storm front breaks up: the sky over there clears.', 'info'); refreshSheet(); }); };
     if ($('sh-sstop')) $('sh-sstop').onclick = () => { sfx('click'); act('sunderStop', [b.id], () => { toast('The Sundering Ray stands down: the blow is lost.', 'info'); refreshSheet(); }); };
     if ($('sh-suser')) $('sh-suser').onclick = () => { sfx('click'); const on = !b.sUseR; act('sunderReactor', [b.id, on], () => { toast(on ? `Use Reactor on: with a Reactor in reach the Ray winds up on it (${SUNDER.reactorCharge} s, ${SUNDER.uranium} Uranium or an Enriched Uranium a blow).` : 'Use Reactor off: with Generators in reach the Ray winds up on them and leaves the Uranium alone.', 'info'); refreshSheet(); }); };
@@ -8867,6 +8889,7 @@ function refreshBuildingSheet(b) {
     if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
     if (def.t2 && typeof t2Panel === 'function') parts.push(...t2Panel(b, mine)); // (Composter, Tree Nursery, Water Pump: js/terraform2.js)
     if (def.t3 && typeof t3Panel === 'function') parts.push(...t3Panel(b, mine)); // (Seam Drill, Seed Mast, Thermal Plant: js/terraform3.js)
+    if ((def.t4 || def.sapexit) && typeof t4Panel === 'function') parts.push(...t4Panel(b, mine)); // (Sluice, Sap Head, Sap Exit: js/terraform4.js)
     if (def.farm) {
       const crops = reachableRes(b.x, b.y, def.radius, R_CROP), ripe = countResIn(b.x, b.y, def.radius, R_CROP, true, S.zone[tIdx(b.x, b.y)]);
       parts.push(`<div class="kv"><span>${S.wet ? 'Fertile or wet ground in reach' : 'Fertile soil in reach'}</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);
@@ -9703,6 +9726,31 @@ function openUplinkSheet(u) {
   refreshSheet();
 }
 
+/** The drawbridge a tap at tile (i, j), world point (wx, wy), is on or at the control box of, or -1 (Orbital platforms). */
+function orbTapped(i, j, wx, wy) {
+  const O = S.orb;
+  if (!O) return -1;
+  for (const b of O.bx) if (Math.abs(b.x + 0.5 - wx) <= 0.9 && Math.abs(b.y + 0.5 - wy) <= 0.9) return b.br;
+  return orbBridgeAt(tIdx(i, j));
+}
+
+/** A drawbridge's panel (a tap on its strip or on either of its control boxes): its state, who holds its boxes, and Raise or Lower. */
+function openBridgeSheet(k) {
+  const B = S.orb.br[k], t = tIdx(B.x0 + ((B.x1 - B.x0) >> 1), B.y0 + ((B.y1 - B.y0) >> 1));
+  R.selected = 0; R.selTile = t; UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3>${orbName(k)} bridge</h3><div class="sub">A drawbridge between two station decks</div></div></div>
+    <p class="desc">Hold one of its two control boxes, with armed robots beside it or with your land round it, and you can Raise or Lower it. A bridge goes up only when no robot is on it, after a ${ORBITAL.warn} second warning (cross or clear it in time); a raised bridge is void: nothing walks across, but aircraft, Airships and Missiles still fly over. Each box is held by the colony with the most armed robots within ${ORBITAL.reach} tiles of it, else by the colony whose land it stands in.</p>
+    <div id="sh-dyn"></div>
+    <div class="btn-row"><button class="btn primary" id="sh-br-up" data-info="Raise the bridge: nothing can walk across it until it is lowered again. It can't go up while a robot is on it.">Raise the bridge</button><button class="btn primary" id="sh-br-dn" data-info="Lower the bridge: after a few seconds it is a walkable deck again.">Lower the bridge</button></div>
+    <div class="btn-row"><button class="btn" id="sh-br-guard" data-info="Send armed warbots to stand beside a control box and hold it.">Hold a box with warbots</button></div>${flavorLine('bridge')}`;
+  openSheet('bridge', k, html);
+  const go = (up) => act('bridgeSet', [k, up], (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else sfx('order'); refreshSheet(); });
+  $('sh-br-up').onclick = () => go(1);
+  $('sh-br-dn').onclick = () => go(0);
+  $('sh-br-guard').onclick = () => { sfx('click'); closeSheet(); setMode('attack'); UI.armyCmd = 'hold'; showArmyCmdBanner('Tap the ground beside a control box.'); };
+  refreshSheet();
+}
+
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const i = t % S.W, j = (t / S.W) | 0;
@@ -10164,6 +10212,20 @@ function refreshSheet() {
       (u.jam ? `<div class="kv"><span>Jammed</span><span class="err">${u.jam - 1 === 0 ? 'by your warbots' : 'by ' + playerName(u.jam - 1, true) + '\'s warbots'}</span></div>` : '') +
       (S.time < UPLINK.online ? `<div class="kv"><span>Online in</span><span>${fmtClock(UPLINK.online - S.time)}</span></div>` : '') +
       (L ? `<div class="kv"><span>From your Command Base</span><span>${dirText(L, u)}</span></div>` : '');
+  } else if (UI.sheetKind === 'bridge') {
+    const k = UI.sheetFor, B = S.orb && S.orb.br[k];
+    if (!B) { closeSheet(); return; }
+    const who = (o) => (o < 0 ? 'No one' : o === ME ? 'You' : playerName(o));
+    const boxes = S.orb.bx.filter((b) => b.br === k).sort((a, b) => a.end - b.end);
+    const state = B.mv === 1 ? `Raising in ${Math.max(1, Math.ceil(ORBITAL.warn - (S.time - B.t0)))} s: get off it` : B.mv === 2 ? 'Rising' : B.mv === 3 ? 'Lowering' : B.up ? 'Raised: nothing can cross' : 'Down: open to cross';
+    $('sh-dyn').innerHTML = `<div class="kv"><span>The bridge</span><span>${state}</span></div>` +
+      boxes.map((b) => `<div class="kv"><span>Box on the ${orbDeckName(b.end ? B.b : B.a)} deck</span><span>${who(b.owner)}</span></div>`).join('') +
+      (S.time < B.cd && !B.mv ? `<div class="kv"><span>Resting</span><span>${Math.ceil(B.cd - S.time)} s</span></div>` : '') +
+      (orbOccupied(k) ? '<div class="kv"><span>On the bridge</span><span>Robots</span></div>' : '');
+    const holds = orbHolds(ME, k);
+    $('sh-br-up').hidden = !!B.up; $('sh-br-dn').hidden = !B.up;
+    $('sh-br-up').disabled = !!orbWhy(ME, k, 1) || !holds; $('sh-br-dn').disabled = !!orbWhy(ME, k, 0) || !holds;
+    $('sh-br-up').title = $('sh-br-dn').title = holds ? '' : 'Hold one of its control boxes first.';
   } else if (UI.sheetKind === 'post') {
     const post = postAt(UI.sheetFor);
     if (!post) { closeSheet(); return; }

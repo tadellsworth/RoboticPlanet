@@ -273,12 +273,14 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
 
 ## Three new maps (the owner's ideas, Nov 23 2026; to build later)
 
-- **Orbital platforms** (high atmosphere). A few large orbital platforms high over the planet, the clouds and the
-  planet's curve far below, joined by **bridges that can be raised and lowered** (drawbridges). Each bridge has a
-  **control box**: whoever holds it raises or lowers the bridge, cutting a route or opening one. The owner's model is a
-  StarCraft II-style platform map (mechanics only, no look or names borrowed). Lore fit: the Carriers' and the Orbital
-  Lift's world; open questions: what the platforms are (Accord stations? Pathfinder hardware?), how goods get there
-  (no ground resources: salvage, docking pads, Trade Posts?), what falling off means, air units and Missiles allowed.
+- **Orbital platforms** (high atmosphere): **built** (Nov 2026; `SHAPE_PRESETS` `orbital`, `orbitalMap` in js/world.js, `ORBITAL` in js/defs.js,
+  the rules `orbSet`/`orbTick`/`orbBoxes` in js/sim.js, the order `bridgeSet`, `aiBridges` in js/ai.js, the look in js/orbital.js; README, Orbital
+  platforms). The owner's decisions: the platforms are Accord station decks with an ordinary economy (the Ring's: Stalk, soil, Ore, Crystal, Stone, oil);
+  a bridge can't be raised with a robot on it; aircraft, Airships and Missiles work as on The Ring; two players, five decks (Small, Medium) or seven
+  (Large and up). Bridges start down; two control boxes per bridge, held by armed robots near or the land round; Raise warns 4 s, Lower and Raise take 3 s,
+  20 s rest. Argos's rules (no Murmur, no weather, no dust storm). Open: **four players** (a deck each round a middle deck); **more layouts** (a ring of
+  decks, a long chain); **bridges that can be destroyed** (or a bridge that jams) and a Warbot or Missile attack on a control box; **raising with a Worker on it called off sooner** (a stuck-unit rule); whether boxes need a
+  cost or a cooldown per colony; a **mission** teaching the bridges (none yet); a rival that **sends a squad to hold** a contested box.
 - **The Ring** (in space, among the Ring's big asteroids): **built** (Nov 26 2026; `SHAPE_PRESETS` `asteroids`, `ringMap` in
   js/world.js, the space in js/ring.js; README, The Ring). Two players: a home asteroid each, a rich rock in the middle with a
   side rock to each side of it (the Trade Posts), a chain of stepping stones and resource rocks between, empty space
@@ -297,10 +299,10 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
 - **Half underground** (caves and surface): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
   js/defs.js; README, Half underground). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
   inside, the Hollow's dark look, plenty of Ore and Crystal, nothing grows, and no Missile, bomb, aircraft or Mass Driver canister reaches
-  in; outside, the Biome's surface with the stalk groves and crop soil and little Ore. A solid wall (no road tunnels through it) runs between
+  in; outside, the Biome's surface with the stalk groves and crop soil and **no Ore or Crystal at all** (nor from Ringfall: tuned Nov 27 for forced mutual encroachment with the Murmur off). A solid wall (no road tunnels through it) runs between
   them with two or three mouths, narrow gates or wide mouths by seed; each side starts with an extra stock of what it lacks
-  (Fiber and Fuel inside; Ore, Crystal and Alloy outside) and has to branch out through the mouths; the Murmur, if on, live in the caves and on the surface (mirrored twin nests); the rival plays either start
-  (`aiNoCrops`, `aiBan`, the mouth pull in `aiSearchSpot`). Rival vs rival (Normal, 2 players, 12 games): 6 wins for the start inside, 6 for the start outside, none undecided, 6 to 23 minutes.
+  (Fiber and Fuel inside; 130 Ore, 60 Crystal and 30 Alloy outside, about the first eight minutes) and has to branch out through the mouths; the Murmur, if on, live in the caves and on the surface (mirrored twin nests); the rival plays either start
+  (`aiNoCrops`, `aiBan`, the mouth pull in `aiSearchSpot`). Rival vs rival, Murmur off (Normal, 2 players, Medium seeds 11 to 18 and Large 21 to 24; and 41 to 45): before the tuning 6 wins for the start inside and 6 outside (6 to 23 minutes); now 7 and 10 of 17, all decided, 7 to 28 minutes. The outside rival's Outposts and Mines are in the caves by minute 4 to 10 and the inside rival's Outposts reach the surface by 6 to 14. Open: the Ore and Crystal a colony outside holds are all from the caves, so a long game is decided at the mouths; a mission that teaches it.
   Open: **three players** (parked: `cavesMap` still lays out three colonies, an outside pair and one inside on the line, but the map takes two or four for now, `evenOnly`: the owner will decide whether and how the split of three comes back); **more entrance layouts** (a mouth that opens or collapses, a drop shaft, a natural bridge over the wall, side by side
   gates in a long wall, more than three); **caves with more to them** (underground lakes, floating Crystal masses and ceiling tremors as
   in the Hollow, a Murmur mound under the middle, the Bloom's veins as an optional Fiber source); **entities in the caves' own
@@ -2837,7 +2839,7 @@ plants / irrigation, 3 resources from the ground, 4 military earthworks, 5 big p
    "seed" fields that slowly grow new Crystal on prepared ground (renewable, with upkeep); geothermal power from lava or
    hot springs (a Fuel-free Generator on volcanic maps); reclaiming wasteland (craters, scorched ground, fallen Lift
    cable) back into usable land (pairs with "total war scars the land").
-4. **Military uses:** earthworks (berms, trenches, tank traps) that block or slow warbots, cheaper than Walls; flooding
+4. **Military uses** (stage 4 BUILT Nov 27 2026: the Earth Bank, Fire Trench, Dragon's Teeth, Cave in, the Sluice and the Sap Head; see below): earthworks (berms, trenches, tank traps) that block or slow warbots, cheaper than Walls; flooding
    enemy lowland by releasing dammed water anywhere (like the Dam map, buildable); collapsing Murmur tunnels, or digging
    your own under a wall for a surprise attack (mirrors the Sapper); rival terraformers whose equipment you can raid.
 5. **Big projects (megastructure-sized) — the owner's favourite:** a Lake Maker (turn a basin into a lake: ports,
@@ -2974,6 +2976,44 @@ made, for the owner:
 (`haulRich`) and rivals keep their extraction chain going (`AI_THIN`); neither touches stage 3, which rivals never build,
 and a Seam Drill (2 Ore or 1 Crystal a minute) and six Seed Mast beds (about 1.6 Crystal a minute) still sit below a
 Mine or a Tap on a deposit, so the audit's Chip and Crystal conclusions hold (docs/economy-audit-nov26.md).
+
+**Stage 4, military earthworks: BUILT (Nov 27 2026; README "Terraforming, stage 4", ART_GUIDE Batch 38,
+`tools/terraform4-test.js`, the mission Ground War).** The owner's picks from the stage 4 canvas ("your picks for all"):
+the Grader's **Earth Bank**, **Fire Trench** and **Dragon's Teeth** (dragged like Walls, rendered as per-tile pieces
+that join), its **Cave in** of Murmur tunnels, the **Sluice** (Radial Gates) and the **Sap Head** (Tunnel Bore A).
+Calls made, for the owner to confirm or change:
+- **Earthworks are terrain, for everyone.** Your own trucks and Bulwarks can't cross your bank either (a Gate-like
+  "your side passes" would make a bank a free Wall). The heavy set (`EW.heavy`): trucks, Tankers, Road Trains,
+  Crawlers, the Howitzer, Bulwarks, Graders and Brutes. Trucks and Tankers rarely meet one (earthworks never go on
+  roads). The Murmur climb over everything but are slowed; their Brutes are heavy for routes the colony plans, not for
+  the Murmur's own night routes (unchanged).
+- **Cover:** a bank covers your robots within 1.6 tiles behind it (60% of the damage) from fire from beyond a tile and
+  a half; a trench halves any fire on your robots in it, shells and bombs too. A foe's earthworks give you nothing.
+- **Damage:** blasts (anything that leaves a crater: shells, bombs, missiles) and a foe's heavy army robots in the way
+  (2 a shot). Light warbots don't shoot earthworks: they climb over. Should a player be able to order warbots to shoot an
+  enemy earthwork (an Attack order on its tile)? Not built: today only a heavy army robot whose route runs through one
+  breaks it, and blasts.
+- **The Sluice floods by its own rules, not the Dam map's:** the Dam turns the flood plain into fords and back
+  (`terrainChanged` each time, about 15 ms a tile batch), which costs too much for a building a player can open again
+  and again. The Sluice's flood is a layer (`S.fld`) drawn over the ground, closing routes while under water and
+  slowing in mud; the ground underneath never changes, so nothing is re-baked or re-zoned. The Dam's numbers were the
+  model (its 35% of armour for buildings off the river's path, robots knocked about), but nothing is shared in code.
+- **Breach Bank** (the canvas's concept C: blow your own Earth Bank across a stream to let the water out) is **not
+  built**: a Bank across water isn't possible (earthworks go on open ground), so it needs a "bank across a stream" job
+  first. Follow-up: a Grader job that dams a stream tile with earth, and a one-shot Breach order (Ammo charges, a Worker)
+  that releases it as a Sluice does once.
+- **The Sap Head digs on its own** (no Worker, no goods a tile): 8 s a tile, 30 tiles at most. The tremor tells a rival
+  roughly where (2 tiles off), every 20 s a rival at most, when the head passes under or beside one of its buildings or
+  Walls; a computer rival's forts answer it as a raid (`P.raided`). The exit has 20 strength. Robots go through as if
+  the sap were a road 0.6 times its length, out of reach meanwhile.
+- **Rivals don't build any of it** (stage 4 is the player's, like 2 and 3). They route round earthworks and floods,
+  their heavy army robots shoot through, their forts answer a tremor. Teaching a Warden to bank its front is the next
+  step if play shows they need it.
+- **Not built (follow-ups):** the canvas's runner-ups as upgrade tiers (Gabion Berm, Slit Trench), the caved-in exit's
+  rendered look (`tunnel.js c=collapsed`: today the exit just goes, its groove drawn in code), the Mole (a robot bore),
+  the Sluice's opening as an 8-frame loop (it switches between shut and open, the spill animated in code), and the flood
+  on the Contingency globe.
+- **Numbers** (all in `EW`, `SLUICE`, `CAVE`, `SAP`): to tune in play-testing.
 
 ## Done: Argos on the main menu (owner, Nov 26)
 

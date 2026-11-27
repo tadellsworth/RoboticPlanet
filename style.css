@@ -4109,6 +4109,7 @@ body.deck #banner-text details.how summary, body.deck #banner-text details.how[o
 .bcard .tf-glyph { width: 44px; height: 44px; grid-row: span 3; display: grid; place-items: center; font-size: 26px; font-weight: 700; border-radius: 10px; background: rgba(255,255,255,0.06); }
 .tf-glyph.tf-raise { color: #ffb24a; } .tf-glyph.tf-lower { color: #7fb4ff; } .tf-glyph.tf-flatten { color: #e8e2d4; }
 .tf-glyph.tf-fill { color: #e2c48a; } .tf-glyph.tf-dig { color: #3fb6e8; }
+.tf-glyph.tf-bank { color: #d49a6a; } .tf-glyph.tf-trench { color: #b9b2a6; } .tf-glyph.tf-teeth { color: #e6e2da; } .tf-glyph.tf-cave { color: #c8a8ff; }
 .build-grid .tf-note { grid-column: 1 / -1; margin: 4px 2px 0; font-size: 13px; opacity: 0.85; }
 .tf-seg { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .tf-seg button { font-size: 12px; padding: 4px 8px; }

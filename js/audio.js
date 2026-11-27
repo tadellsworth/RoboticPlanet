@@ -608,6 +608,8 @@ function sfx(name, dest, y, dur) {
   const spd = typeof UI !== 'undefined' && UI.speed > 0 ? UI.speed : 1; // (a falling bomb's whistle lasts as long as its fall)
   switch (name) {
     case 'click': _tone(720, 0.06, 'triangle', 0.06, null, 0, D); break;
+    // A drawbridge starting to move (Orbital platforms; `dur` 1 raising, 0 lowering): a servo whine, then the lock's clunk.
+    case 'bridge': _tone(dur === 1 ? 150 : 300, 0.7, 'sawtooth', 0.03, dur === 1 ? 320 : 130, 0, D); _tone(dur === 1 ? 90 : 70, 0.18, 'triangle', 0.07, 45, 0.7, D); break;
     case 'place': _tone(440, 0.08, 'triangle', 0.08, null, 0, D); _tone(660, 0.1, 'triangle', 0.08, null, 0.07, D); break;
     case 'complete': _tone(523, 0.1, 'sine', 0.08, null, 0, D); _tone(659, 0.1, 'sine', 0.08, null, 0.08, D); _tone(784, 0.16, 'sine', 0.08, null, 0.16, D); break;
     case 'produce': _tone(980, 0.05, 'sine', 0.035, null, 0, D); break;

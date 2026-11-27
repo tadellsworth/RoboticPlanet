@@ -1379,6 +1379,9 @@ function aiThink(p) {
   // 4d) A gap with no crossing on foot (The Ring, Sky islands): Cargo Planes fly warbots over it.
   if (S.mode !== 'colony') aiAir(p, me, kinds, lvl);
 
+  // 4d2) Orbital platforms: work the drawbridges whose control boxes we hold.
+  if (S.orb && S.mode !== 'colony') aiBridges(p);
+
   // 4e) Howitzers: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
   // 4f) Bulk trade: pick a contract at the Trade Terminal.
@@ -2023,7 +2026,7 @@ function aiAirStyle(p) { return AI_AIR_STYLE[S.players[p].style] || AI_AIR_STYLE
 /** Rivals of p to fly to: [{ q, L }]. Empty off The Ring and Sky islands (every way across is a Viaduct, a Ropeway or a flight there). */
 function aiAirFoes(p) {
   const out = [], sh = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0];
-  if (!sh || !(sh.asteroids || sh.sky) || S.difficulty === 'easy' || !warOn() || worldBan('airfield') || botBanned(p, 'cargoplane')) return out;
+  if (!sh || !(sh.asteroids || sh.sky || sh.orbital) || S.difficulty === 'easy' || !warOn() || worldBan('airfield') || botBanned(p, 'cargoplane')) return out;
   for (let q = 0; q < S.players.length; q++) {
     const Q = S.players[q], L = getE(Q.lander);
     if (q === p || !foes(q, p) || isWild(q) || Q.out || Q.absent || !L || L.dead || L.owner !== q) continue;
@@ -2237,6 +2240,52 @@ function aiAir(p, me, kinds, lvl) {
     if (why) { P.air = null; P.airLast = S.time - 30; return; }
     P.air.sent = n;
     return;
+  }
+}
+
+/*
+ * Orbital platforms (S.orb): how a rival works the drawbridges whose control boxes it holds (every few seconds).
+ *   - It lowers a raised bridge of its own once the threat is gone and AI_BRIDGE.hold seconds have passed, at once if its home
+ *     deck can no longer reach the enemy's (it never shuts itself in), and whenever it has no raised bridge to its name to defend.
+ *   - Medium and up raise a bridge, nothing on it, when AI_BRIDGE.threat or more enemy warbots stand on the far deck within
+ *     AI_BRIDGE.near tiles of it and outnumber ours on the near deck, none of ours is out on the far deck, and fewer than
+ *     AI_BRIDGE.most of its bridges are up. A delay, not a wall: the army marches on the other routes, aircraft fly.
+ */
+const AI_BRIDGE = { every: 4, hold: { medium: 90, normal: 75, hard: 60, warlord: 45 }, threat: 3, near: 16, most: 2 };
+function aiBridges(p) {
+  const P = S.players[p], O = S.orb, L = getE(P.lander);
+  if (!L || L.dead || S.time - (P.bridgeT ?? -99) < AI_BRIDGE.every) return;
+  P.bridgeT = S.time;
+  const deckOf = (x, y) => O.plats.findIndex((D) => x >= D.x0 && x <= D.x1 + 1 && y >= D.y0 && y <= D.y1 + 1);
+  const mine = O.br.map((B, k) => k).filter((k) => orbHolds(p, k));
+  const up = mine.filter((k) => O.br[k].up && !O.br[k].mv);
+  const enemy = S.players.findIndex((Q) => Q.id !== p && foes(Q.id, p) && !isWild(Q.id) && !Q.out && !Q.absent);
+  const EL = enemy >= 0 ? getE(S.players[enemy].lander) : null;
+  const cut = EL && !EL.dead && S.zone[tIdx(L.x, L.y)] !== S.zone[tIdx(EL.x, EL.y)];
+  const hold = AI_BRIDGE.hold[S.difficulty] || 75;
+  // Lower: the threat has passed (or we are shut in).
+  for (const k of up) {
+    const B = O.br[k], cx = (B.x0 + B.x1 + 1) / 2, cy = (B.y0 + B.y1 + 1) / 2;
+    let threat = 0;
+    for (const u of S.bots) if (!u.dead && !u.inside && isArmy(u) && u.owner >= 0 && foes(u.owner, p) && dist2(u.x, u.y, cx, cy) <= AI_BRIDGE.near * AI_BRIDGE.near) threat++;
+    if ((cut && S.time - B.t0 > 20) || (S.time - B.t0 > hold && threat < AI_BRIDGE.threat)) { orbSet(p, k, 0); return; }
+  }
+  if (S.difficulty === 'easy') return;
+  if (up.length + mine.filter((k) => O.br[k].mv === 1 || O.br[k].mv === 2).length >= AI_BRIDGE.most) return;
+  // Raise: an army massing on the far deck of a bridge of ours.
+  for (const k of mine) {
+    const B = O.br[k];
+    if (B.up || B.mv || S.time < B.cd || S.time < 240) continue;
+    const dA = dist2(O.plats[B.a].x0 + O.plats[B.a].x1, O.plats[B.a].y0 + O.plats[B.a].y1, L.x * 2, L.y * 2), dB = dist2(O.plats[B.b].x0 + O.plats[B.b].x1, O.plats[B.b].y0 + O.plats[B.b].y1, L.x * 2, L.y * 2);
+    const far = dA <= dB ? B.b : B.a, near = far === B.a ? B.b : B.a, cx = (B.x0 + B.x1 + 1) / 2, cy = (B.y0 + B.y1 + 1) / 2;
+    let foe = 0, ours = 0, out = 0;
+    for (const u of S.bots) {
+      if (u.dead || u.inside || !isArmy(u) || u.owner < 0) continue;
+      const d = deckOf(u.x, u.y);
+      if (foes(u.owner, p)) { if (d === far && dist2(u.x, u.y, cx, cy) <= AI_BRIDGE.near * AI_BRIDGE.near) foe++; }
+      else if (u.owner === p) { if (d === near) ours++; else if (d === far) out++; }
+    }
+    if (foe >= AI_BRIDGE.threat && foe > ours && !out && !orbOccupied(k)) { orbSet(p, k, 1); return; }
   }
 }
 

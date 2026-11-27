@@ -640,6 +640,69 @@ const SEED = { reach: 2, most: 6, prepEvery: 10, seed: 1, hopper: 3, step: 5, sp
  * (thermalHot). It costs more than a Generator and only stands where the ground is hot: a reward on volcanic maps.
  */
 const THERMAL = { radius: 3 };
+/*
+ * Terraforming, stage 4: military earthworks (the player's, like stages 2 and 3: rivals never build them, they only meet
+ * them). See the stage 4 block in sim.js and js/terraform4.js.
+ *
+ * EW: the Grader's three line tools on the Terraform tab, dragged like Walls, one Earthworks site a tile (`time` s of a
+ * Grader's work, `cost` brought as for Raise), cheaper than Walls. Done, the tile keeps the work in per-tile layers
+ * (S.ewK its kind, S.ewO its owner + 1, S.ewH its strength, 1..`hp`): it stands on the ground as terrain does, for
+ * everyone, its owner included.
+ *  - Earth Bank (bank): heaped earth. Vehicles and heavy robots (`heavy`) can't cross it; other ground robots climb over
+ *    at `slow.bank` of their speed. Its owner's (and allies') robots within `coverR` tiles behind it take `cover.bank` of
+ *    the damage from fire coming across it (from more than a tile away, on the far side).
+ *  - Fire Trench (trench): a revetted cut. Anyone crossing it goes at `slow.trench`; its owner's robots in it take
+ *    `cover.trench` of the damage from fire (shells and bombs included).
+ *  - Dragon's Teeth (teeth): concrete pyramids. Vehicles and heavy robots can't pass; small robots go between them at
+ *    `slow.teeth`.
+ * Shells, bombs and missiles wear them (`blast` strength a tile of blast reach, at the tile struck and those round it);
+ * a heavy robot of a foe's army in the way breaks through (`breach` a shot, as a Wall). Below `worn` of `hp` a tile is
+ * worn (it looks slumped; the rules stay), at 0 it is breached: a gap anyone crosses, kept in the layers for repair. A
+ * Grader repairs: drag the same tool over a worn or breached tile (`fix` of the cost, `fixTime` s). Rivals route round
+ * them (no blocked tiles for a heavy robot, `path` more for a slowed step) and their heavy armies shoot a way through.
+ */
+const EW = {
+  kinds: {
+    bank: { k: 1, cost: { stone: 3 }, time: 18, hp: 60 },
+    trench: { k: 2, cost: { stone: 1 }, time: 16, hp: 40 },
+    teeth: { k: 3, cost: { cement: 1, alloy: 1 }, time: 14, hp: 90 },
+  },
+  slow: { bank: 0.4, trench: 0.6, teeth: 0.85 }, cover: { bank: 0.6, trench: 0.5 }, coverR: 1.6, path: { bank: 4, trench: 1.5, teeth: 0.5 },
+  heavy: ['truck', 'tanker', 'roadtrain', 'crawler', 'rocket', 'bulwark', 'grader', 'brute'],
+  worn: 0.6, blast: 14, breach: 2, fix: 0.5, fixTime: 10,
+};
+/*
+ * SLUICE: a Sluice (BDEFS.sluice, two tiles: R turns it) stands on the bank of a lake, a river or a canal where the
+ * water meets ground no higher than its own, the water on one long side and that ground on the other. Shut, it holds
+ * the water back. Opened (its panel, or the Open order), the water pours out over the connected ground of its level or
+ * lower (sluiceFloodPlan: nearest first, the way the water runs, up to `most` tiles, or `perWater` a tile of the water
+ * behind it), the front running out at `speed` tiles a second. Each tile it reaches goes through its stages: pouring
+ * (the front, `pour` s), spreading (`spread` s), under water (until `stay` s after the gates opened; then it goes down,
+ * the far end first, over `recede` s), wet mud (`mud` s) and dried silt (`silt` s), then it's ground again, part of it
+ * left fertile (`fert`). Robots on the ground where the front arrives are knocked about (`botHit`); under water nobody
+ * walks (routes go round, a robot caught there wades out at `slow.water`), mud slows to `slow.mud`, the front to
+ * `slow.pour`. A building the front reaches loses `hurt` of its full strength (a Command Base never below 1) and is
+ * knocked out (no work, no fire) while the water stands round it. Shut again (or spent), the Sluice refills for
+ * `refill` s before it can open again. A Sluice the flood would put under water itself is refused.
+ */
+const SLUICE = { most: 90, perWater: 1.5, speed: 1.6, pour: 3, spread: 8, stay: 45, recede: 30, mud: 40, silt: 60, fert: 0.3,
+  botHit: 3, hurt: 0.35, refill: 120, slow: { pour: 0.5, water: 0.3, mud: 0.6 }, every: 10 };
+/*
+ * CAVE (Cave in, a Grader job on the Terraform tab): on a Murmur tunnel tile (in your land or no-one's) it caves the
+ * tunnel in for `len` tiles each way along it: the ridge slumps to a groove (S.caveIn: the Murmur never dig through it
+ * again), and every exit of that nest cut off from its nest by it caves in too. On an exit (yours to cave: the Murmur's,
+ * or a foe's Sap Head exit), it collapses it. `time` s of work, no goods.
+ *
+ * SAP: a Sap Head (BDEFS.saphead) digs a sap, a tunnel of its own, along a route its owner plans from it like a road
+ * (up to `most` tiles, under anything a Murmur tunnel goes under: ground, roads, buildings, Walls), `dig` s a tile while
+ * it stands (not switched off), up to `reach` tiles out. Only its owner sees the route. When the head passes under (or within `hear`
+ * tiles of) a foe's building or Wall, that foe feels a tremor near it (once per `tremorEvery` s, the place given to
+ * `tremorFuzz` tiles). At the route's end it breaks out: an exit (BDEFS.sapexit, its owner's, `exitArmor`) opens, and
+ * the owner's ground robots go through the sap between the Sap Head and the exit as if it were a road `cost` times as
+ * long (heavy robots too). A foe can shoot the exit down or cave it in, and the sap is dead; re-plan from the Sap Head.
+ */
+const CAVE = { len: 3, time: 14 };
+const SAP = { most: 30, reach: 30, dig: 8, hear: 1, tremorEvery: 20, tremorFuzz: 2, exitArmor: 20, cost: 0.6 };
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
 /** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
@@ -879,9 +942,14 @@ const SHAPE_PRESETS = [
     tip: 'Half underground: a surface half and a cave half joined by two or three mouths in a solid wall. The caves hold the Ore and Crystal, the surface the Fiber and crops; nothing grows or is harvested in the caves, and no Missile, bomb or aircraft reaches in. Each colony starts with a stock of what its side lacks, but it runs out: expand through the mouths early.',
     tipIn: 'Half underground, starting in the caves: Ore and Crystal all round you, safe from Missiles and aircraft, but nothing grows here. Your stock of Fiber lasts a while; Fuel comes from the oil seeps (Oil Pump, then a Refinery). Push Outposts out through the cave mouths to the stalk groves and crop soil on the surface before the Fiber runs out.',
     tipOut: 'Half underground, starting on the surface: farms, crops and stalk groves, but little Ore or Crystal. Your stock of Ore and Crystal lasts a while; the caves hold plenty more. Push Outposts in through the cave mouths early, and watch the air: your rival inside cannot be bombed or hit by Missiles, but you can.' },
+  // Orbital platforms (the owner's idea, Nov 2026): a few Accord station decks high over the planet, joined by drawbridges that a
+  // control box at each end raises and lowers (orbitalMap in world.js, ORBITAL in defs.js, the rules in sim.js, the look in js/orbital.js).
+  // Two colonies. Argos's rules whatever the Biome setting (no Murmur, no weather, no dust storm).
+  { name: 'Orbital platforms', group: 'heights', noMurmur: true, blurb: 'Accord station decks high over the planet, joined by drawbridges. A control box at each end raises or lowers its bridge: hold the boxes and you choose who can cross.', w: 1.2, h: 1.2, orbital: true, flat: true,
+    tip: 'Orbital platforms: your colony stands on a station deck high over the planet, and the other decks are joined to it by bridges. Every bridge starts down. Each has a control box at both ends (small consoles, lit in the colour of whoever holds them): hold a box with armed robots, or the ground round it, and tap it to Raise or Lower its bridge. A bridge goes up only when nothing stands on it, after a short warning, and a raised bridge is a gap nothing can walk across. Aircraft, Airships and Missiles still fly over it. Argos\'s rules: no Murmur, no weather.' },
 ];
 /** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
-function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.asteroids); }
+function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && (P.asteroids || P.orbital)); } // (Orbital platforms lie in open space too: the void between its decks)
 /** Is tile t space on The Ring: empty void that nothing can cross or build on (T_CHASM there, never a Sky bridge)? */
 function voidTile(t) { return S.terrain[t] === T_CHASM && ringShape(); }
 /**
@@ -1111,22 +1179,42 @@ const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or 
  */
 const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, stone: HOME_STONE };
 /**
+ * Orbital platforms (SHAPE_PRESETS orbital: orbitalMap in world.js, the rules in sim.js (orbSet, orbTick), the look in js/orbital.js).
+ * Five to seven Accord station decks in the high atmosphere, the space between them `T_CHASM` that nothing can build on or
+ * cross (voidTile), joined by drawbridges: a strip of tiles between two decks that is walkable while the bridge is down and
+ * void while it is up. A control box stands at each end of a bridge; the colony that holds either box can order the bridge up or
+ * down. S.orb: { plats, br: [bridges], bx: [boxes] } (see orbitalMap).
+ *   warn    seconds between a Raise order and the bridge lifting (still walkable: time to cross or clear it); if a robot is on it
+ *           then, it stays down (no robot is ever lost to a raise)
+ *   lift    seconds the leaf takes to swing up or come down (a raised bridge is void from the start of the lift; a lowered one
+ *           walkable at the end of it)
+ *   cool    seconds after a bridge has moved before any order can move it again
+ *   fail    seconds' rest after a raise that was called off
+ *   reach   tiles from a control box within which armed robots hold it
+ *   pad     tiles round the strip that a robot's centre counts as on it
+ *   mul, oil, stone  as RING's: the decks are small, so deposits are a little richer, every deck has an oil seep or two for Fuel,
+ *           and each home deck is topped up to `stone` Stone
+ */
+const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE };
+/** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
+function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }
+/**
  * Half underground (SHAPE_PRESETS caves: cavesMap in world.js). One map half is the surface (the Biome's look and rules), the
  * other the caves (the Hollow's look, always dark, no weather); a solid wall between them is broken only by two or three
  * entrances. S.cave tiles: 0 surface, 1 inside the caves, 2 the wall (rock nothing tunnels through).
  *   stock     the opening stock on top of START_STOCK for a colony that starts inside (no Fiber source there) and for one
- *             that starts outside (little Ore or Crystal there): enough for the first minutes, then it has to branch out
+ *             that starts outside (no Ore or Crystal there at all): enough for the first minutes, then it has to branch out
  *             through the entrances; `bots` the extra Workers inside, which have no Agribot's crops to staff
  *   mouth     entrance half-widths (tiles to each side of the middle line): a narrow gate, a middle one and a wide mouth
  *   nests     Murmur nest sites on each half of the map (in twin pairs) by Size, only with the Murmur on
  *   ore, crystal, stone, oil, stalk  how many fields a thousand tiles of cave (ore, crystal, stone, oil) and of surface
- *             (stalk groves, fertile soil, a little Ore and Crystal) get: the caves hold the riches
+ *             (stalk groves, fertile soil; Ore and Crystal are 0 there on purpose) get: the caves hold all the Ore and Crystal
  */
 const CAVES = {
-  stock: { inside: { fiber: 100, fuel: 30, stone: 10, cement: 12 }, outside: { ore: 60, crystal: 25, alloy: 25, fiber: 20 } },
+  stock: { inside: { fiber: 140, fuel: 30, stone: 12, cement: 20 }, outside: { ore: 130, crystal: 60, alloy: 30, fiber: 30 } },
   mouth: [1, 2.5, 5], wall: 2,
   nests: [2, 3, 4, 5, 7, 9],
-  inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 1.3, crystal: 0.9, oil: 1 },
+  inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 0, crystal: 0, oil: 1 },
 };
 /** Does map type `shape` (or, with none given, the current game's) have the caves (Half underground)? */
 function cavesShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.caves); }
@@ -1757,6 +1845,22 @@ const BDEFS = {
     desc: 'Power from the heat below, with no Fuel: built right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells vent. Like a Generator, every factory, Refinery, Oil Pump and Bot Foundry within 3 tiles works a third faster while it runs, and it powers a Seam Drill, a Seed Mast, a Maglev Terminal or a Mass Driver end (a shot on it costs no Fuel). It never powers a megastructure: those want a Generator\'s Fuel.',
     cost: { cement: 6, alloy: 3, chip: 1 }, t3: true, burner: { radius: THERMAL.radius, boost: 1 / 3, perFuel: 0, heat: true }, armor: 10, buildTime: 12,
   },
+  // Terraforming, stage 4 (SLUICE, SAP): on the Terraform tab too, `t4`; the player's alone. A Sluice is two tiles (long).
+  sluice: {
+    name: 'Sluice', short: 'Sluice',
+    desc: 'Radial gates in a concrete sill, built on the bank where a lake, river or canal meets ground no higher than its own (R turns it). Shut, it holds the water back. Open it from its panel and the water pours out over the low ground beyond: pouring, spreading, under water, then wet mud and dried silt as it goes down. Nobody walks under water, mud slows everyone, and buildings the water reaches are damaged and knocked out while it stands. It refills before it can open again.',
+    cost: { cement: 6, alloy: 2 }, sluice: true, t4: true, long: true, armor: 14, buildTime: 16,
+  },
+  saphead: {
+    name: 'Sap Head', short: 'Sap',
+    desc: 'A tunnel bore under a hut of shoring. Plan a route from it like a road (its panel: Plan sap) and it digs a sap along it, slowly, under ground, roads, buildings and Walls. Only you see the route; a rival only feels a tremor when the head passes under something of theirs. At the end it breaks out: an exit opens, and your robots go through the sap between the Sap Head and the exit. The enemy can shoot the exit down or cave it in.',
+    cost: { cement: 4, alloy: 3, chip: 1 }, saphead: true, t4: true, armor: 12, buildTime: 14,
+  },
+  // A Sap Head's break-out (SAP): not built, never in a menu; its owner's robots come up through it.
+  sapexit: {
+    name: 'Sap Exit', desc: 'Where a Sap Head\'s tunnel breaks out: its owner\'s robots come up through it from the Sap Head. Shoot it down or cave it in (a Grader\'s Cave in) to shut the sap.',
+    cost: {}, sapexit: true, armor: SAP.exitArmor, buildTime: 1,
+  },
   repair: {
     name: 'Repair Station',
     desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
@@ -1902,7 +2006,7 @@ const BDEFS = {
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
   'kiln', 'tarworks', 'roadworks', 'station', 'magterm', 'mdriver', 'catcher', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'lance', 'sunder', 'dome', 'city', 'lift', 'atmos', 'deepcore', 'gup', 'depot', 'grower', 'lab', 'terminal',
-  'composter', 'nursery', 'wpump', 'seamdrill', 'seedmast', 'thermal']; // (the last six on the Terraform tab, with its tools: js/terraform2.js, js/terraform3.js)
+  'composter', 'nursery', 'wpump', 'seamdrill', 'seedmast', 'thermal', 'sluice', 'saphead']; // (the last eight on the Terraform tab, with its tools: js/terraform2.js, js/terraform3.js, js/terraform4.js)
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
@@ -2754,6 +2858,9 @@ const FLAVOR = {
   seamdrill: 'Bores to the seams the survey filed under instrument error.',
   seedmast: 'Ringfall restocks the planet on its own schedule. The Seedbed keeps ours.',
   thermal: 'The Pathfinder zoned this ground for bathhouses. It runs a turbine instead.',
+  sluice: 'Built to water the colonists\' fields. Opened on someone else\'s.',
+  saphead: 'Utility tunnel, per the city plan. Utilities: one warbot company.',
+  sapexit: 'Utility access hatch. Not on the city plan.',
   express: 'Arterial, built to the standard. Speed limit posted. Nobody reads it.',
   roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
   freight: 'Timetable slot reserved for a passenger service. Unused.',
@@ -2783,6 +2890,7 @@ const FLAVOR = {
   // Neutral ground (not buildings anyone owns)
   post: 'Accord rates honoured. The ledger is still open.',
   uplink: 'Transmitting. No response. Transmitting.',
+  bridge: 'Span lock: obeys whoever holds the box. The station logs no rank.',
 };
 
 /** Lines for the loading screen (one at random, in index.html: keep the two lists the same). */

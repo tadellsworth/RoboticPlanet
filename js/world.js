@@ -27,6 +27,7 @@ function generateMap(seed, W, H, cfg) {
   cfg = cfg || {};
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).hollow) return hollowMap(seed, W, H, cfg); // (its own layout: see hollowMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).orbital) return orbitalMap(seed, W, H, cfg); // (Orbital platforms: station decks and drawbridges, see orbitalMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
@@ -2850,7 +2851,7 @@ function ringMap(seed, W, H, cfg) {
  *     narrow middle gate with wide mouths to each side, a wide middle mouth with narrow gates to each side, or two middle-sized
  *     mouths only. Each opens into a funnel of open floor on both sides.
  *   - Inside: the Hollow's look; winding passages and pillars, no stalks or fertile soil, plenty of Ore and Crystal, Stone and oil.
- *     Outside: flat ground with crags, the standard colony's stalk groves, fertile soil, Stone and oil, and little Ore or Crystal.
+ *     Outside: flat ground with crags, the standard colony's stalk groves, fertile soil, Stone and oil, and NO Ore or Crystal (the caves hold it all).
  *   - Returns what generateMap does, plus `cave` (the S.cave tile mask) and `caves`: { south, seats: [{x, y, inside}],
  *     entrances: [{x, y, hw}], nests: [{x, y}] (twin pairs, inside), nestsOut: the same on the surface, wall: [y of the wall's middle at each column] }.
  */
@@ -2977,8 +2978,7 @@ function cavesMap(seed, W, H, cfg) {
   const KIT = {
     out: [[-6, 2, 2.6, R_STALK, 0.85], [-4, -4, 1.6, R_STALK, 0.8], [7, -3, 1.6, R_STALK, 0.8], [1, 8, 2.0, R_STALK, 0.8],
       [6, 0, 1.8, R_BOULDER, 0.8], [2, -4, 1.2, R_BOULDER, 0.7], [-8, -6, 1.4, R_BOULDER, 0.75],
-      [-1, 6.5, 2.2, 'fert', 0.85], [5, 7, 1.8, 'fert', 0.85], [-9, 5, 1.7, 'fert', 0.85],
-      [-4, 5, 1.0, R_ORE, 0.9], [4, 5, 1.0, R_CRYSTAL, 0.9], [9, -2, 0.9, R_ORE, 0.8], [-10, 1, 0.9, R_CRYSTAL, 0.8]],
+      [-1, 6.5, 2.2, 'fert', 0.85], [5, 7, 1.8, 'fert', 0.85], [-9, 5, 1.7, 'fert', 0.85]], // (no Ore or Crystal on the surface: it comes through the mouths)
     in: [[6, 0, 1.8, R_BOULDER, 0.8], [2, -4, 1.2, R_BOULDER, 0.7], [-8, -6, 1.4, R_BOULDER, 0.75], [-5, 7, 1.3, R_BOULDER, 0.7],
       [-4, 5, 1.9, R_ORE, 0.9], [9, 3.5, 1.9, R_ORE, 0.85], [-8, -4, 1.6, R_ORE, 0.85], [-1, 9, 1.8, R_ORE, 0.8],
       [4, 5, 1.7, R_CRYSTAL, 0.9], [-10, -1, 1.6, R_CRYSTAL, 0.85], [10, -4, 1.6, R_CRYSTAL, 0.8], [5, 10, 1.5, R_CRYSTAL, 0.8]],
@@ -3109,6 +3109,228 @@ function cavesMap(seed, W, H, cfg) {
     ...out, bases: ordered.map((s) => ({ x: s.x, y: s.y })),
     spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
     caves: { south, seats: ordered.map((s) => ({ x: s.x, y: s.y, inside: s.inside })), entrances, nests, nestsOut, variant },
+  };
+}
+
+/* ------------------------------------------------------------------ Orbital platforms */
+
+/**
+ * Orbital platforms (SHAPE_PRESETS orbital, ORBITAL in defs.js): two colonies on station decks high over the planet. Its own
+ * generator (called by generateMap first thing, as ringMap is), point-symmetric to the tile (every tile has its twin, the same
+ * spot turned half round), so both colonies get exactly the same. The decks are rectangles with their corners cut, level
+ * ground (elevation 0), the space between them `T_CHASM` (voidTile: nothing is built on it or crosses it); the decks are
+ * joined by bridges, strips of BW tiles across a gap of `g` tiles.
+ *   Small and Medium, five decks: a home deck at each end (player 0's at the bottom), a big middle deck (its own twin), and a
+ *     side deck to each side (twins), each beside the middle deck and under (or over) a home deck. Six bridges: each home deck to
+ *     the middle deck and to its side deck, and the side decks to the middle one.
+ *   Large and up, seven decks: the same homes and middle deck (now a tall spine), and two side decks on each side, one beside
+ *     each home deck's end. Eight bridges: each home deck to a side deck on each side, and the four side decks to the middle one.
+ * Every bridge starts down (a strip of ground), and has a control box on each deck at its two ends (S.orb.bx), standing
+ * on the rim's clear ground beside the bridge head. The rim (any ground beside space) and the heads stay clear of deposits and
+ * crags; the middle of the middle deck and of each side deck stays bare (a Trade Post or an Uplink can stand there).
+ * Resources: the standard colony's starter fields on each home deck (the same offsets from the Command Base as every map, and
+ * the Ring's: Stalk, Stone, Ore, Crystal, fertile soil and three oil fields), the other decks get fields scattered over them (more
+ * the bigger the deck) and an oil seep or two, so Fuel is never short.
+ * Returns what generateMap does, with `orbital`: { plats: [{ id, x0, y0, x1, y1, kind, tw }], br: [{ id, ax, x0, y0, x1, y1, a, b }] }
+ * (the decks and the bridges, boxes are made by newGame).
+ */
+function orbitalMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
+  const N = W * H, half = Math.floor(H / 2);
+  const terrain = new Uint8Array(N).fill(T_CHASM), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1);
+  const id = (i, j) => j * W + i, mir = (t) => N - 1 - t;
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const rng = makeRng((seed ^ 0x6f1d3b) >>> 0), sH = seed * 7 + 11;
+  const dens = RPR.density, stampDens = clamp(dens, 0.7, 1.15);
+  const seven = (cfg.size ?? 1) >= 2, BW = ORBITAL.width, CH = 2, M = 2;
+  const g = clamp(Math.round(H * 0.075), 4, 7);
+  const twinR = (r) => ({ x0: W - 1 - r.x1, x1: W - 1 - r.x0, y0: H - 1 - r.y1, y1: H - 1 - r.y0 });
+  // 1) The decks (as rectangles). Index 0 is player 0's home deck, 1 its twin, 2 the middle deck; then side decks, each followed by its twin.
+  const plats = [];
+  const add = (r, kind, tw) => { plats.push({ id: plats.length, ...r, kind, tw }); return plats.length - 1; };
+  const hh = clamp(Math.round(H * (seven ? 0.2 : 0.23)), 12, 28);
+  const yA0 = H - M - hh, lw = clamp(Math.round(W * 0.2), 7, 40), lx0 = M, lx1 = M + lw - 1;
+  const aX = clamp(Math.round(W * 0.14), 3, lx1 - 2 * CH - BW + 1);
+  add({ x0: aX, x1: W - 1 - aX, y0: yA0, y1: H - 1 - M }, 'home', 1);
+  add(twinR(plats[0]), 'home', 0);
+  const mx0 = lx1 + 1 + g;
+  const link = []; // [deck, deck] of the bridges (canonical ones; their twins are made below)
+  if (!seven) {
+    const yM1 = yA0 - 1 - g, hL = clamp(Math.round(H * 0.2), 9, 40);
+    add({ x0: mx0, x1: W - 1 - mx0, y0: H - 1 - yM1, y1: yM1 }, 'mid', 2);
+    const L = add({ x0: lx0, x1: lx1, y0: yM1 - hL + 1, y1: yM1 }, 'deck', 4), R = add(twinR(plats[L]), 'deck', L);
+    plats[L].tw = R;
+    link.push([0, 2], [0, L], [L, 2]);
+  } else {
+    const yL1 = yA0 - 1 - g, yL2 = M + hh + g, hL = Math.floor((yL1 - yL2 + 1 - g) / 2);
+    add({ x0: mx0, x1: W - 1 - mx0, y0: H - 1 - yL1, y1: yL1 }, 'mid', 2);
+    const L1 = add({ x0: lx0, x1: lx1, y0: yL1 - hL + 1, y1: yL1 }, 'deck', 0), R1 = add(twinR(plats[L1]), 'deck', L1);
+    const L2 = add({ x0: lx0, x1: lx1, y0: yL2, y1: yL2 + hL - 1 }, 'deck', 0), R2 = add(twinR(plats[L2]), 'deck', L2);
+    plats[L1].tw = R1; plats[L2].tw = R2;
+    link.push([0, L1], [0, R2], [L1, 2], [L2, 2]);
+  }
+  const inDeck = (r, i, j) => { if (i < r.x0 || i > r.x1 || j < r.y0 || j > r.y1) return false; return Math.min(i - r.x0, r.x1 - i) + Math.min(j - r.y0, r.y1 - j) >= CH; };
+  for (const r of plats) for (let j = r.y0; j <= r.y1; j++) for (let i = r.x0; i <= r.x1; i++) if (inDeck(r, i, j)) terrain[id(i, j)] = T_GROUND;
+  // 2) The bridges: a strip of BW tiles across the gap between two decks, in the middle of the stretch both can reach (their corners are cut).
+  const br = [];
+  const strip = (a, b) => {
+    const p = plats[a], q = plats[b];
+    const ox0 = Math.max(p.x0, q.x0) + CH, ox1 = Math.min(p.x1, q.x1) - CH, oy0 = Math.max(p.y0, q.y0) + CH, oy1 = Math.min(p.y1, q.y1) - CH;
+    if (ox1 - ox0 + 1 >= BW && (p.y1 < q.y0 || q.y1 < p.y0)) { // one over the other
+      const c = Math.floor((ox0 + ox1) / 2), top = p.y1 < q.y0 ? p : q, bot = top === p ? q : p;
+      return { ax: 'v', x0: c - 1, x1: c + 1, y0: top.y1 + 1, y1: bot.y0 - 1, a: top.id, b: bot.id };
+    }
+    if (oy1 - oy0 + 1 >= BW && (p.x1 < q.x0 || q.x1 < p.x0)) { // side by side
+      const c = Math.floor((oy0 + oy1) / 2), lf = p.x1 < q.x0 ? p : q, rt = lf === p ? q : p;
+      return { ax: 'h', x0: lf.x1 + 1, x1: rt.x0 - 1, y0: c - 1, y1: c + 1, a: lf.id, b: rt.id };
+    }
+    return null;
+  };
+  for (const [a, b] of link) {
+    const s = strip(a, b);
+    if (!s) continue;
+    br.push(s);
+    // its twin: the same strip turned half round (the deck at its low end is now the twin of the other end's)
+    br.push({ ax: s.ax, x0: W - 1 - s.x1, x1: W - 1 - s.x0, y0: H - 1 - s.y1, y1: H - 1 - s.y0, a: plats[s.b].tw, b: plats[s.a].tw });
+  }
+  br.forEach((s, k) => { s.id = k; });
+  // 3) The rim (kept clear), the heads of the bridges and the bare middles.
+  const rim = new Uint8Array(N), bare = new Uint8Array(N), near = new Uint8Array(N);
+  for (let t = 0; t < N; t++) if (terrain[t] !== T_CHASM) { const i = t % W, j = (t / W) | 0; if (i === 0 || j === 0 || i === W - 1 || j === H - 1) { rim[t] = 1; continue; } orth(t, (u) => { if (terrain[u] === T_CHASM) rim[t] = 1; }); }
+  for (let t = 0; t < N; t++) if (rim[t]) { near[t] = 1; orth(t, (u) => { near[u] = 1; }); }
+  const mark = (arr, x0, y0, x1, y1) => { for (let j = Math.max(0, y0); j <= Math.min(H - 1, y1); j++) for (let i = Math.max(0, x0); i <= Math.min(W - 1, x1); i++) arr[id(i, j)] = 1; };
+  for (const s of br) {
+    // a head's ground: 4 tiles into each deck, 3 tiles either side of the strip
+    if (s.ax === 'v') { mark(bare, s.x0 - 3, s.y0 - 4, s.x1 + 3, s.y0 - 1); mark(bare, s.x0 - 3, s.y1 + 1, s.x1 + 3, s.y1 + 4); }
+    else { mark(bare, s.x0 - 4, s.y0 - 3, s.x0 - 1, s.y1 + 3); mark(bare, s.x1 + 1, s.y0 - 3, s.x1 + 4, s.y1 + 3); }
+  }
+  for (const r of plats) if (r.kind !== 'home' && r.id <= r.tw) { const cx = Math.round((r.x0 + r.x1) / 2), cy = Math.round((r.y0 + r.y1) / 2); mark(bare, cx - 2, cy - 2, cx + 2, cy + 2); mark(bare, W - 1 - cx - 2, H - 1 - cy - 2, W - 1 - cx + 2, H - 1 - cy + 2); } // (a deck's middle, and its twin's turned half round)
+  // The control boxes: one on each deck at each end of a bridge, on clear ground just beside the head.
+  const bx = [];
+  for (const s of br) for (const end of [0, 1]) {
+    if (s.id % 2) { const o = bx.find((b) => b.br === s.id - 1 && b.end === 1 - end); if (o) bx.push({ id: bx.length, br: s.id, end, x: W - 1 - o.x, y: H - 1 - o.y, owner: -1 }); continue; } // (a twin bridge's boxes are its original's, turned half round)
+    const cand = [];
+    for (const d of [2, 3]) for (const side of [-1, 1]) {
+      const along = side < 0 ? (s.ax === 'v' ? s.x0 - 2 : s.y0 - 2) : (s.ax === 'v' ? s.x1 + 2 : s.y1 + 2);
+      const ins = end === 0 ? (s.ax === 'v' ? s.y0 - d : s.x0 - d) : (s.ax === 'v' ? s.y1 + d : s.x1 + d);
+      cand.push(s.ax === 'v' ? [along, ins] : [ins, along]);
+    }
+    const pick = cand.find(([i, j]) => i > 0 && j > 0 && i < W - 1 && j < H - 1 && terrain[id(i, j)] === T_GROUND && !rim[id(i, j)] && !near[id(i, j)]) || cand.find(([i, j]) => terrain[id(i, j)] === T_GROUND);
+    if (pick) bx.push({ id: bx.length, br: s.id, end, x: pick[0], y: pick[1], owner: -1 });
+  }
+  // A few crags, away from the rim, the heads, the middles and the bases.
+  const base = { x: Math.floor(W / 2), y: yA0 + Math.round(hh * 0.56) };
+  base.y = Math.min(base.y, H - M - 6);
+  const bxx = base.x, byy = base.y;
+  for (let t = 0; t < N; t++) {
+    if (terrain[t] !== T_GROUND || near[t] || bare[t] || rim[t]) continue;
+    const i = t % W, j = (t / W) | 0, m = Math.min(t, mir(t)), mi = m % W, mj = (m / W) | 0;
+    if (dist2(i, j, bxx, byy) < 100 || dist2(i, j, W - 1 - bxx, H - 1 - byy) < 100) continue;
+    if (fbm(mi / 6.5, mj / 6.5, sH, 3) > TPR.rock + 0.05) terrain[t] = T_ROCK;
+  }
+  for (let t = 0; t < N; t++) if (bx.some((b) => id(b.x, b.y) === t) && terrain[t] === T_ROCK) terrain[t] = T_GROUND;
+  // 4) Resources, every tile made to its twin as well. `jmin`: the middle deck is its own twin, so it is laid out in its lower half.
+  const free = (t) => terrain[t] === T_GROUND && !rim[t] && !res[t] && !fert[t] && !bare[t];
+  const stamp = (x, y, rad, type, fill, jmin) => {
+    for (let j = Math.max(jmin || 0, Math.floor(y - rad)); j <= Math.min(H - 2, Math.ceil(y + rad)); j++) {
+      for (let i = Math.max(1, Math.floor(x - rad)); i <= Math.min(W - 2, Math.ceil(x + rad)); i++) {
+        const d2 = dist2(i, j, x, y), t = id(i, j);
+        if (d2 > rad * rad || !free(t) || !free(mir(t))) continue;
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        for (const u of [t, mir(t)]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } }
+      }
+    }
+  };
+  const oil = (x, y, k, jmin) => {
+    const c = [];
+    for (let j = Math.max(jmin || 0, Math.floor(y - 3)); j <= Math.min(H - 2, Math.ceil(y + 3)); j++) for (let i = Math.max(1, Math.floor(x - 3)); i <= Math.min(W - 2, Math.ceil(x + 3)); i++) { const t = id(i, j); if (free(t) && free(mir(t))) c.push([dist2(i, j, x, y), t]); }
+    c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [, t] of c.slice(0, k)) for (const u of [t, mir(t)]) res[u] = R_OIL;
+  };
+  // The landing zone: open ground round each Command Base.
+  for (let j = byy - 4; j <= byy + 4; j++) for (let i = bxx - 4; i <= bxx + 4; i++) { const t = id(i, j); if (terrain[t] === T_ROCK) for (const u of [t, mir(t)]) terrain[u] = T_GROUND; }
+  // The home decks: the standard colony's starter fields, then the richer ones out beyond, and oil.
+  stamp(bxx - 6, byy - 2, 2.5, R_STALK, 0.85 * stampDens);
+  stamp(bxx - 4, byy + 4, 1.4, R_STALK, 0.8 * stampDens);
+  stamp(bxx + 6, byy, 1.8, R_BOULDER, 0.8 * stampDens);
+  stamp(bxx - 4, byy - 5, 1.3, R_ORE, 0.9 * stampDens);
+  stamp(bxx + 4, byy - 5, 1.3, R_CRYSTAL, 0.9 * stampDens);
+  stamp(bxx + 2, byy + 4, 1.2, R_BOULDER, 0.7 * stampDens);
+  stamp(bxx - 1, byy - 6.5, 2.0, 'fert', 0.85);
+  stamp(bxx + 9, byy - 3.5, 1.6, R_ORE, 0.8 * stampDens);
+  stamp(bxx - 10, byy + 2.5, 1.5, R_CRYSTAL, 0.8 * stampDens);
+  for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, ORBITAL.oil.home)) oil(bxx + dx, byy + dy, 4);
+  stamp(bxx - 8, byy + 6, 1.4, R_BOULDER, 0.75 * stampDens);
+  // The other decks: fields scattered over them (the more the bigger), best-candidate spaced, Ore, Crystal and Stone in turn, and oil.
+  const scatter = (r, jmin) => {
+    const x0 = r.x0 + 2, x1 = r.x1 - 2, y0 = Math.max(r.y0 + 2, jmin || 0), y1 = r.y1 - 2;
+    if (x1 < x0 || y1 < y0) return;
+    const area = (x1 - x0 + 1) * (y1 - y0 + 1), n = clamp(Math.round(area / 34), 3, 36), sites = [], types = [R_ORE, R_CRYSTAL, R_BOULDER, R_ORE, R_CRYSTAL, R_BOULDER, R_ORE, R_CRYSTAL];
+    const pickSite = (minD) => {
+      let best = null, bs = -1;
+      for (let k = 0; k < 14; k++) {
+        const x = x0 + rng() * (x1 - x0), y = y0 + rng() * (y1 - y0), t = id(Math.round(x), Math.round(y));
+        if (!free(t) || !free(mir(t))) continue;
+        let d = Infinity; for (const s of sites) d = Math.min(d, dist(x, y, s[0], s[1]));
+        if (d >= minD && d > bs) { bs = d; best = [x, y]; }
+      }
+      return best;
+    };
+    const oils = r.kind === 'mid' ? ORBITAL.oil.mid : ORBITAL.oil.deck + Math.floor(area / 420);
+    for (let k = 0; k < oils; k++) { const s = pickSite(4); if (s) { sites.push(s); oil(s[0], s[1], 3, jmin); } }
+    for (let k = 0; k < n; k++) {
+      const s = pickSite(4.2);
+      if (!s) continue;
+      sites.push(s);
+      const type = types[k % types.length];
+      stamp(s[0], s[1], type === R_BOULDER ? 1.5 : 1.7, type, 0.85, jmin);
+    }
+  };
+  for (const r of plats) {
+    if (r.kind === 'mid') scatter(r, half);
+    else if (r.kind === 'deck' && r.id < r.tw) scatter(r);
+  }
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 600 && placed < Math.ceil(URANIUM_DEPOSITS / 2); tries++) {
+      const i = 2 + Math.floor(rng() * (W - 4)), j = half + 1 + Math.floor(rng() * (H - half - 3)), t = id(i, j);
+      if (!free(t) || !free(mir(t)) || dist(i, j, bxx, byy) < 12) continue;
+      for (const u of [t, mir(t)]) res[u] = R_URANIUM;
+      placed++;
+    }
+  }
+  // Stone: each home deck is topped up to ORBITAL.stone (Cement comes from Stone alone, and every Viaduct costs Cement).
+  {
+    const per = clamp(Math.round(RES[R_BOULDER].amount * RPR.amount * ORBITAL.mul), 1, 255), target = Math.round(ORBITAL.stone * RPR.amount);
+    const b0 = id(bxx, byy), land = new Uint8Array(N), q = [b0];
+    land[b0] = 1;
+    for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!land[u] && terrain[u] !== T_CHASM) { land[u] = 1; q.push(u); } });
+    let have = 0;
+    for (const t of q) if (res[t] === R_BOULDER) have += per;
+    const spots = q.filter((t) => free(t) && free(mir(t)) && dist((t % W), (t / W) | 0, bxx, byy) >= 4.5)
+      .sort((a, c) => (dist2(a % W, (a / W) | 0, bxx + 3, byy + 7) - dist2(c % W, (c / W) | 0, bxx + 3, byy + 7)) || a - c);
+    for (let k = 0; k < spots.length && have < target; k++) { for (const u of [spots[k], mir(spots[k])]) res[u] = R_BOULDER; have += per; }
+  }
+  // The rim and the heads stay clear; nothing lies off the ground.
+  for (let t = 0; t < N; t++) {
+    if (rim[t]) { if (terrain[t] === T_ROCK) terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+    if (terrain[t] !== T_GROUND) { res[t] = R_NONE; fert[t] = 0; }
+  }
+  // How much each holds (as on every map: richer out toward the middle).
+  const reach = Math.max(1, dist(bxx, byy, W - 1 - bxx, H - 1 - byy) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bxx, byy), dist(i, j, W - 1 - bxx, H - 1 - byy));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (SKY_RICH.includes(res[t]) ? ORBITAL.mul : 1)), 1, 255);
+  }
+  // The bridges start down: the strips are ground (flat, bare: nothing is ever built or grown on them).
+  for (const s of br) for (let j = s.y0; j <= s.y1; j++) for (let i = s.x0; i <= s.x1; i++) { const t = id(i, j); terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bxx, y: byy }, { x: W - 1 - bxx, y: H - 1 - byy }],
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    orbital: { plats: plats.map((r) => ({ id: r.id, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, kind: r.kind, tw: r.tw })), br, bx },
   };
 }
 
@@ -3314,7 +3536,7 @@ function newGame(opts) {
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
-  if (SHAPE_PRESETS[settings.shape].asteroids) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring has Argos's look and rules, whatever the Biome setting)
+  if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring and Orbital platforms have Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
   const { W, H } = mapDims(settings);
@@ -3375,6 +3597,7 @@ function newGame(opts) {
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
+  if (m.orbital) S.orb = orbInit(m.orbital, m.bases); // (Orbital platforms: its decks, drawbridges and control boxes: orbitalMap)
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   if (SHAPE_PRESETS[settings.shape].walker) walkerSetup(m.bases); // (the Walking Factory: its yard and loop round the middle)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
@@ -3446,6 +3669,8 @@ function newGame(opts) {
   if (opts.setup) opts.setup(S);
   clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
   S.decor = makeDecor();
+  if (S.orb) S.decor.fill(0); // (no plants on a station's decks)
+  if (S.orb) orbRoads(); // (and the lowered bridges carry roads)
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
   if (S.town) for (let j = S.town.y0; j <= S.town.y1; j++) for (let i = S.town.x0; i <= S.town.x1; i++) if (townIn(i, j)) S.decor[j * S.W + i] = 0; // (nor in Passenger Town's streets)
@@ -3654,6 +3879,7 @@ function passTile(t, who) {
   if (!b) return false;
   if (b.type === 'viaduct') return true;
   if (BDEFS[b.type].pylon) return !!S.road[t];
+  if (b.type === 'saphead' || b.type === 'sapexit') return who !== undefined && who === b.owner; // (stage 4: its owner's robots go down and up a sap through it)
   return (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
 
@@ -4419,6 +4645,7 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
     const r2 = canPlace(owner, type, i2, j2, skipBlockCheck, '_');
     if (!r2.ok) return { ok: false, reason: `It is two tiles long, and its other end won't go there: ${r2.reason}` };
     if (S.elev[tIdx(i, j)] !== S.elev[tIdx(i2, j2)]) return { ok: false, reason: 'It is two tiles long and needs level ground under both.' };
+    if (def.sluice) { const sw = sluiceWhy(i, j, axis); if (sw) return { ok: false, reason: sw }; } // (stage 4: on the bank, water on one side, low ground on the other)
     return r;
   }
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
@@ -4427,11 +4654,13 @@ function canPlace(owner, type, i, j, skipBlockCheck, axis) {
   // (Nothing can be attacked on a Trade Post's ground, so only the Terminal that docks there may stand on it: an Outpost
   // or Wall there would be a door no enemy could ever break.)
   if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
+  if (orbTile(t)) return { ok: false, reason: 'A drawbridge: nothing is built on it.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return { ok: false, reason: lw }; } // (a landmark's ground: js/landmarks.js)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return { ok: false, reason: 'The dam stands here: tap it to Demolish it or Shore it up.' };
   if (S.town && townRuinAt(t)) return { ok: false, reason: `${TOWN_KINDS[townRuinAt(t).k].name.replace(/^the /i, 'The ')} of Passenger Town stands here: tap it and Strip for salvage to open its lot.` };
   if (S.walker && walkerYard(i, j)) return { ok: false, reason: 'The Walking Factory\'s yard: it walks here, so nothing can be built on it.' };
+  if (S.ewK && S.ewK[t]) return { ok: false, reason: 'An earthwork stands here (an Earth Bank, a Fire Trench or Dragon\'s Teeth).' };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
@@ -4765,10 +4994,12 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if ((S.bAt[t] && !pylonAt(t)) || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t]) || liftWreckAt(t)) return false;
   if (voidTile(t)) return false; // (the void of The Ring: no road, bridge or tunnel)
+  if (orbTile(t)) return false; // (a drawbridge's strip carries its own road while it is down: orbFlip)
   if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
+  if (S.ewK && S.ewK[t]) return false; // (stage 4: an earthwork stands here)
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -5986,6 +6217,9 @@ function destroyBuilding(b, burn, quiet) {
   // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
   if (typeof dropLoot === 'function' && (b.built || !burn) && !shaft) dropLoot(b); // (a Deep Core's stock is lost with it)
   if (BDEFS[b.type].magterm) magTermDown(b);
+  // (stage 4: a Sap Exit gone shuts its sap; a Sap Head gone takes its exit with it)
+  if (BDEFS[b.type].sapexit && typeof sapExitLost === 'function') sapExitLost(b, b.lastHitBy ?? -1);
+  if (BDEFS[b.type].saphead && b.sap && b.sap.exit) { const e = getE(b.sap.exit); b.sap.exit = 0; if (e && !e.dead) { e.head = 0; destroyBuilding(e, false, true); } }
   releaseBotsFrom(b, !!burn);
   // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
   // destroyed by force (P.avoid, see aiSearchSpot): it used to put the next one up in the same crater.
@@ -6205,7 +6439,7 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault', 'tun', 'cave']; // optional per-tile layers some games have (null otherwise; tun: the Murmur's tunnels)
 /** Per-tile layers kept in a save as [tile, value, tile, value, ...] for the tiles that aren't 0 (most aren't): War scars' craters and ash. */
-const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
+const SPARSE_LAYERS = ['crater', 'ash', 'crk', 'soil', 'grove', 'grvF', 'grvO', 'wet', 'tform', 'shift', 'sbed', 'sbO', 'sbS', 'ewK', 'ewO', 'ewH', 'fld', 'caveIn']; // (crk: a Sundering Ray's cracked roads and track, see sunderLand; then Terraforming stage 2, T2_LAYERS, and stage 3's Crystal Seedbeds, T3_LAYERS)
 function sparseOut(a) { const o = []; for (let t = 0; t < a.length; t++) if (a[t]) o.push(t, a[t]); return o; }
 function sparseIn(o, N) { const a = new Uint8Array(N); for (let k = 0; k + 1 < o.length; k += 2) a[o[k]] = o[k + 1]; return a; }
 const TYPED_FIELDS = {
@@ -6260,6 +6494,15 @@ function checkSave(o) {
     if (H.ps != null && !(Array.isArray(H.ps) && H.ps.length >= 1 && H.ps.length <= 4 && H.ps.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
     if (H.laneP != null && !(Array.isArray(H.laneP) && H.laneP.length === H.lanes.length && H.laneP.every((p) => Number.isInteger(p) && p >= 0 && p < o.players.length))) bad();
     if (H.won != null && !['maw', 'waves'].includes(H.won)) bad();
+  }
+  // Orbital platforms (S.orb: see orbInit): decks, bridges (each strip on the map, its state) and control boxes (tile, holder).
+  if (o.orb != null) {
+    const O = o.orb, int = Number.isInteger, inM = (x, y) => int(x) && int(y) && x >= 0 && y >= 0 && x < o.W && y < o.H;
+    if (!obj(O) || !Array.isArray(O.plats) || !Array.isArray(O.br) || !Array.isArray(O.bx) || O.plats.length > 16 || O.br.length > 32 || O.bx.length > 64) bad();
+    if (!O.plats.every((P) => obj(P) && inM(P.x0, P.y0) && inM(P.x1, P.y1) && ['home', 'mid', 'deck'].includes(P.kind) && int(P.tw) && P.tw >= 0 && P.tw < O.plats.length)) bad();
+    if (!O.br.every((B) => obj(B) && inM(B.x0, B.y0) && inM(B.x1, B.y1) && B.x0 <= B.x1 && B.y0 <= B.y1 && (B.ax === 'v' || B.ax === 'h') && int(B.a) && int(B.b) && B.a >= 0 && B.b >= 0 && B.a < O.plats.length && B.b < O.plats.length
+      && (B.up === 0 || B.up === 1) && [0, 1, 2, 3].includes(B.mv) && Number.isFinite(B.t0) && Number.isFinite(B.cd) && (B.by == null || (int(B.by) && B.by >= -1 && B.by < o.players.length)))) bad();
+    if (!O.bx.every((b) => obj(b) && inM(b.x, b.y) && int(b.br) && b.br >= 0 && b.br < O.br.length && (b.end === 0 || b.end === 1) && int(b.owner) && b.owner >= -1 && b.owner < o.players.length)) bad();
   }
   if (o.difficulty != null && !ownKey(DIFFICULTY, o.difficulty)) bad();
   if (o.diffLow != null && !ownKey(DIFFICULTY, o.diffLow)) bad(); // (the easiest level the rivals were at: ORDERS.rivalDifficulty)
@@ -6394,7 +6637,7 @@ function checkSave(o) {
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
     if (b.route != null) deal(b.route); // a Trade Terminal's route
     // an Earthworks site's job (TERRA): raise or lower to a level, fill or dig
-    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig', 'soil', 'clear'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
+    if (b.tf != null && !(b.type === 'earthwork' && obj(b.tf) && ['up', 'down', 'fill', 'dig', 'soil', 'clear', 'bank', 'trench', 'teeth', 'ewfix', 'cave'].includes(b.tf.k) && Number.isInteger(b.tf.to) && b.tf.to >= 0 && b.tf.to <= TERRA.top && Number.isInteger(b.tf.n) && b.tf.n >= 1 && b.tf.n <= TERRA.top)) bad();
     if (b.type === 'earthwork' && b.tf == null) bad();
     if (b.keepStaff != null && b.keepStaff !== 1) bad(); // (Keep staffed: ORDERS.keepStaff)
     if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
@@ -6423,6 +6666,11 @@ function checkSave(o) {
     for (const k of ['mdAt', 'mdNext']) if (b[k] != null && !(Number.isSafeInteger(b[k]) && b[k] >= 0)) bad();
     if (b.mdFar != null && b.mdFar !== 0 && b.mdFar !== 1) bad();
     // a Catcher kit to throw (its tile), a Catcher kit assembling itself, the land a Port or a kit's Catcher claims
+    // (Terraforming stage 4: a Sluice's flood, a Sap Head's sap, a Sap Exit's head; tiles on the map, times as numbers)
+    if (b.fl != null && !(b.type === 'sluice' && obj(b.fl) && Array.isArray(b.fl.ts) && b.fl.ts.length <= 400 && b.fl.ts.every(tileOk) && Array.isArray(b.fl.d) && b.fl.d.length === b.fl.ts.length && b.fl.d.every((v) => Number.isInteger(v) && v > 0 && v < 1e5) &&
+      Array.isArray(b.fl.st) && b.fl.st.length === b.fl.ts.length && b.fl.st.every((v) => Number.isInteger(v) && v >= 0 && v <= 5) && ['t0', 'top', 'n', 'rs'].every((k) => Number.isFinite(b.fl[k])))) bad();
+    if (b.sap != null && !(b.type === 'saphead' && obj(b.sap) && Array.isArray(b.sap.route) && b.sap.route.length <= SAP.most && b.sap.route.every(tileOk) && Number.isInteger(b.sap.dug) && b.sap.dug >= 0 && b.sap.dug <= b.sap.route.length &&
+      Number.isFinite(b.sap.acc) && Number.isSafeInteger(b.sap.exit) && (b.sap.heard == null || obj(b.sap.heard)))) bad();
     if (b.mdKit != null && !(b.type === 'mdriver' && Array.isArray(b.mdKit) && b.mdKit.length === 2 && Number.isInteger(b.mdKit[0]) && Number.isInteger(b.mdKit[1]) && b.mdKit[0] >= 0 && b.mdKit[1] >= 0 && b.mdKit[0] < o.W && b.mdKit[1] < o.H)) bad();
     if (b.kitT != null && !(b.type === 'catcher' && b.kitT === 1)) bad();
     if (b.claim != null && !(Number.isInteger(b.claim) && b.claim >= 0 && b.claim <= 8)) bad();

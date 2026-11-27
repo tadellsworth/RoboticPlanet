@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -522,6 +522,48 @@ canyon's crumbled lip art. Graphics Saver draws one star layer and nothing moves
 frost or night sky on the land (`R.void` in js/nature.js). The map picker's card is a schematic from the flags; Custom Game and Observer
 list it like any map. State: none beyond the map (`S.settings.shape`). Measured (rival vs rival, Normal, Balanced both, Medium and Large, four seeds each, 45-minute cap): 5 of 8 games undecided, against 8 of 8 on Sky islands; Domination and Uplinks both play out (Domination won at 34 minutes, an Uplink held and its clock run).
 
+**Orbital platforms** (`SHAPE_PRESETS` `orbital`, under Heights and depths, two players; flat, `noMurmur`; the owner's idea from IDEAS.md) is a map of
+Accord station decks high over the planet, joined by **drawbridges** that a colony raises and lowers from **control boxes**. `orbitalMap`
+(js/world.js, called first by `generateMap`) lays it out point-symmetric to the tile (`tools/map-symmetry-test.js`). The map is 1.2 × the
+size's in each direction (Medium 48 × 68). **Decks**: rectangles with their corners cut, level ground, the space between them `T_CHASM` that
+`voidTile` treats as on The Ring (`ringShape` is true for both maps: nothing is built on it or laid across it; a Viaduct or Ropeway still
+spans it, and aircraft, Airships and Missiles fly over). Small and Medium have **five decks** (a home deck at each end, a big middle deck, and a
+side deck to each side of it, each over or under a home deck) and six bridges; Large and up have **seven** (the same homes and a tall middle
+deck, and two side decks on each side) and eight bridges (`ORBITAL` in js/defs.js; `S.orb`: `plats`, `br`, `bx`, `ver`).
+**Bridges**: a strip of three tiles across a gap of `g` tiles (4 to 7, by map height). Down, its tiles are ground (walkable, pathable, plated with
+hazard edges); up, `T_CHASM`. The terrain is the truth for walking, so paths, zones and territory need nothing special: `orbFlip` changes the
+tiles, calls `terrainChanged` and drops the paths of bots that crossed it. Nothing is built, dropped or terraformed on a strip, and no rail or pipe goes on it, and no road is laid or taken up on it by a player
+(`orbTile`; `canRoad`, `canPlace`, `tfWhere`, `airdropBlocked`, `removeRoad`, `wreckRoad`). Every strip carries a **permanent road**, part of the map from the start: it
+stays when the bridge is raised (drawn as faint lane lines on the void and as lane dashes on the lifted leaf), costs nothing and is destroyed by nothing but
+the bridge itself. `S.road` mirrors it only while the strip is ground (`orbFlip` -> `setRoad`, which bumps `S.roadVer`, so `roadNet`, the path caches and
+territory follow): a road on a void tile would read as drivable to every `S.road` reader. A raised bridge therefore cuts road networks and
+haulers, a lowered one joins the two decks' roads. Every bridge starts **down**.
+**The order** `bridgeSet` (last in js/orders.js; `orbSet`): the colony holding either control box of the bridge, with the bridge idle and
+out of its rest, orders it up or down. **Raise**: a warning of `ORBITAL.warn` (4) s (the bridge is still walkable; lamps and the deck flash amber and the panel
+counts down), then the leaf swings up over `lift` (3) s and the tiles are void from that moment. A raise is **called off** if any robot on foot
+(any colony's) is on the strip at the end of the warning (and refused at the order if one is: `orbOccupied`, a robot's centre within `pad`
+0.35 tiles of the strip): no robot is ever lost to a raise, and a bridge that comes up drops the route of any bot that planned to cross it.
+**Lower**: the leaf swings down over `lift` s and the tiles become ground at the end of it. After any move the bridge rests `cool` (20) s (8 s
+after a called-off raise). **Control boxes** (`S.orb.bx`, two per bridge, one on each deck at each end, on clear ground beside the head): held by
+the colony with more armed robots (`isArmy`, on foot) within `reach` (4) tiles than any other; with none near, by the colony whose land it stands
+in; a tie, or no land, leaves it as it was (`orbBoxes`, once a second). Each colony starts holding the boxes on its own home deck, the rest are no
+one's. So you can always raise your own end, and the other end is yours only where you hold it. **Panel**: tap a bridge or a box: its state, who holds
+each box, and Raise or Lower (disabled with the reason), and Hold a box with warbots. The minimap shows a square at each box in the holder's colour
+and a red stripe on a raised bridge; a message says when a bridge moves or a box changes hands; `sfx('bridge')`.
+**Look and rules**: `newGame` sets the biome to Lunar (Argos's rules: no Murmur, no weather, no Arrival City or Atmosphere Engine), no dust storm, no
+plants on the decks (`S.decor` cleared). The look is js/orbital.js (display only): `orbitalSky` (space and stars above the planet's curved limb, the
+planet far below with ocean, land, two layers of cloud and a cloud shadow, a low sun; the horizon moves with the view), `orbDeckPaint` (plating,
+seams, rivets, kerb and railing, baked with the ground), `orbVoidPaint` (the hull under a deck's southern edge), `orbitalBridges` (the swinging
+leaves, corner lamps, the RAISING / LOWERING word) and `drawOrbBox`. **Economy**: as The Ring's: the standard colony's starter fields (Stalk, fertile
+soil for a Bio Farm, Stone, Ore, Crystal) and three oil fields on each home deck, more fields on the other decks the bigger they are (`scatter`) with an
+oil seep or two each (`ORBITAL.oil`), Ore, Crystal, Stalk and Stone `ORBITAL.mul` (1.25) richer, each home deck topped up to `ORBITAL.stone` Stone. A
+lowered bridge's road joins the two decks' road networks, so Haulers and trucks cross on it; raised, it is cut, and goods cross by Viaduct (which spans a raised bridge).
+**The rival** (`aiBridges`, `AI_BRIDGE`, js/ai.js): lowers a raised bridge of its own once 45 to 90 s have passed (by level) and the enemy
+warbots near it are fewer than 3, at once if its home deck is cut off from yours, and never shuts itself in; Medium and up raise a bridge
+of theirs (nothing on it) when three or more of your warbots stand on its far deck within 16 tiles and outnumber its own on the near deck, none of its own is out there,
+at most two of its bridges are up, and not before minute 4. It crosses by the bridges (they start down) and flies as on The Ring (`aiAir` is
+allowed here too).
+
 **Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
 the size's (49 × 84 at Medium; an odd width, so there is a middle column to mirror about, and 1.45 times wider for four colonies), mirrored west to east
@@ -534,7 +576,7 @@ width). A Ropeway over the wall (14 tiles) is the only other way for Workers, Ha
 **The two halves** (`S.cave`: 0 surface, 1 inside, 2 wall; the Uint8Array is saved with the game, `checkSave` checks it and `S.caves`):
 the caves are the north half on half the seeds and the south on the rest (`S.caves.south`, from the seed: the map is made with the caves north and then
 turned over end to end, so player 0 starts inside on about half the planets and outside on the rest). The surface has the standard colony's
-fields (stalk groves, fertile soil, Stone, oil seeps) and a little Ore and Crystal (`CAVES.outside`: per thousand tiles of surface); the caves have winding
+fields (stalk groves, fertile soil, Stone, oil seeps) and **no Ore or Crystal at all** (`CAVES.outside` has `ore` and `crystal` at 0, `KIT.out` no Ore or Crystal fields, and no Ringfall strike or Ring drizzle leaves any there: `drizzleOn` is off on this map, `meteorImpact` places no deposit on it); the caves have winding
 passages, rock pillars, **plenty of Ore and Crystal** and Stone and oil (`CAVES.inside`), **no stalk groves or fertile soil**, and a small patch of Ore and Crystal just
 inside each entrance and of stalks and fertile soil just outside it. **Colonies** (`S.caves.seats`: `{ x, y, inside }`): two (one outside, one inside, on the middle
 line) or four (an outside and an inside colony on the west side and the same on the east: in 2 vs 2 each team has one of each). Half the colonies start inside.
@@ -543,9 +585,9 @@ the Random map pool leave this map out for three, and a 3 that arrives from a sa
 other maps do the same clamping), or **four** when three people sit in a lobby (everyone needs a place; the fourth is a computer rival). `playerCount` applies it to every game. The
 three-colony layout (an outside pair and one inside on the line) is **parked**, not removed: `cavesMap` still builds it, so an older three-player save loads and plays, and it takes one line to
 bring back (drop `evenOnly`). Each
-kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil, Stone and a little Ore and Crystal on the surface; Ore, Crystal and Stone
+kind has its own kit of fields round its Command Base (`KIT` in `cavesMap`: stalks, fertile soil and Stone on the surface; Ore, Crystal and Stone
 inside, and the oil seeps in both), alike for every colony of that kind to the bit. **Opening stock**: on top of `START_STOCK`, a colony that starts inside lands with
-`CAVES.stock.inside` (+100 Fiber, +30 Fuel, +10 Stone, +12 Cement) and one that starts outside with `CAVES.stock.outside` (+60 Ore, +25 Crystal, +25 Alloy, +20 Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the
+`CAVES.stock.inside` (+140 Fiber, +30 Fuel, +12 Stone, +20 Cement) and one that starts outside with `CAVES.stock.outside` (+130 Ore, +60 Crystal, +30 Alloy, +30 Fiber: about the first eight minutes of building, as nothing on the surface makes Ore or Crystal, so it has to send Outposts and Mines in through a mouth by then; a colony inside has no Fiber source, and Alloy, Bio Farms and nearly every building need Fiber) (`newGame`; and a Worker takes the Agribot's place inside, as in the
 Hollow): enough for the first few minutes of what its side lacks, then it has to branch out through the mouths for it (Outposts claim ground across the wall's far side, and the
 rival does exactly that: see below). **The look**: the caves are the Hollow's art (`BIOMES.hollow`, `art/biomes/hollow`) as a second region over the `S.cave` tiles (`applyBiome`:
 `R.secondRegion` is the Hollow, `R.biomeMix` the mask; `makeDecor` gives them the Hollow's plants; no second biome can be picked on this map), the surface the Biome the game picked.
@@ -1008,6 +1050,69 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   - Art (ART_GUIDE Batch 37): `renderer/b/seamdrill.js`, `seedmast.js`, `thermal.js`, `seedbed.js` (shared `t3kit.js`),
     `renderer/tools/render_t3.sh` then `install_t3.py`. Mission: **Deep Ground** (Sea and Sky, after Topsoil; the
     Cinderlands' lava lakes). Tests: `node tools/terraform3-test.js`.
+- **Terraforming, stage 4: military earthworks** (Nov 2026; `EW`, `SLUICE`, `CAVE`, `SAP` in `js/defs.js`; the rules in
+  the stage 4 block of `js/sim.js`: `t4Job`, `t4Earthwork`, `ewAt`, `ewCover`, `ewHit`, `ewBlast`, `ewBreachHit`,
+  `t4Slow`, `t4Blocks`, `t4CaveIn`, `sluiceWhy`, `sluiceFloodPlan`, `sluiceOrder`, `sluiceTick`, `sluiceReach`,
+  `sapPlan`, `updateSapHead`, `sapTremor`, `sapBreakOut`, `sapLink`, `sapRide`; the cards, panels, the sap planner and the
+  drawing in `js/terraform4.js`). The player's alone: no rival builds or plans any of it, and a game without it has no
+  layers, nothing new saved or hashed and none of it run (seeded AI-vs-AI games keep their hashes). Layers (`T4_LAYERS`,
+  sparse in saves, hashed when present): `S.ewK` (1 Earth Bank, 2 Fire Trench, 3 Dragon's Teeth), `S.ewO` (owner + 1),
+  `S.ewH` (strength, 0 breached), `S.fld` (a flood's stage, 1..5), `S.caveIn` (a caved-in groove).
+  - **Earthworks** (Grader jobs: `TF_TOOLS` `bank`, `trench`, `teeth`; keys K, X, Z; dragged like Walls, `tfPlace`;
+    each an Earthworks site, `b.tf.k` the kind, Workers never take them). Costs and times `EW.kinds` (bank 3 Stone 18 s,
+    trench 1 Stone 16 s, teeth 1 Cement 1 Alloy 14 s); strength 60, 40, 90. Done (`t4Earthwork`), the tile keeps it in
+    the layers and stands for everyone (an earthwork is terrain): `EW.heavy` (trucks, Tankers, Road Trains, Crawlers,
+    Howitzers, Bulwarks, Graders, Brutes) can't cross a bank or teeth (`findPath` with `opts.ew` from `routeOpts`: 1
+    light, 2 heavy, 3 a heavy army robot that may plan through a foe's at `BREACH_COST` plus its strength; no diagonal
+    slip between two; `blockedStep` / `t4Blocks` for routes planned before it stood), everyone else is slowed
+    (`EW.slow` bank 0.4, trench 0.6, teeth 0.85, `t4Slow` in `speedMul`) and routes count `EW.path` more a step. Cover
+    (`ewCover` in `damageBot`): in your side's trench `EW.cover.trench` (0.5) of any fire; within `EW.coverR` (1.6) of
+    your side's bank lying toward a shooter more than a tile and a half away, `EW.cover.bank` (0.6). Damage: blasts
+    (`ewBlast` from `scarBlast`, `EW.blast` 14 per tile of blast reach, falling off), a foe's heavy army robot shooting
+    one in its way (`ewBreachHit`, `EW.breach` 2 a shot); below `EW.worn` (60%) worn, at 0 breached (kept, a gap,
+    `ewAt` 0; its owner told). Repair: the same tool over a worn or breached one plans `ewfix` (`EW.fix` half the cost,
+    `EW.fixTime` 10 s). Nothing is built or paved on one (`canPlace`, `canRoad`, `tfWhere`); groves, beds and humus keep
+    off. Drawn baked with the ground (`t4PaintTile`, `ewDraw`): the rendered pieces `ew-<kind>-<piece>-<look>` (arms
+    n/e/s/w for every team, the post with the team's stake, lamp or cat's-eye for both, layered as the Walls are), at
+    three looks (`ewLook`), their night lights in the glow map (`t4Glow`, `ew-<kind>-glow-<look>`); drawn in code the
+    same way while the art loads. A re-bake only when a tile crosses a look (`markDirty` of that tile).
+  - **Cave in** (`TF_TOOLS` `cave`, key V, `CAVE.time` 14 s, no goods): on a Murmur tunnel tile, or beside a tunnel
+    exit or a foe's Sap Exit (`t4CaveTarget`). Done (`t4CaveIn`): the tunnel caves in `CAVE.len` (3) tiles each way
+    (`S.tun` cleared, `S.caveIn` set: `tunnelable` refuses it, so the Murmur never dig through again), and the exits of
+    that nest no longer joined to it (`t4TunReach`) collapse (`collapseExit`); an exit beside the tile collapses.
+  - **Sluice** (`BDEFS.sluice`, Sluice Dam concept A "Radial Gates", accent spillway mint `#b8ffe8`; 6 Cement, 2 Alloy;
+    key U; two tiles, `long`, R turns it). Placed (`sluiceWhy` in `canPlace`) with water along one long side
+    (`sluiceSides`) and open ground no higher than it along the other. Open (`ORDERS.sluice`, `sluiceOrder`): the flood
+    plan (`sluiceFloodPlan`) runs breadth-first from the dry side over ground of its level or lower, never uphill, up to
+    `SLUICE.most` (90) or `SLUICE.perWater` (1.5) a tile of the water behind it (`sluiceWater`, up to 600). It is kept on
+    the Sluice (`b.fl`: `t0`, the tiles `ts`, their distances `d`, `top`, `n`, the recede start `rs`, each tile's stage
+    `st`); each tile's stage is worked out from the clock (`sluiceStage`: the front at `SLUICE.speed` 1.6 tiles a second;
+    pouring `pour` 3 s, spreading `spread` 8 s, under water until `stay` 45 s after opening, then going down the far end
+    first over `recede` 30 s, wet mud `mud` 40 s, dried silt `silt` 60 s, gone; `SLUICE.fert` of it fertile).
+    `sluiceTick` (every `SLUICE.every` 10 ticks, only a flood's own tiles) writes `S.fld`; where the front arrives
+    (`sluiceReach`) robots take `botHit` (3), buildings lose `hurt` (35%) of their armour (a Command Base kept at 1) and
+    are knocked out (`b.fldT`: `updateBuilding` skips them) until the water goes down, crops and Stalks wash away. Under
+    water nobody routes (`findPath` closes `S.fld` 3; a route already through it is dropped), a robot there wades at
+    `slow.water` (0.3), mud `slow.mud` (0.6), the front `slow.pour` (0.5). It shuts by itself once its flood is out (or
+    when shut: the front stops), then refills `SLUICE.refill` (120 s). No terrain changes, no `terrainChanged`: the
+    flood is drawn over the ground each frame from its own tile list (`t4Overlay`), never baked.
+  - **Sap Head** (`BDEFS.saphead`, Tunnel Bore concept A, accent tunnel-lamp salmon `#ffa38c`; 4 Cement, 3 Alloy, 1
+    Chip; key Q). Its panel's Plan sap (T) opens the Terraform mode with the tool `sap` (`sapStart`, `sapPaint`: a
+    four-way route out from it), Dig sends `ORDERS.sap` (`sapPlan`, `sapWhy`: a tile at a time, `tunnelable`, up to
+    `SAP.most` 30 tiles and `SAP.reach` 30 out, its end open ground: `sapEndWhy`). `b.sap` (`route`, `dug`, `acc`,
+    `exit`, `heard`): it digs a tile every `SAP.dig` (8) s (`updateSapHead`); a foe with a building within `SAP.hear` (1)
+    of the head feels a tremor (`sapTremor`: a message and rings near it, fuzzed `SAP.tremorFuzz` 2 tiles, once per
+    `tremorEvery` 20 s a foe; a rival's `P.raided` set, so its forts send a guard, `garrisonDefense`). At the end it
+    breaks out (`sapBreakOut`): a `sapexit` of its owner's (`SAP.exitArmor` 20, `e.head`). Its owner's robots go through
+    (`sapLink` in `findPath`, `sapLen` x `SAP.cost` a step; `passTile` lets them onto both ends; in `moveAlong`
+    `sapRide`: down at one end, `u.sapT` out of sight and out of reach (`aloft`), up at the other, or back where it went
+    down if the far end is lost). The route is its owner's alone (`sapSeen`; drawn in `t4Marks`). The exit shot down or
+    caved in (`sapExitLost`): the sap is dead; plan it again.
+  - Rivals don't terraform; they cope: their routes go round earthworks and floods, their heavy army robots shoot a way
+    through a foe's earthworks in their way, their forts answer a tremor. Saves: `checkSave` checks `b.fl` and `b.sap`;
+    the layers are sparse. Art (ART_GUIDE Batch 38): `renderer/walls/b/earthwork.js` (the pieces), `renderer/b/sluice.js`
+    and `tunnel.js` (the Sluice and the Sap Head, the Sap Exit), `renderer/tools/render_t4.sh` then `install_t4.py`.
+    Mission: **Ground War** (First Contact, after The Murmur). Tests: `node tools/terraform4-test.js`.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
   **Road crew** (`ROAD_CREW`, `ROAD_CREWS`, `roadCrew`, `PAVER_LAY`, `PAVE_LEAVE` in `js/defs.js` and `js/sim.js`; Nov
@@ -4929,6 +5034,21 @@ ground, powering a drill with no Fuel, powering a Maglev Terminal and a Mass Dri
 a fuelled Generator's Fuel; turned off, the Generator's half a Fuel a shot) and never a megastructure (an Orbital Lift
 not boosted, a Deep Core without power); no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
 seam refused; and the same game twice giving the same hash.
+
+```bash
+node tools/terraform4-test.js
+```
+
+Terraforming, stage 4: nothing of it until it's used; an Earth Bank, a Fire Trench and Dragon's Teeth built by a
+Grader along a dragged line, at their costs, nothing else planned on them; a bank and teeth closing the way to heavy
+robots and not to a Warbot, a trench to no one, the slow on each; cover behind your bank and in your trench, none from a
+foe's; blasts wearing a bank to worn and breached, a Grader repairing it; a foe's heavy army robot shooting through
+Dragon's Teeth, one of yours never planning through your own; a Sluice only on the bank, its flood through pouring,
+spreading, under water, wet mud and silt and gone, routes closed under water, robots knocked about, buildings hurt and
+knocked out, the refill; a Cave in caving a tunnel to a groove the Murmur never dig through and its cut-off exit in; a
+Sap Head's route rules, its route its owner's alone, its dig rate, the tremor a rival feels, the break-out, its owner's
+robots through it out of reach, a rival shooting its exit down; saves mid-flood and mid-dig playing on to the same
+hash, a damaged flood refused; the same game twice the same.
 
 ```bash
 node tools/smoke-test.js http://localhost:8000/ .

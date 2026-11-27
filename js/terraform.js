@@ -26,14 +26,14 @@ const TF_TOOLS_UI = {
 };
 
 /** The tab's button and its cards (openBuildMenu). */
-function tfTabButton() { return `<button data-g="terra"><kbd>${BUILD_TAB_KEYS.terra}</kbd>Terraform<span class="n">${TF_TOOLS.length + (typeof t2Types === 'function' ? t2Types().length : 0) + (typeof t3Types === 'function' ? t3Types().length : 0)}</span></button>`; }
+function tfTabButton() { return `<button data-g="terra"><kbd>${BUILD_TAB_KEYS.terra}</kbd>Terraform<span class="n">${TF_TOOLS.length + (typeof t2Types === 'function' ? t2Types().length : 0) + (typeof t3Types === 'function' ? t3Types().length : 0) + (typeof t4Types === 'function' ? t4Types().length : 0)}</span></button>`; }
 function tfCards() {
   const n = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
   return TF_TOOLS.map((k) => {
     const T = TF_TOOLS_UI[k];
     return `<button class="bcard tf-card" data-tf="${k}" data-g="terra" title="${T.name}"><kbd data-tab="${BUILD_TAB_KEYS.terra}" data-key="${T.key.toUpperCase()}">${T.key.toUpperCase()}</kbd>` +
       `<div class="tf-glyph tf-${k}" aria-hidden="true">${T.glyph}</div><div class="bname">${T.name}</div><div class="bhave">${T.card}</div></button>`;
-  }).join('') + (typeof t2Cards === 'function' ? t2Cards() : '') + (typeof t3Cards === 'function' ? t3Cards() : '') + `<p class="tf-note" data-g="terra">${n ? `${n} Grader${n === 1 ? '' : 's'} to do the work.` : 'A <b>Grader</b> does the work: order one at the Bot Foundry.'} Not on a rival's land, nor under buildings, roads, track, pipes or resources.</p>`;
+  }).join('') + (typeof t2Cards === 'function' ? t2Cards() : '') + (typeof t3Cards === 'function' ? t3Cards() : '') + (typeof t4Cards === 'function' ? t4Cards() : '') + `<p class="tf-note" data-g="terra">${n ? `${n} Grader${n === 1 ? '' : 's'} to do the work.` : 'A <b>Grader</b> does the work: order one at the Bot Foundry.'} Not on a rival's land, nor under buildings, roads, track, pipes or resources.</p>`;
 }
 function tfBind(body) { for (const el of body.querySelectorAll('.bcard[data-tf]')) el.onclick = () => tfStart(el.dataset.tf); }
 
@@ -77,6 +77,7 @@ function tfPreview() {
 function tfBanner() {
   const F = UI.tf;
   if (!F) return;
+  if (F.tool === 'sap') { sapBanner(); return; } // (stage 4: a Sap Head's route: js/terraform4.js)
   tfPreview();
   const T = TF_TOOLS_UI[F.tool], P = F.prev, n = P.plan.size;
   const graders = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].grader).length;
@@ -95,6 +96,7 @@ function tfBanner() {
 function tfPaint(i, j, first) {
   const F = UI.tf;
   if (!F || !inMap(i, j)) return;
+  if (F.tool === 'sap') { sapPaint(i, j, first); return; }
   const t = tIdx(i, j);
   if (F.tool === 'flatten') {
     if (first) F.start = t;
@@ -113,6 +115,7 @@ function tfPaint(i, j, first) {
 function tfTap(i, j) {
   const F = UI.tf;
   if (!F || !inMap(i, j)) return;
+  if (F.tool === 'sap') { sapTap(i, j); return; }
   const t = tIdx(i, j);
   if (F.tool === 'flatten') {
     if (F.start < 0 || F.list.length > 1 || F.start === t) { F.start = t; F.end = t; F.list = [t]; }
@@ -128,6 +131,7 @@ function tfTap(i, j) {
 /** The banner's Terraform: send the plan's good tiles. */
 function tfConfirm() {
   const F = UI.tf;
+  if (F && F.tool === 'sap') { sapConfirm(); return; }
   if (!F || !F.prev || !F.prev.plan.size) return;
   const tiles = [...F.prev.plan.keys()], tool = F.tool, target = tfTarget() ?? 0;
   act('terraform', [tool, tiles, target], (r) => {
@@ -168,7 +172,7 @@ function tfKey(k) {
  */
 
 /** The jobs' tints and glyph colours (the canvas legend): raise warm, lower cool, flatten pale, fill and dig blue. */
-const TF_COL = { up: '#ffc46e', down: '#8fd8ff', flatten: '#ecf0f4', fill: '#78c8ff', dig: '#5fc8ff', soil: '#c8925a', clear: '#a6e08c' };
+const TF_COL = { up: '#ffc46e', down: '#8fd8ff', flatten: '#ecf0f4', fill: '#78c8ff', dig: '#5fc8ff', soil: '#c8925a', clear: '#a6e08c', bank: '#d49a6a', trench: '#b9b2a6', teeth: '#e6e2da', ewfix: '#ffd166', cave: '#c8a8ff' };
 const TF_FRESH = 180; // (seconds of game time new ground takes to weather into the biome's)
 /** Fresh, turned soil for each biome (RGB): the Rust's red-brown earth, darker and browner in the forests and swamps. */
 const TF_SOIL = {
@@ -375,6 +379,7 @@ function tfSiteGround(ctx, b, x, y, z, ox, oy, saver) {
   };
   const along = (a, c = 0.5) => (di ? [di > 0 ? x + a * z : x + z - a * z, y + c * z] : [x + c * z, dj > 0 ? y + a * z : y + z - a * z]);
   const heap = (kind, a, c, r, v) => { const [hx, hy] = along(a, c), img = tfHeap(kind, bio, v); ctx.drawImage(img, hx - r * z * 1.39, hy - r * z * 1.39, r * z * 2.78, r * z * 2.78); };
+  if (typeof t4SiteGround === 'function' && (EW.kinds[J.k] || J.k === 'ewfix' || J.k === 'cave')) { t4SiteGround(ctx, b, x, y, z); return; } // (stage 4: js/terraform4.js)
   if (J.k === 'down') {
     if (k <= 0) return; // (planned, not started: the ground as it is)
     // Lower (and Flatten down): the cut opens from the Grader's side, its face moving across; a spoil heap grows
@@ -509,7 +514,7 @@ function tfPlanTile(ctx, x, y, z, k, prog, owed, mine, dir, work) {
         ctx.strokeStyle = col; ctx.beginPath(); pts.forEach(([px, py], q) => (q ? ctx.lineTo(px + d, py + d) : ctx.moveTo(px + d, py + d))); ctx.stroke();
       }
     };
-    if (k === 'up' || k === 'down') {
+    if (typeof t4Glyph === 'function' && t4Glyph(ctx, k, cx, cy, s, both)) { /* (stage 4: js/terraform4.js) */ } else if (k === 'up' || k === 'down') {
       const q = k === 'up' ? -1 : 1;
       for (const o of [-0.6, 0.6]) both([[cx - s, cy + o * s - q * s * 0.5], [cx, cy + o * s + q * s * 0.5], [cx + s, cy + o * s - q * s * 0.5]]);
     } else if (k === 'flatten') {
@@ -550,7 +555,7 @@ function tfPlanTile(ctx, x, y, z, k, prog, owed, mine, dir, work) {
 /** The plan being made (the Terraform mode): each tile's job as it will be placed, refused tiles crossed out. */
 function tfDrawPlan(ctx, ox, oy, z, inView) {
   const F = typeof UI !== 'undefined' && UI.tf;
-  if (R.mode !== 'terra' || !F || !F.prev) return;
+  if (R.mode !== 'terra' || !F || !F.prev || F.tool === 'sap') return; // (a sap's route: t4Marks)
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const [t, J, , same] of F.prev.rows) {

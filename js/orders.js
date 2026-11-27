@@ -361,6 +361,10 @@ const ORDERS = {
    * `target`). Each that can be done becomes an Earthworks site for a Grader. What happened comes back (tfPlace).
    */
   terraform(p, tool, list, target) { return tfPlace(p, String(tool), Array.isArray(list) ? list.slice(0, TERRA.most) : [], target | 0); },
+  /** Terraforming stage 4: open (on) or shut Sluice `id` ('' or why not: sluiceOrder). */
+  sluice(p, id, on) { const b = getE(id | 0); return { why: sluiceOrder(p, b, !!on) }; },
+  /** Terraforming stage 4: Sap Head `id`'s sap along `list` (tiles out from beside it), dug again from the start ('' or why not: sapPlan). */
+  sap(p, id, list) { const b = getE(id | 0); return { why: sapPlan(p, b, Array.isArray(list) ? list.slice(0, SAP.most + 1).map((t) => t | 0) : []) }; },
   /** The road crew limit: at most v Workers lay planned road at once (one of ROAD_CREWS; 0: no limit). */
   roadCrew(p, v) { if (ROAD_CREWS.includes(v)) S.players[p].roadCrew = v; },
   paveMark(p, i, j, on) { if (inMap(i, j)) setPaveMark(p, i, j, !!on); },
@@ -682,6 +686,8 @@ const ORDERS = {
   /** Disband group gid: its units go back to the Reserve. */
   agDisband(p, gid) { const g = agById(gid); if (!g || g.owner !== p) return false; agDisband(g); return true; },
   shipLine(p, uid, mid) { const u = ownU(p, uid, 'airship'); if (!u) return 'That Airship is gone.'; const b = mid ? ownB(p, mid) : null; if (mid && !b) return 'That Mooring Mast is gone.'; return setShipLine(p, u, b); },
+  /** Orbital platforms: raise (up 1) or lower (0) drawbridge k, ordered by a colony that holds one of its control boxes. '' or why not. */
+  bridgeSet(p, k, up) { return orbSet(p, k, !!up); },
 };
 
 /**

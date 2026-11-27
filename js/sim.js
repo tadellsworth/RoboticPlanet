@@ -102,6 +102,8 @@ function simStep(dt) {
   if (S.town && S.tick % 3 === 1) townTick(3 * dt); // (Passenger Town's sentries)
   if (S.walker) walkerTick(dt); // (the Walking Factory: it walks, its claim, its line)
   if (S.dam && S.tick % 3 === 2) damTick(3 * dt); // (The Dam: robots at the dams, Workers mending, the floods)
+  if (S.fld || S.tremors) t4Tick(); // (Terraforming stage 4: a Sluice's flood, the tremors felt)
+  if (S.orb) orbTick(); // (Orbital platforms: the bridges' warnings and leaves, the control boxes)
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -1246,6 +1248,7 @@ function routeOpts(u) {
   if (isArmy(u) && !u.fight) o.cover = u.owner; // and out of the enemy's guns
   if (isArmy(u) && !u.fight && u.task && u.task.type === 'hold') { const r = rallyById(u.task.rally); if (r && r.safe) o.safe = dangerMap(u.owner); } // (an Army Group's raid: round them, both ways, see agRaid)
   if (isArmy(u) && !u.fight && S.players[u.owner] && S.players[u.owner].ai && S.rads && S.rads.length) o.rad = true; // (a rival's army marches round radiation where it can)
+  if (S.ewK && !bt.air && !bt.sea && !bt.rail && !bt.wild) o.ew = ewHeavy(u.type) ? (o.breach ? 3 : 2) : 1; // (stage 4: earthworks stop or slow it; a heavy army shoots through a foe's: ewBreachHit)
   if (S.grove && S.players[u.owner] && S.players[u.owner].ai && !bt.air && !bt.sea && !bt.rail) o.grove = u.owner; // (a rival's robots go round a foe's groves where the way round is short: GROVE.path)
   if (bt.wild && u.task && u.task.night && !u.fight && murmurSmart()) o.coverMap = murmurGunMap(); // (Active: the Murmur keep out of the colonies' guns where they can)
   return o;
@@ -1256,7 +1259,8 @@ function routeOpts(u) {
  * an enemy Wall it means to break through)? The route's last tile, where it is going, never is.
  */
 function blockedStep(u, t) {
-  return S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner) && !((ferryLink(t) >= 0 || airLink(t) >= 0) && getE(S.bAt[t]).owner === u.owner);
+  return (S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner) && !((ferryLink(t) >= 0 || airLink(t) >= 0) && getE(S.bAt[t]).owner === u.owner)) ||
+    ((S.ewK || S.fld) && t4Blocks(u, t)); // (stage 4: an earthwork or a flood shut it since the route was planned)
 }
 
 /**
@@ -1707,7 +1711,7 @@ function moveAlong(u, dt) {
   {
     const nx = u.path[u.pi], pv = u.path[u.pi - 1], W = S.W;
     if (u.pi > 0 && nx !== undefined && Math.max(Math.abs((nx % W) - (pv % W)), Math.abs(((nx / W) | 0) - ((pv / W) | 0))) > 1 &&
-      viaLink(pv) !== nx && ropeLink(pv) !== nx && ferryLink(pv) !== nx && airLink(pv) !== nx && !(u.ride >= 0)) {
+      viaLink(pv) !== nx && ropeLink(pv) !== nx && ferryLink(pv) !== nx && airLink(pv) !== nx && !(u.ride >= 0) && !u.sapT && sapLink(pv, u.owner) !== nx) {
       u.x = (pv % W) + 0.5; u.y = ((pv / W) | 0) + 0.5;
       u.path = null; u.deck = null; u.vel = 0;
       if (!(BOTS[u.type].wild && u.plan && u.task?.night)) { cancelTask(u, true); u.task = null; }
@@ -1742,6 +1746,7 @@ function moveAlong(u, dt) {
   }
   // At a Port whose ferry line is the next leg: wait there for the Ferry (see ferryPassenger).
   const nxt = u.path[u.pi];
+  if ((u.sapT || S.bAt[here]) && sapRide(u, here, nxt)) return !u.path; // (stage 4: down a sap and through, to come up at its far end)
   if (nxt !== undefined && nxt !== here && S.bAt[here] && ferryLink(here) === nxt) {
     const at = getE(S.bAt[here]), to = getE(S.bAt[nxt]);
     if (at && to && at.owner === u.owner) {
@@ -1862,6 +1867,7 @@ function moveAlong(u, dt) {
       u.moved = 0;
       if (breachable(t, u.owner) && isArmy(u) && botArmed(u)) { breachHit(u, getE(S.bAt[t])); spreadOut(u, dt); return false; }
       if (u.hw && breachable(t, u.owner)) { hordeBreach(u, getE(S.bAt[t])); return false; } // (Horde's waves bite their way through)
+      if (S.ewK && !S.bAt[t] && ewFoeBlock(u, t) && isArmy(u) && botArmed(u)) { ewBreachHit(u, t); spreadOut(u, dt); return false; } // (stage 4: a heavy robot shoots through a foe's earthwork)
       const g = u.path[u.path.length - 1], keep = u.path, pi = u.pi;
       if (goTo(u, g % S.W, (g / S.W) | 0)) { u.blockT = 0; return false; }
       u.path = keep; u.pi = pi;
@@ -4131,7 +4137,9 @@ function completeRamp(b) {
  * (fromStore); dug earth comes out as crates of Stone on the spot. Done, the site goes and the ground stays changed
  * (completeEarthwork): the areas, territory, the sea, the bake and the minimap follow (terrainChanged).
  */
-const TF_TOOLS = ['raise', 'lower', 'flatten', 'fill', 'dig', 'soil', 'reclaim']; // (the last two: stage 2, SOIL)
+const TF_TOOLS = ['raise', 'lower', 'flatten', 'fill', 'dig', 'soil', 'reclaim', 'bank', 'trench', 'teeth', 'cave']; // (soil and reclaim: stage 2, SOIL; the last four: stage 4, EW and CAVE)
+/** Stage 4's jobs (t4Job, t4Earthwork): the three earthworks, their repair, and Cave in. */
+const T4_JOBS = new Set(['bank', 'trench', 'teeth', 'ewfix', 'cave']);
 
 /** The job planned on tile t: in `plan` (a Map being put together), else an Earthworks site's, else null. */
 function tfJobAt(t, plan) {
@@ -4173,12 +4181,14 @@ function tfSides(t) {
 }
 
 /** Why `owner` can't work tile t at all ('' if it can): the land, what stands on it, whether a Grader could get beside it. */
-function tfWhere(owner, t, plan) {
+function tfWhere(owner, t, plan, ewOk) {
   const i = t % S.W, j = (t / S.W) | 0;
   if (!inMap(i, j)) return 'Outside the map.';
+  if (S.ewK && S.ewK[t] && !ewOk) return 'An earthwork stands here (stage 4): a Grader works round it.';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds this ground: terraform your own land or no-one\'s.';
   if (postAt(t) || calmAt(i + 0.5, j + 0.5)) return 'A Trade Post\'s ground: it stays as it is.';
   if (uplinkAt(t)) return 'A neutral Uplink stands here.';
+  if (orbTile(t)) return 'A drawbridge: it stays as it is.';
   if (S.landmarks && typeof lmWhy === 'function') { const lw = lmWhy(t); if (lw) return lw; }
   if (S.dam && damAt(t)) return 'The dam stands here.';
   if (S.town && townRuinAt(t)) return 'A building of Passenger Town stands here.';
@@ -4209,6 +4219,7 @@ function tfWhere(owner, t, plan) {
  * their new level, so a land bridge or a canal can be dragged out tile by tile).
  */
 function tfJob(owner, tool, t, target, plan) {
+  if (tool === 'bank' || tool === 'trench' || tool === 'teeth' || tool === 'cave') return t4Job(owner, tool, t, tfWhere(owner, t, plan, true)); // (stage 4: EW, CAVE)
   const where = tfWhere(owner, t, plan);
   if (where) return { why: where };
   const sides = tfSides(t);
@@ -4358,11 +4369,11 @@ function tfHasGrader(p) {
 /** What an Earthworks site shows on its panel. */
 function tfStatus(b) {
   const g = tfGrader(b), owed = storeFunded(b) ? stillOwed(b) : null;
-  const verb = { up: 'Raising', down: 'Lowering', fill: 'Filling', dig: 'Digging', soil: 'Spreading soil', clear: 'Reclaiming' }[b.tf.k];
+  const verb = { up: 'Raising', down: 'Lowering', fill: 'Filling', dig: 'Digging', soil: 'Spreading soil', clear: 'Reclaiming', bank: 'Heaping an Earth Bank', trench: 'Cutting a Fire Trench', teeth: 'Setting Dragon\'s Teeth', ewfix: 'Repairing the earthwork', cave: 'Caving in' }[b.tf.k];
   if (g && g.task.phase !== 'go') return `${verb}: ${Math.floor(b.progress * 100)}%`;
   if (owed && Object.keys(owed).length && !tfReady(b)) return `Waiting for ${costText(owed)} from storage`;
   if (b.unlinked && !tfReady(b)) return 'No road to storage yet';
-  if (!tfReady(b)) return b.tf.k === 'soil' ? 'Waiting for Fiber and Stone' : 'Waiting for Stone';
+  if (!tfReady(b)) return b.tf.k === 'soil' ? 'Waiting for Fiber and Stone' : `Waiting for ${costText(siteCost(b))}`;
   if (g) return 'A Grader is on its way';
   if (!tfHasGrader(b.owner)) return 'Waiting for a Grader: order one at the Bot Foundry';
   return b.tfNoAt > S.time - 45 ? 'No Grader can get beside it: it needs free ground beside it that your robots can reach' : 'Waiting for a Grader';
@@ -4380,6 +4391,7 @@ function completeEarthwork(b) {
   S.byId.delete(b.id);
   S.bAt[t] = 0;
   if (J.k === 'soil' || J.k === 'clear') { t2Earthwork(b, t, J, P); return; } // (stage 2: the ground stays where it is)
+  if (T4_JOBS.has(J.k)) { t4Earthwork(b, t, J, P); return; } // (stage 4: an earthwork stands on it, or a tunnel caves in)
   groveClear(t); // (a grove where the ground is raised, lowered, filled or dug goes)
   if (S.soil && J.k === 'dig') S.soil[t] = 0;
   S.tfTiles = S.tfTiles || {};
@@ -4509,7 +4521,7 @@ function soilAdd(t, n) {
 /** Can a Composter's humus reach tile t (open ground, nothing built or laid on it, not a rival's)? */
 function soilOpen(t, owner) {
   return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t]) &&
-    !(S.owner[t] >= 0 && S.owner[t] !== owner) && !(S.sbed && S.sbed[t]);
+    !(S.owner[t] >= 0 && S.owner[t] !== owner) && !(S.sbed && S.sbed[t]) && !(S.ewK && S.ewK[t]);
 }
 
 /** A Composter at work (updateBuilding): a batch from its hopper every SOIL.every s enriches the ground in reach. */
@@ -4551,7 +4563,7 @@ function groveSpotOk(b, t) {
   const i = t % S.W, j = (t / S.W) | 0;
   return S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !S.fert[t] && !burntSoil(t) &&
     !(S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) && !(S.pipe && (S.pipe[t] || (S.pipePlan && S.pipePlan[t]))) && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) &&
-    !(S.grove && S.grove[t]) && !S.resRes[t] && !(S.sbed && S.sbed[t]) && !groveLane(b, i, j) && !(S.owner[t] >= 0 && S.owner[t] !== b.owner) && !calmAt(i + 0.5, j + 0.5) && !runwayAt(t);
+    !(S.grove && S.grove[t]) && !S.resRes[t] && !(S.sbed && S.sbed[t]) && !(S.ewK && S.ewK[t]) && !groveLane(b, i, j) && !(S.owner[t] >= 0 && S.owner[t] !== b.owner) && !calmAt(i + 0.5, j + 0.5) && !runwayAt(t);
 }
 /** The groves Nursery b looks after (its owner's, in its reach). */
 function grovesOf(b) {
@@ -4908,7 +4920,7 @@ function bedSpotOk(b, t) {
   const i = t % S.W, j = (t / S.W) | 0;
   return S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !S.fert[t] && !S.resRes[t] && !t3Bed(t) &&
     !(S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) && !(S.pipe && (S.pipe[t] || (S.pipePlan && S.pipePlan[t]))) && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) &&
-    !(S.grove && S.grove[t]) && !(S.owner[t] >= 0 && S.owner[t] !== b.owner) && !calmAt(i + 0.5, j + 0.5) && !runwayAt(t);
+    !(S.grove && S.grove[t]) && !(S.ewK && S.ewK[t]) && !(S.owner[t] >= 0 && S.owner[t] !== b.owner) && !calmAt(i + 0.5, j + 0.5) && !runwayAt(t);
 }
 /** Is bed tile t still fit for a bed (nothing built, laid or grown over it since)? A ripe bed holds its Crystal. */
 function bedStands(t) {
@@ -4997,6 +5009,558 @@ function bedsGrowing(b) { let n = 0; for (const t of bedsOf(b)) if (S.sbed[t] >=
 
 /** Is a stage 3 thing in this game (a seam surveyed, a bed)? */
 function t3Any() { return !!(S.seams || S.sbed); }
+
+/* ------------------------------------------------------------------ terraforming, stage 4 (EW, SLUICE, CAVE, SAP) */
+
+/*
+ * Military earthworks (the player's: no rival builds them, or plans the Grader's stage 4 jobs; rivals route round them,
+ * shoot a way through with heavy robots, and answer a tremor). Per-tile layers, made the first time something needs
+ * them and kept in saves as sparse layers (SPARSE_LAYERS): S.ewK (the earthwork's kind: 1 Earth Bank, 2 Fire Trench, 3
+ * Dragon's Teeth), S.ewO (its owner + 1), S.ewH (its strength, 0 breached .. EW.kinds[k].hp), S.fld (a Sluice's flood:
+ * 1 pouring, 2 spreading, 3 under water, 4 wet mud, 5 dried silt) and S.caveIn (1: a tunnel caved in by a Grader, a
+ * groove the Murmur never dig through again). A game without any of it has none of them, nothing hashed and nothing run.
+ * The Sluices' floods are on the Sluice (b.fl), a Sap Head's route and dig on the Sap Head (b.sap).
+ */
+const T4_LAYERS = ['ewK', 'ewO', 'ewH', 'fld', 'caveIn'];
+const EW_KINDS = ['', 'bank', 'trench', 'teeth'];
+const EW_HEAVY = new Set(EW.heavy);
+/** Layer k (one of T4_LAYERS), made if it isn't there. */
+function t4Layer(k) { return t2Layer(k); }
+/** Is a stage 4 thing in this game (an earthwork, a flood, a caved tunnel, a Sluice or Sap Head)? */
+function t4Any() { return !!(S.ewK || S.fld || S.caveIn) || S.buildings.some((b) => !b.dead && BDEFS[b.type].t4); }
+/** The earthwork's kind on tile t (1 bank, 2 trench, 3 teeth) while it stands (not breached), else 0. */
+function ewAt(t) { return S.ewK && S.ewK[t] && S.ewH[t] ? S.ewK[t] : 0; }
+/** Who built the earthwork on tile t (-1: none). */
+function ewOwner(t) { return S.ewO && S.ewO[t] ? S.ewO[t] - 1 : -1; }
+/** Does robot type `type` count as a vehicle or heavy robot (EW.heavy): Earth Banks and Dragon's Teeth stop it. */
+function ewHeavy(type) { return EW_HEAVY.has(type); }
+/** A robot on the ground (not flying, sailing, on rails, inside or underground). */
+function t4Ground(u) { const bt = BOTS[u.type]; return !(bt.air || bt.sea || bt.rail || bt.magpod || u.inside || u.sapT || aloft(u)); }
+/** Is tile t closed to a robot that is heavy (or not): an earthwork that stops it, or water standing from a Sluice. */
+function t4Shut(t, heavy) { const k = ewAt(t); return (heavy && (k === 1 || k === 3)) || !!(S.fld && S.fld[t] === 3); }
+/** Would the next step of robot u's route onto tile t run into what stage 4 shut there since it was planned? */
+function t4Blocks(u, t) { return t4Ground(u) && !BOTS[u.type].wild && t4Shut(t, ewHeavy(u.type)) && !(S.fld && S.fld[tIdx(Math.floor(u.x), Math.floor(u.y))] === 3); }
+/** A foe's earthwork on tile t that heavy robot u could break through (its army, armed). */
+function ewFoeBlock(u, t) { const k = ewAt(t); return (k === 1 || k === 3) && ewHeavy(u.type) && foes(ewOwner(t), u.owner); }
+
+/** How fast robot u moves for the earthwork or flood it is on: EW.slow, SLUICE.slow; 1 elsewhere and off the ground. */
+function t4Slow(u) {
+  const i = Math.floor(u.x), j = Math.floor(u.y);
+  if (!inMap(i, j)) return 1;
+  const t = j * S.W + i;
+  let m = 1;
+  const k = S.ewK ? ewAt(t) : 0, f = S.fld ? S.fld[t] : 0;
+  if (!k && (!f || f === 5)) return 1;
+  if (!t4Ground(u)) return 1;
+  if (k) m *= EW.slow[EW_KINDS[k]];
+  if (f) m *= f <= 2 ? SLUICE.slow.pour : f === 3 ? SLUICE.slow.water : f === 4 ? SLUICE.slow.mud : 1;
+  return m;
+}
+
+/**
+ * The share of a hit robot u takes for the earthworks round it: in its side's Fire Trench, EW.cover.trench (any fire);
+ * shot from beyond a tile away across its side's Earth Bank (a bank tile within EW.coverR of it toward the shooter,
+ * between them), EW.cover.bank. 1 otherwise.
+ */
+function ewCover(u, sx, sy) {
+  if (!t4Ground(u)) return 1;
+  const i = Math.floor(u.x), j = Math.floor(u.y);
+  if (!inMap(i, j)) return 1;
+  const mine = (t) => { const o = ewOwner(t); return o >= 0 && !foes(o, u.owner); };
+  const t = j * S.W + i;
+  if (ewAt(t) === 2 && mine(t)) return EW.cover.trench;
+  if (sx === undefined) return 1;
+  const dx = sx - u.x, dy = sy - u.y, d = Math.sqrt(dx * dx + dy * dy);
+  if (d < 1.5) return 1;
+  const R0 = Math.ceil(EW.coverR);
+  for (let b = j - R0; b <= j + R0; b++) for (let a = i - R0; a <= i + R0; a++) {
+    if ((a === i && b === j) || !inMap(a, b)) continue;
+    const v = b * S.W + a;
+    if (ewAt(v) !== 1 || !mine(v)) continue;
+    const vx = a + 0.5 - u.x, vy = b + 0.5 - u.y, vd = Math.sqrt(vx * vx + vy * vy);
+    if (vd > EW.coverR || vd >= d) continue;
+    if ((vx * dx + vy * dy) / (vd * d) > 0.55) return EW.cover.bank; // (the bank lies toward the shooter)
+  }
+  return 1;
+}
+
+/** The earthwork on tile t takes `dmg` (by colony `by`): worn below EW.worn, breached at 0 (a gap anyone crosses). */
+function ewHit(t, dmg, by) {
+  if (!ewAt(t) || dmg <= 0) return;
+  const k = S.ewK[t], full = EW.kinds[EW_KINDS[k]].hp, before = S.ewH[t];
+  const left = Math.max(0, Math.round(before - dmg));
+  S.ewH[t] = left;
+  if ((before >= full * EW.worn) !== (left >= full * EW.worn) || !left) markDirty(t % S.W, (t / S.W) | 0);
+  if (!left) {
+    S.ewVer = (S.ewVer || 0) + 1;
+    addFx('dustcloud', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 0.9 });
+    const o = ewOwner(t), P = S.players[o];
+    if (P && !(P.ewBreachT > S.time - 20)) { P.ewBreachT = S.time; postMsg(o, `${['', 'Your Earth Bank is', 'Your Fire Trench is', 'Your Dragon\'s Teeth are'][k]} breached. A Grader repairs it: drag the same tool over it (Build, 6).`, t % S.W, (t / S.W) | 0, 'bad'); }
+    if (by >= 0 && S.players[by]) S.players[by].stats.ewBreached = (S.players[by].stats.ewBreached || 0) + 1;
+  }
+}
+
+/** A blast of reach r at (x, y) (a shell, a bomb, a missile: scarBlast) wears the earthworks in it, the nearer the more. */
+function ewBlast(x, y, r) {
+  if (!S.ewK) return;
+  const R0 = Math.ceil(r + 0.5), ci = Math.floor(x), cj = Math.floor(y);
+  for (let b = cj - R0; b <= cj + R0; b++) for (let a = ci - R0; a <= ci + R0; a++) {
+    if (!inMap(a, b)) continue;
+    const t = b * S.W + a;
+    if (!ewAt(t)) continue;
+    const d = dist(a + 0.5, b + 0.5, x, y);
+    if (d > r + 0.5) continue;
+    ewHit(t, EW.blast * Math.max(0.3, r) * (1 - 0.6 * Math.min(1, d / (r + 0.5))), -1);
+  }
+}
+
+/** Heavy robot u of an army shoots at the foe's earthwork on tile t in its way (breachHit's way, EW.breach a shot). */
+function ewBreachHit(u, t) {
+  const x = (t % S.W) + 0.5, y = ((t / S.W) | 0) + 0.5;
+  u.vel = 0;
+  u.face = datan2(y - u.y, x - u.x);
+  if (u.cd > 0 || !useAmmo(u)) return;
+  u.cd = 1.0;
+  u.fought = 1;
+  shotFx(u.x, u.y, x + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, y + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
+  if (isMe(u.owner) || isMe(ewOwner(t))) sfx('hit');
+  ewHit(t, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * EW.breach, u.owner);
+}
+
+/**
+ * What a stage 4 Terraform tool would plan on tile t for `owner` (tfJob's part for 'bank', 'trench', 'teeth' and
+ * 'cave'; `where`: tfWhere's reason, '' if the tile is free to work): { k, to, n, cost, yieldN, time } or { why }.
+ * Dragging a line tool over its own kind, worn or breached, plans its repair ('ewfix'); Cave in goes on a Murmur
+ * tunnel, or beside a tunnel exit or a foe's Sap Exit.
+ */
+function t4Job(owner, tool, t, where) {
+  if (tool === 'cave') {
+    if (where) return { why: where };
+    if (t4CaveTarget(owner, t) < 0) return { why: 'Cave in: on a Murmur tunnel (the raised ridge with the veins), or right beside a tunnel exit or an enemy Sap Exit.' };
+    return { k: 'cave', to: S.elev[t], n: 1, cost: {}, yieldN: 0, time: CAVE.time };
+  }
+  const K = EW.kinds[tool], k = K.k;
+  if (S.ewK && S.ewK[t]) {
+    if (S.ewK[t] !== k) return { why: 'Another earthwork stands here.' };
+    if (ewOwner(t) !== owner) return { why: 'Someone else\'s earthwork.' };
+    if (S.ewH[t] >= K.hp) return { why: 'Already standing, in good repair.', same: true };
+    const s = S.bAt[t] ? getE(S.bAt[t]) : null;
+    if (s && s.tf && !s.built && s.owner === owner) return { why: 'Already planned here.' };
+    if (s) return { why: 'A building stands here.' };
+    const cost = {}; for (const g in K.cost) cost[g] = Math.max(1, Math.round(K.cost[g] * EW.fix));
+    return { k: 'ewfix', to: S.elev[t], n: k, cost, yieldN: 0, time: EW.fixTime };
+  }
+  if (where) return { why: where };
+  if (tfLevel(t) === null) return { why: S.terrain[t] === T_WATER ? 'Water: earthworks go on open ground.' : 'Only open ground.' };
+  if (S.fld && S.fld[t] && S.fld[t] < 5) return { why: 'The ground is under the flood: wait for it to dry.' };
+  return { k: tool, to: S.elev[t], n: k, cost: { ...K.cost }, yieldN: 0, time: K.time };
+}
+
+/** The tile a Cave in on tile t would cave in: t itself (a tunnel), an exit beside it (its tile), or -1. */
+function t4CaveTarget(owner, t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (S.tun && S.tun[t] && !S.bAt[t] && tunnelNest(t)) return t;
+  for (const [di, dj] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const b = getE(S.bAt[tIdx(i + di, j + dj)]);
+    if (b && !b.dead && ((BDEFS[b.type].burrow && !b.maw) || (BDEFS[b.type].sapexit && foes(b.owner, owner)))) return tIdx(b.x, b.y);
+  }
+  return -1;
+}
+
+/** A stage 4 Earthworks job done (completeEarthwork; the site already gone): the earthwork stands, is repaired, or the tunnel caves in. */
+function t4Earthwork(b, t, J, P) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (J.k === 'cave') { t4CaveIn(b.owner, t); return; }
+  for (const k of ['ewK', 'ewO', 'ewH']) t4Layer(k);
+  const k = J.k === 'ewfix' ? S.ewK[t] || J.n : EW.kinds[J.k].k;
+  if (J.k !== 'ewfix') { groveClear(t); if (S.decor) S.decor[t] = 0; }
+  S.ewK[t] = k; S.ewO[t] = b.owner + 1; S.ewH[t] = EW.kinds[EW_KINDS[k]].hp;
+  S.ewVer = (S.ewVer || 0) + 1;
+  if (P) { const s = J.k === 'ewfix' ? 'ewFixed' : 'ew' + EW_KINDS[k]; P.stats[s] = (P.stats[s] || 0) + 1; }
+  markDirty(i, j);
+  addFx('dustcloud', i + 0.5, j + 0.5, { r: 0.8 });
+  // Routes over it are worked out again (a heavy robot can't cross it now; anyone else goes slower).
+  for (const u of S.bots) if (!u.dead && u.path && !BOTS[u.type].air && !BOTS[u.type].sea && u.path.indexOf(t, u.pi || 0) >= 0) dropPath(u);
+  if (!S.buildings.some((e) => !e.dead && e.owner === b.owner && e.tf && !e.built)) postMsg(b.owner, 'Terraforming done: the Graders have finished every job.', b.x, b.y, 'good');
+}
+
+/** The tiles of nest network k (S.tun) its root reaches along the tunnels (a Set), from tile `root`. */
+function t4TunReach(k, root) {
+  const seen = new Set([root]), q = [root], W = S.W;
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    for (const v of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) if (v >= 0 && v < S.tun.length && !seen.has(v) && S.tun[v] === k) { seen.add(v); q.push(v); }
+  }
+  return seen;
+}
+
+/**
+ * A Grader's Cave in at tile t, done by colony p: a Murmur tunnel there caves in for CAVE.len tiles each way along it (a
+ * groove the Murmur never dig through again: S.caveIn), and every exit of its nest it cut off caves in too; an exit (the
+ * Murmur's, or a foe's Sap Exit) beside it collapses.
+ */
+function t4CaveIn(p, t) {
+  const tg = t4CaveTarget(p, t);
+  if (tg < 0) { postMsg(p, 'Nothing left to cave in there.', t % S.W, (t / S.W) | 0, 'info'); return; }
+  const e = S.bAt[tg] ? getE(S.bAt[tg]) : null;
+  const P = S.players[p];
+  if (P) P.stats.caveIn = (P.stats.caveIn || 0) + 1;
+  addFx('dustcloud', (tg % S.W) + 0.5, ((tg / S.W) | 0) + 0.5, { r: 1.2 });
+  if (e && BDEFS[e.type].sapexit) { sapExitLost(e, p); destroyBuilding(e, false); postMsg(p, 'You caved in the enemy\'s sap: its exit is gone.', e.x, e.y, 'good'); return; }
+  if (e && BDEFS[e.type].burrow) {
+    if (S.tun && S.tun[tg]) t4Groove([tg]);
+    collapseExit(e, p);
+    return;
+  }
+  // A tunnel: the tile and CAVE.len more each way along it.
+  const k = S.tun[tg], nest = tunnelNest(tg), W = S.W, gone = [tg], seen = new Set([tg]);
+  let front = [tg];
+  for (let s = 0; s < CAVE.len; s++) {
+    const nx = [];
+    for (const a of front) {
+      const i = a % W;
+      for (const v of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+        if (v < 0 || v >= S.tun.length || seen.has(v) || S.tun[v] !== k) continue;
+        seen.add(v);
+        const o = getE(S.bAt[v]);
+        if (o && !o.dead && (isNestB(o) || BDEFS[o.type].burrow)) continue; // (the nest's own tile stays; an exit goes below if it is cut off)
+        gone.push(v); nx.push(v);
+      }
+    }
+    front = nx;
+  }
+  t4Groove(gone);
+  // Exits of that nest now cut off from it go too.
+  let cut = 0;
+  if (nest) {
+    const reach = t4TunReach(k, tIdx(nest.x, nest.y));
+    for (const x of S.buildings.slice()) {
+      if (x.dead || !BDEFS[x.type].burrow || x.nest !== nest.id || x.maw) continue;
+      if (!reach.has(tIdx(x.x, x.y))) { collapseExit(x, p); cut++; }
+    }
+  }
+  postMsg(p, `Tunnel caved in: ${gone.length} tiles of it slumped to a groove the Murmur can't dig through${cut ? `, and ${cut} exit${cut === 1 ? '' : 's'} cut off from the nest caved in` : ''}.`, t % W, (t / W) | 0, 'good');
+}
+/** Tunnel tiles `ts` cave in: no tunnel there now, and a groove (S.caveIn) the Murmur never dig through again. */
+function t4Groove(ts) {
+  const C = t4Layer('caveIn');
+  for (const v of ts) { if (S.tun) S.tun[v] = 0; C[v] = 1; markDirty(v % S.W, (v / S.W) | 0); }
+  if (S.mur) S.mur.ver = (S.mur.ver || 0) + 1;
+}
+
+/* -------- the Sluice (SLUICE) */
+
+/** The tiles round a Sluice standing at (i, j) along `axis`: its two long sides as [water side, dry side], or null if it fits nowhere. */
+function sluiceSides(i, j, axis) {
+  const ns = axis === 'ns', a = [[i, j], ns ? [i, j + 1] : [i + 1, j]];
+  const side = (d) => a.map(([x, y]) => (ns ? [x + d, y] : [x, y + d])).filter(([x, y]) => inMap(x, y)).map(([x, y]) => tIdx(x, y));
+  const s0 = side(-1), s1 = side(1);
+  const wet = (ts) => ts.filter((t) => S.terrain[t] === T_WATER && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t])).length;
+  const w0 = wet(s0), w1 = wet(s1);
+  if (!w0 && !w1) return null;
+  return w0 >= w1 ? [s0, s1] : [s1, s0];
+}
+/** Why a Sluice can't stand at (i, j) along `axis` ('' if it can): water on one long side, its level's or lower ground on the other. */
+function sluiceWhy(i, j, axis) {
+  const sd = sluiceSides(i, j, axis);
+  if (!sd) return 'A Sluice goes on the bank, right beside water (a lake, a river or a canal) along one of its long sides (R turns it).';
+  const lv = S.elev[tIdx(i, j)], dry = sd[1].filter((t) => S.terrain[t] === T_GROUND && S.elev[t] <= lv && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]));
+  if (!dry.length) return 'Its other side has to be open ground no higher than it, for the water to run out over.';
+  return '';
+}
+/** The water behind Sluice b (connected water tiles from its water side, up to 600): how much it can let out. */
+function sluiceWater(b) {
+  const sd = sluiceSides(b.x, b.y, b.mdAxis);
+  if (!sd) return 0;
+  const W = S.W, seen = new Set(), q = sd[0].filter((t) => S.terrain[t] === T_WATER);
+  for (const t of q) seen.add(t);
+  for (let h = 0; h < q.length && q.length < 600; h++) {
+    const a = q[h], i = a % W;
+    for (const v of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) if (v >= 0 && v < S.terrain.length && !seen.has(v) && S.terrain[v] === T_WATER && !(S.lava && S.lava[v])) { seen.add(v); q.push(v); }
+  }
+  return q.length;
+}
+/**
+ * Where Sluice b's water goes when it opens: the ground beyond its dry side the water can run over (no higher than the
+ * Sluice's level, never uphill from where it came), nearest first, up to SLUICE.most tiles or SLUICE.perWater a tile of
+ * the water behind it. [{ t, d }] (d: tiles the water runs to get there).
+ */
+function sluiceFloodPlan(b) {
+  const sd = sluiceSides(b.x, b.y, b.mdAxis);
+  if (!sd) return [];
+  const lv = S.elev[tIdx(b.x, b.y)], W = S.W, N = W * S.H, most = Math.min(SLUICE.most, Math.ceil(sluiceWater(b) * SLUICE.perWater));
+  const ok = (t) => S.terrain[t] === T_GROUND && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) && S.elev[t] <= lv && S.bAt[t] !== b.id;
+  const out = [], dist = new Map();
+  for (const t of sd[1]) if (ok(t) && !dist.has(t)) { dist.set(t, 1); out.push(t); }
+  for (let h = 0; h < out.length && out.length < most; h++) {
+    const a = out[h], i = a % W, d = dist.get(a);
+    for (const v of [a - W, i < W - 1 ? a + 1 : -1, a + W, i > 0 ? a - 1 : -1]) {
+      if (v < 0 || v >= N || dist.has(v) || !ok(v) || S.elev[v] > S.elev[a] || out.length >= most) continue;
+      dist.set(v, d + 1); out.push(v);
+    }
+  }
+  return out.slice(0, most).map((t) => ({ t, d: dist.get(t) }));
+}
+/** Can Sluice b open now? '' or why not. */
+function sluiceCan(b) {
+  if (!b.built) return 'It isn\'t built yet.';
+  if (b.slOpen) return 'It is open.';
+  if (b.slReady > S.time) return `Refilling: ready in ${Math.ceil(b.slReady - S.time)} s.`;
+  if (b.fl) return 'Its last flood is still going down.';
+  if (!sluiceSides(b.x, b.y, b.mdAxis)) return 'No water behind it any more.';
+  return '';
+}
+/** Colony p opens (on) or shuts Sluice b (ORDERS.sluice). '' or why not. */
+function sluiceOrder(p, b, on) {
+  if (!b || b.dead || b.owner !== p || !BDEFS[b.type].sluice) return 'That isn\'t your Sluice.';
+  if (on) {
+    const why = sluiceCan(b);
+    if (why) return why;
+    const plan = sluiceFloodPlan(b);
+    if (!plan.length) return 'There is no lower ground beyond it for the water to run out over.';
+    b.fl = { t0: S.time, ts: plan.map((e) => e.t), d: plan.map((e) => e.d), top: plan[plan.length - 1].d, n: plan.length, rs: S.time + SLUICE.stay, st: plan.map(() => 0) };
+    b.slOpen = 1;
+    t4Layer('fld');
+    const c = bCentre(b);
+    if (isMe(p)) sfx('rumble', c.x, c.y);
+    const P = S.players[p];
+    postMsg(p, `Sluice open: the water is pouring out over ${plan.length} tiles of low ground.`, b.x, b.y, 'info');
+    for (const Q of S.players) if (!Q.absent && Q.id !== p && foes(Q.id, p) && !isWild(Q.id) && plan.some((e) => S.owner[e.t] === Q.id || (S.bAt[e.t] && getE(S.bAt[e.t])?.owner === Q.id))) postMsg(Q.id, `${playerName(p)} opened a Sluice: a flood is coming down onto your land. Get your robots to high ground.`, plan[0].t % S.W, (plan[0].t / S.W) | 0, 'bad');
+    if (P) P.stats.sluiceOpen = (P.stats.sluiceOpen || 0) + 1;
+    return '';
+  }
+  if (!b.slOpen) return 'It is shut.';
+  sluiceShut(b);
+  return '';
+}
+/**
+ * Sluice b's gates close and it refills. Shut by hand (`spent` false), the front stops where it is and the water starts
+ * going down soon after; shut by itself with its whole flood out (`spent`), the water stands its time.
+ */
+function sluiceShut(b, spent) {
+  b.slOpen = 0;
+  b.slReady = S.time + SLUICE.refill;
+  const F = b.fl;
+  if (!F || spent) return;
+  const el = S.time - F.t0;
+  let n = 0;
+  while (n < F.n && F.d[n] / SLUICE.speed <= el) n++;
+  F.n = Math.max(1, n);
+  F.top = F.d[F.n - 1];
+  F.rs = Math.min(F.rs, S.time + SLUICE.pour + SLUICE.spread);
+}
+/** The stage the flood F is at on its q-th tile now (0 none, then SLUICE's five). */
+function sluiceStage(F, q) {
+  const now = S.time, a = F.t0 + F.d[q] / SLUICE.speed;
+  if (q >= F.n || now < a) return 0;
+  const down = F.rs + (1 - F.d[q] / Math.max(1, F.top)) * SLUICE.recede; // (the far end first)
+  if (now < down) return now < a + SLUICE.pour ? 1 : now < a + SLUICE.pour + SLUICE.spread ? 2 : 3;
+  return now < down + SLUICE.mud ? 4 : now < down + SLUICE.mud + SLUICE.silt ? 5 : 0;
+}
+/** Every SLUICE.every ticks: each Sluice's flood moves on, tile by tile (only the tiles of a flood are looked at). */
+function sluiceTick() {
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].sluice || !b.fl) continue;
+    const F = b.fl, Fl = t4Layer('fld'), arrive = [], under = [];
+    let live = 0;
+    // (a Sluice open with its whole flood out: it shuts by itself)
+    if (b.slOpen && S.time - F.t0 >= F.top / SLUICE.speed + SLUICE.pour) sluiceShut(b, true);
+    for (let q = 0; q < F.ts.length; q++) {
+      const t = F.ts[q], st = sluiceStage(F, q), was = F.st[q];
+      if (st) live++;
+      if (st === was) continue;
+      F.st[q] = st;
+      Fl[t] = st;
+      if (!was && st) arrive.push(t);
+      if (st === 3) under.push(t);
+      if (!st && was && !S.res[t] && !S.fert[t] && hash2(t, S.seed, 4093) < SLUICE.fert) S.fert[t] = 1; // (silt: fertile for a Bio Farm)
+      S.fldVer = (S.fldVer || 0) + 1;
+    }
+    if (arrive.length) sluiceReach(b, arrive);
+    if (under.length) { const set = new Set(under); for (const u of S.bots) { if (u.dead || !u.path || !t4Ground(u)) continue; for (let q = u.pi || 0; q < u.path.length; q++) if (set.has(u.path[q])) { u.path = null; u.vel = 0; break; } } }
+    if (!live && !b.slOpen) { for (const t of F.ts) Fl[t] = 0; b.fl = null; S.fldVer = (S.fldVer || 0) + 1; }
+  }
+}
+/** The front of Sluice b's flood reaches tiles `ts`: robots there are knocked about, buildings hurt and knocked out, crops washed away. */
+function sluiceReach(b, ts) {
+  const set = new Set(ts), hit = new Set(), lost = new Map(), swept = new Map(), F = b.fl;
+  const until = F.rs + SLUICE.recede;
+  for (const t of ts) {
+    if (S.bAt[t]) { const e = getE(S.bAt[t]); if (e && !e.dead && e !== b) hit.add(e); }
+    if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(t % S.W, (t / S.W) | 0); }
+    if (((t % S.W) + ((t / S.W) | 0)) % 3 === 0) addFx('dust', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 0.45 });
+  }
+  for (const e of hit) {
+    const def = BDEFS[e.type], full = def.armor || 1;
+    e.fldT = Math.max(e.fldT || 0, until);
+    if (def.wild) continue;
+    e.armor -= full * SLUICE.hurt; e.lastHit = S.time;
+    if (e.armor > 0) continue;
+    if (e.type === 'lander') { e.armor = 1; continue; }
+    if (e.owner >= 0) lost.set(e.owner, (lost.get(e.owner) || 0) + 1);
+    destroyBuilding(e, false, true);
+  }
+  for (const u of S.bots) {
+    if (u.dead || !t4Ground(u)) continue;
+    const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+    if (!set.has(t)) continue;
+    if (u.owner >= 0 && !isWild(u.owner)) swept.set(u.owner, (swept.get(u.owner) || 0) + 1);
+    damageBot(u, SLUICE.botHit, undefined, undefined, true);
+    if (!u.dead) { u.path = null; u.vel = 0; }
+  }
+  for (const [p, n] of lost) postMsg(p, `The flood wrecked ${n} of your building${n === 1 ? '' : 's'}.`, b.x, b.y, 'lost');
+  for (const [p, n] of swept) postMsg(p, `The flood knocked ${n} of your robot${n === 1 ? '' : 's'} off their feet.`, ts[0] % S.W, (ts[0] / S.W) | 0, 'bad');
+}
+/** Sluice b's status line (from updateBuilding). */
+function updateSluice(b) {
+  const F = b.fl;
+  if (b.slOpen) b.status = `Open: the water is pouring out (${F ? F.n : 0} tiles)`;
+  else if (F) b.status = `Shut: the flood is ${S.time < F.rs ? 'standing' : 'going down'}${b.slReady > S.time ? `; refilled in ${Math.ceil(b.slReady - S.time)} s` : ''}`;
+  else if (b.slReady > S.time) b.status = `Shut, refilling: ready in ${Math.ceil(b.slReady - S.time)} s`;
+  else b.status = sluiceSides(b.x, b.y, b.mdAxis) ? 'Shut, holding the water back: ready to open' : 'Shut: no water behind it';
+}
+
+/* -------- the Sap Head (SAP) */
+
+/** Why colony p can't plan sap route `list` (tiles, from beside the Sap Head out) for Sap Head b ('' if it can). */
+function sapWhy(p, b, list) {
+  if (!b || b.dead || b.owner !== p || !BDEFS[b.type].saphead) return 'That isn\'t your Sap Head.';
+  if (!b.built) return 'Build the Sap Head first.';
+  if (!Array.isArray(list) || !list.length) return 'Plan a route out from it.';
+  if (list.length > SAP.most) return `A sap runs ${SAP.most} tiles at most.`;
+  let prev = tIdx(b.x, b.y);
+  const seen = new Set();
+  for (const t of list) {
+    if (!Number.isInteger(t) || t < 0 || t >= S.W * S.H || seen.has(t) || t === tIdx(b.x, b.y)) return 'That route doesn\'t hold together.';
+    seen.add(t);
+    const dx = Math.abs((t % S.W) - (prev % S.W)), dy = Math.abs(((t / S.W) | 0) - ((prev / S.W) | 0));
+    if (dx + dy !== 1) return 'A sap runs a tile at a time, straight or round corners (no diagonals).';
+    if (!tunnelable(t)) return 'A sap can\'t run under water, rock, chasms, lava or the tide.';
+    if (dist(t % S.W, (t / S.W) | 0, b.x, b.y) > SAP.reach) return `A sap reaches ${SAP.reach} tiles from its Sap Head at most.`;
+    prev = t;
+  }
+  return sapEndWhy(list[list.length - 1]);
+}
+/** Why a sap can't break out at tile t ('' if it can): open, level ground with nothing on it. */
+function sapEndWhy(t) {
+  if (S.terrain[t] !== T_GROUND || S.ramp[t]) return 'Its end has to come up on open ground (not a slope).';
+  if (S.bAt[t]) return 'Its end has to come up on open ground: a building stands there.';
+  if (S.res[t] || S.road[t] || (S.rail && S.rail[t])) return 'Its end has to come up on open ground (no road, track or resources).';
+  if (postAt(t) || calmAt((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5)) return 'Not on a Trade Post\'s ground.';
+  return '';
+}
+/** Colony p plans Sap Head b's route (ORDERS.sap): the sap is dug again from the start along it. '' or why not. */
+function sapPlan(p, b, list) {
+  const why = sapWhy(p, b, list);
+  if (why) return why;
+  const old = sapExitOf(b) || (b.sap && b.sap.exit ? getE(b.sap.exit) : null);
+  if (old && !old.dead) { old.head = 0; destroyBuilding(old, false, true); S.roadVer = (S.roadVer || 0) + 1; }
+  b.sap = { route: list.slice(), dug: 0, acc: 0, exit: 0, heard: {} };
+  return '';
+}
+/** Does colony p see Sap Head b's sap (its route, the head working along it)? Only its owner does: a rival feels the tremor, nothing more. */
+function sapSeen(b, p) { return !!b && b.owner === p; }
+/** The Sap Exit Sap Head b's sap broke out at (built, standing), or null. */
+function sapExitOf(b) { const e = b && b.sap && b.sap.exit ? getE(b.sap.exit) : null; return e && !e.dead && e.built ? e : null; }
+/** Sap Head b digs (each tick it stands): a tile every SAP.dig s; a tremor for a foe whose building it passes under; at the end, the break-out. */
+function updateSapHead(b, dt) {
+  const A = b.sap;
+  if (!A) { b.status = 'No sap planned: plan a route from it (Plan sap)'; return; }
+  if (A.exit) { b.status = sapExitOf(b) ? `Sap open: ${A.route.length} tiles to its exit` : 'Its exit was lost: plan the sap again'; return; }
+  if (A.dug >= A.route.length) {
+    const t = A.route[A.route.length - 1], why = sapEndWhy(t);
+    if (why) { b.status = `Waiting to break out: ${why}`; return; }
+    sapBreakOut(b, t);
+    return;
+  }
+  A.acc += dt;
+  b.working = true;
+  b.status = `Digging: ${A.dug} of ${A.route.length} tiles`;
+  if (A.acc < SAP.dig) return;
+  A.acc -= SAP.dig;
+  const t = A.route[A.dug++];
+  sapTremor(b, t);
+}
+/** The head of Sap Head b's sap reached tile t: a foe with a building or Wall within SAP.hear tiles of it feels a tremor. */
+function sapTremor(b, t) {
+  const i = t % S.W, j = (t / S.W) | 0, R0 = SAP.hear, A = b.sap;
+  for (let y = j - R0; y <= j + R0; y++) for (let x = i - R0; x <= i + R0; x++) {
+    if (!inMap(x, y) || !S.bAt[tIdx(x, y)]) continue;
+    const e = getE(S.bAt[tIdx(x, y)]);
+    if (!e || e.dead || e.owner < 0 || !foes(e.owner, b.owner) || isWild(e.owner)) continue;
+    const q = e.owner, P = S.players[q];
+    if (!P || P.absent || (A.heard[q] ?? -1e9) > S.time - SAP.tremorEvery) continue;
+    A.heard[q] = S.time;
+    const fx = clamp(i + Math.round((hash2(t, q, 6011) - 0.5) * 2 * SAP.tremorFuzz), 0, S.W - 1), fy = clamp(j + Math.round((hash2(t, q, 6013) - 0.5) * 2 * SAP.tremorFuzz), 0, S.H - 1);
+    (S.tremors = S.tremors || []).push({ x: fx + 0.5, y: fy + 0.5, p: q, t: S.time });
+    postMsg(q, `A tremor under your ${BDEFS[e.type].name}: something is digging down there. Guard the ground round it.`, fx, fy, 'warn');
+    P.tremor = { x: fx, y: fy, t: S.time };
+    if (P.stats) P.stats.tremors = (P.stats.tremors || 0) + 1;
+    // (a rival sends its nearest guard: forts near by answer, as when its buildings are hit: garrisonDefense)
+    if (P.ai) { const Rd = P.raided || (P.raided = {}); Rd.x = fx + 0.5; Rd.y = fy + 0.5; Rd.t = S.time; }
+    return;
+  }
+}
+/** Sap Head b's sap breaks out at tile t: its exit opens, and its owner's robots can go through. */
+function sapBreakOut(b, t) {
+  const e = addBuilding(b.owner, 'sapexit', t % S.W, (t / S.W) | 0, true);
+  e.armor = SAP.exitArmor; e.head = b.id;
+  b.sap.exit = e.id;
+  S.roadVer = (S.roadVer || 0) + 1; S.planVer = (S.planVer || 0) + 1;
+  addFx('dustcloud', e.x + 0.5, e.y + 0.5, { r: 1.2 });
+  const P = S.players[b.owner];
+  if (P) P.stats.sapOpen = (P.stats.sapOpen || 0) + 1;
+  postMsg(b.owner, 'The sap broke out: your robots can go through it between the Sap Head and its exit.', e.x, e.y, 'good');
+  for (const Q of S.players) {
+    if (Q.absent || Q.id === b.owner || !foes(Q.id, b.owner) || isWild(Q.id)) continue;
+    if (S.buildings.some((o) => !o.dead && o.owner === Q.id && dist2(o.x, o.y, e.x, e.y) < 144)) postMsg(Q.id, 'An enemy tunnel broke out near your base! Shoot the exit down, or cave it in with a Grader (Build, 6, Cave in).', e.x, e.y, 'bad');
+  }
+}
+/** A Sap Exit went (shot down or caved in, by colony `by`): its Sap Head's sap is dead. */
+function sapExitLost(e, by) {
+  const h = getE(e.head);
+  if (h && h.sap && h.sap.exit === e.id && !h.sap.dead) { h.sap.dead = 1; postMsg(h.owner, 'Your sap\'s exit was lost: the tunnel is shut. Plan it again from the Sap Head.', e.x, e.y, 'bad'); }
+  if (by >= 0 && S.players[by] && foes(by, e.owner)) S.players[by].stats.sapShut = (S.players[by].stats.sapShut || 0) + 1;
+  S.roadVer = (S.roadVer || 0) + 1; S.planVer = (S.planVer || 0) + 1;
+}
+/** The far end of the sap from tile t, for colony `who`'s robots: a Sap Head's exit tile, or an exit's Sap Head tile; -1 if none. */
+function sapLink(t, who) {
+  const b = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (!b || b.dead || !b.built || b.owner !== who) return -1;
+  if (BDEFS[b.type].saphead) { const e = sapExitOf(b); return e ? tIdx(e.x, e.y) : -1; }
+  if (BDEFS[b.type].sapexit) { const h = getE(b.head); return h && !h.dead && h.built && sapExitOf(h) === b ? tIdx(h.x, h.y) : -1; }
+  return -1;
+}
+/** How long the sap from tile t is (its route's tiles): its cost in routes, and the time going through it. */
+function sapLen(t) { const b = getE(S.bAt[t]); const h = b && BDEFS[b.type].sapexit ? getE(b.head) : b; return h && h.sap ? h.sap.route.length : 1; }
+/**
+ * Robot u at one end of a sap whose route goes on to the other end (moveAlong): it goes down and through, out of sight
+ * and out of reach (u.sapT: when it comes up), and comes up at the far end; if that end is lost meanwhile, back out
+ * where it went down. True while it is down there.
+ */
+function sapRide(u, here, nxt) {
+  if (!u.sapT) {
+    if (nxt === undefined || nxt === here || sapLink(here, u.owner) !== nxt) return false;
+    u.sapT = S.time + sapLen(here) * SAP.cost / Math.max(0.3, BOTS[u.type].speed);
+    u.sapFrom = here; u.vel = 0; u.drive = 0; u.moved = 0;
+    return true;
+  }
+  u.vel = 0; u.moved = 0;
+  if (S.time < u.sapT) return true;
+  const ok = sapLink(u.sapFrom, u.owner) === nxt, at = ok ? nxt : u.sapFrom;
+  u.sapT = 0; u.sapFrom = undefined;
+  u.x = (at % S.W) + 0.5; u.y = ((at / S.W) | 0) + 0.5;
+  if (ok) u.pi++; else dropPath(u);
+  if (u.pi >= (u.path ? u.path.length : 0)) u.path = null;
+  return true;
+}
+
+/** Stage 4's own clock (from simStep): the floods three times a second. */
+function t4Tick() {
+  if (S.tick % SLUICE.every === 5) sluiceTick();
+  if (S.tremors && S.tick % 300 === 0) { S.tremors = S.tremors.filter((r) => S.time - r.t < 30); if (!S.tremors.length) S.tremors = null; }
+}
 
 /** The nearest rock face (see rockFace) a Quarry's worker can cut Stone from, in its owner's or no-one's land. */
 function findFace(b, radius) {
@@ -5545,6 +6109,7 @@ function updateBuilding(b, dt) {
   repairHint(b);
   if (def.gup) updateGup(b, dt); // (first: cut off or paused, its transmission runs back as without power)
   if (b.cut) { crumble(b, dt); return; }
+  if (b.fldT > S.time && !def.sluice) { b.status = 'Flooded: knocked out until the water goes down'; return; } // (stage 4: a Sluice's flood round it)
   if (b.paused) {
     if (def.dome) b.dUp = 0;
     if (def.deepcore) { deepHeld(b); deepWarn(b); } // (turned off, a raid it has already called still comes)
@@ -5578,6 +6143,8 @@ function updateBuilding(b, dt) {
   else if (def.wpump) updateWpump(b); // (stage 2: IRR)
   else if (def.seamdrill) updateSeamDrill(b, dt * S.players[b.owner].mult); // (stage 3: SEAM)
   else if (def.seedmast) updateSeedMast(b, dt * S.players[b.owner].mult); // (stage 3: SEED)
+  else if (def.sluice) updateSluice(b); // (stage 4: SLUICE)
+  else if (def.saphead) updateSapHead(b, dt * S.players[b.owner].mult); // (stage 4: SAP)
   else if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -7279,7 +7846,7 @@ function formPlace(u, lead, gx, gy, dl, key) {
 }
 
 /** Is bot u up in the air (a plane in flight, a robot on its parachute), out of reach of anything on the ground? */
-function aloft(u) { return !!(u.dropping || u.under || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)); } // (u.under: a Sapper underground, out of reach too)
+function aloft(u) { return !!(u.dropping || u.under || u.sapT || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)); } // (u.under: a Sapper underground, out of reach too)
 
 /** Bot u takes `dmg` (from (sx, sy), for a Bulwark's shield). Nothing hurts it on a Trade Post's ground (calmAt) but the planet itself (`nat`: Ringfall, the ground giving way). `small`: small arms (a quarter of it to the Harrow). */
 function damageBot(u, dmg, sx, sy, nat, small) {
@@ -7292,6 +7859,7 @@ function damageBot(u, dmg, sx, sy, nat, small) {
   if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
   if (S.landmarks && typeof lmCover === 'function') dmg *= lmCover(u); // (cover among the Stone Forest's pillars: js/landmarks.js)
   if (S.town) dmg *= townCover(u); // (cover beside Passenger Town's buildings)
+  if (S.ewK && !nat) dmg *= ewCover(u, sx, sy); // (in a Fire Trench, behind an Earth Bank: stage 4)
   u.hp -= dmg;
   u.hurtT = S.time;
   if (sx !== undefined && BOTS[u.type].wild) { u.hitX = sx; u.hitY = sy; u.hitT = S.time; if (u.task && u.task.type === 'guard' && !nat) nestAlarm(getE(u.nest), nestShooterAt(sx, sy)); } // (the Murmur remember what killed them: murmurBody; a nest's guard shot at: nestAlarm)
@@ -7307,6 +7875,7 @@ function hitBuilding(b, dmg, by, src) {
   if (b.crack && BDEFS[b.type].barrier) dmg *= SUNDER.wallTakes; // (a Wall or Gate a Quake cracked, until repaired to full)
   b.armor -= dmg;
   b.lastHit = S.time;
+  if (by >= 0 && BDEFS[b.type].sapexit) b.lastHitBy = by; // (stage 4: who shut a sap)
   if (by >= 0 && foes(by, b.owner)) {
     const P = S.players[b.owner], R = P.raided || (P.raided = {});
     if (!(P.hitBy && P.hitBy[by])) logEvent({ t: S.time, k: 'hit', p: b.owner, q: by, b: b.type }); // (the first: see S.log)
@@ -9883,6 +10452,7 @@ function sabotageRoads(u, r, dt) {
 
 /** Destroy a road tile (no refund): raids and missiles. Lights and overpasses on it go too. */
 function wreckRoad(t, victim, why) {
+  if (orbTile(t)) return; // (a drawbridge's road is part of the bridge: Orbital platforms)
   const i = t % S.W, j = (t / S.W) | 0, cross = crossTile(t);
   setRoad(i, j, false);
   // (In a nuclear blast the land and the zones are worked out once, when it's done: LAND_HOLD, see nukeImpact.)
@@ -11945,6 +12515,7 @@ function costText(cost) {
 function removeRoad(owner, i, j, held) {
   const t = tIdx(i, j);
   if (S.plan[t] === owner + 1) { cancelPlan(t); return; }
+  if (orbTile(t)) return; // (a drawbridge's road is part of the bridge: it can't be taken up)
   if (!S.road[t] || !roadOwnedBy(owner, t)) return; // only your own roads (a rival's are wrecked by raids or Missiles)
   const cross = crossTile(t);
   setRoad(i, j, false);
@@ -13469,7 +14040,7 @@ function meteorImpact(E, h) {
   const spots = [];
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
-  let placed = 0;
+  let placed = S.caves ? 99 : 0; // (Half underground: a strike on the surface leaves its crater but no Ore or Crystal there)
   for (const [, i0, j0] of spots) {
     if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i0, j0)) continue;
     // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
@@ -13498,7 +14069,7 @@ function meteorImpact(E, h) {
  * Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it, and never
  * in the Hollow: it's underground, where only Ringfall reaches, through the breaches (as no Mass Driver works there).
  */
-function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow; }
+function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow && !S.caves; } // (nor on Half underground: the surface has no Ore or Crystal, the roof keeps the sky out of the caves)
 
 /** Can a drizzle deposit lie on tile t? Open, bare ground no one holds, with nothing on it or planned for it. */
 function drizzleOk(t) {
@@ -13670,7 +14241,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
-function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (S.grove ? groveSlow(u) : 1) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
+function speedMul(u) { return (u.task?.pace || 1) * sunderPace(u) * evSpeed(u.x, u.y, u.owner) * atmosMud(u) * (S.grove ? groveSlow(u) : 1) * (S.ewK || S.fld ? t4Slow(u) : 1) * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1) * (u.dashT > S.time ? SKIRM.dashMul : 1); } // (u.dashT: a Skirmisher's dash)
 function drainMul(u) { return evDrain(u.x, u.y) * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -14302,6 +14873,148 @@ function updateUplinks() {
     S.upWarned = w;
     postMsg(ME, lead === ME ? `${w === 60 ? 'One minute' : '20 seconds'} more on the Uplinks and the planet is yours!` : `${who(lead)} wins on the Uplinks in ${w === 60 ? 'one minute' : '20 seconds'}: take or jam one!`, undefined, undefined, lead === ME ? 'good' : 'bad');
   }
+}
+
+/* ------------------------------------------------------------------ Orbital platforms: the drawbridges and their control boxes */
+
+/*
+ * Orbital platforms (SHAPE_PRESETS orbital; orbitalMap in world.js, ORBITAL in defs.js, the look in js/orbital.js).
+ * S.orb = { plats, br, bx, ver }:
+ *   br[k]  a bridge: its strip (x0..x1, y0..y1: tiles; ax 'v' runs north-south, 'h' east-west) between decks `a` (the one
+ *          at its low end) and `b`; up (1: the strip is void, T_CHASM; 0: ground that can be walked), mv (0 at rest, 1 a Raise
+ *          ordered and the warning running, 2 the leaf swinging up, 3 a Lower ordered and the leaf coming down), t0 (when
+ *          mv began), cd (no new order until S.time reaches it), by (who ordered it).
+ *   bx[n]  a control box: bridge br, which end (0 at the low end, 1 at the high), its tile, owner (-1 no one).
+ * A raised bridge is void from the moment the leaf lifts (up = 1) until a Lower finishes (up = 0). A Raise is called off if a
+ * robot (any colony's, on foot) is on the strip when the warning ends, so no robot is ever lost to a raise. Nothing is built on
+ * a strip (orbTile). The tiles' terrain is the truth for walking (T_GROUND or T_CHASM), so paths, zones and territory need
+ * nothing special; orbFlip changes it and tells them (terrainChanged).
+ */
+let _orbIdx = { of: null, idx: null };
+/** The bridge (index) whose strip tile t is, or -1. */
+function orbBridgeAt(t) {
+  const O = S && S.orb;
+  if (!O) return -1;
+  if (_orbIdx.of !== O) {
+    const idx = new Int16Array(S.W * S.H).fill(-1);
+    O.br.forEach((B, k) => { for (let j = B.y0; j <= B.y1; j++) for (let i = B.x0; i <= B.x1; i++) idx[j * S.W + i] = k; });
+    _orbIdx = { of: O, idx };
+  }
+  return _orbIdx.idx[t];
+}
+/** Is tile t on a drawbridge's strip, up or down (nothing is built, laid or dropped on it)? */
+function orbTile(t) { return !!(S && S.orb) && orbBridgeAt(t) >= 0; }
+/** The deck's name for messages: South, North, West, East, South-west..., Middle. */
+function orbDeckName(i) {
+  const P = S.orb.plats[i], cx = (P.x0 + P.x1 + 1) / 2 / S.W, cy = (P.y0 + P.y1 + 1) / 2 / S.H;
+  if (P.kind === 'mid') return 'Middle';
+  const ns = cy < 0.4 ? 'North' : cy > 0.6 ? 'South' : '', ew = cx < 0.4 ? 'west' : cx > 0.6 ? 'east' : '';
+  return ns && ew ? `${ns}-${ew}` : ns || ew.charAt(0).toUpperCase() + ew.slice(1);
+}
+/** Bridge k's name: "South to Middle". */
+function orbName(k) { const B = S.orb.br[k]; return `${orbDeckName(B.a)} to ${orbDeckName(B.b)}`; }
+/** Is any robot on foot on bridge k's strip (or at its edge)? */
+function orbOccupied(k) {
+  const B = S.orb.br[k], pad = ORBITAL.pad;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air) continue;
+    if (u.x >= B.x0 - pad && u.x <= B.x1 + 1 + pad && u.y >= B.y0 - pad && u.y <= B.y1 + 1 + pad) return true;
+  }
+  return false;
+}
+/** Does player p hold a control box at either end of bridge k? */
+function orbHolds(p, k) { return S.orb.bx.some((b) => b.br === k && b.owner === p); }
+/** Why p can't order bridge k up (up 1) or down (0) now ('' if it can). */
+function orbWhy(p, k, up) {
+  const O = S.orb;
+  if (!O) return 'There are no bridges on this map.';
+  const B = O.br[k];
+  if (!B) return 'That bridge is gone.';
+  if (!orbHolds(p, k)) return 'Hold one of its control boxes first: armed robots beside it, or your land round it.';
+  if (B.mv) return 'The bridge is moving.';
+  if (up ? B.up : !B.up) return up ? 'It is already up.' : 'It is already down.';
+  if (S.time < B.cd) return `The bridge is resting: ${Math.ceil(B.cd - S.time)} s.`;
+  if (up && orbOccupied(k)) return 'Robots are on the bridge: it can\'t be raised.';
+  return '';
+}
+/** Order bridge k raised (up 1) or lowered (0) for player p: '' or why not. */
+function orbSet(p, k, up) {
+  k = k | 0;
+  const why = orbWhy(p, k, up);
+  if (why) return why;
+  const B = S.orb.br[k];
+  B.mv = up ? 1 : 3; B.t0 = S.time; B.by = p;
+  S.orb.ver++;
+  const cx = (B.x0 + B.x1 + 1) / 2, cy = (B.y0 + B.y1 + 1) / 2;
+  postMsg(ME, up ? `The ${orbName(k)} bridge is being raised${p === ME ? '' : ' by ' + playerName(p, true)}: get off it (${ORBITAL.warn} s).` : `The ${orbName(k)} bridge is being lowered${p === ME ? '' : ' by ' + playerName(p, true)}.`, cx, cy, up && p !== ME ? 'warn' : 'info');
+  sfx('bridge', cx, cy, up ? 1 : 0);
+  return '';
+}
+/** Raise or lower bridge k's tiles now, and tell the paths, zones and land. */
+function orbFlip(k, up) {
+  const B = S.orb.br[k], W = S.W;
+  B.up = up ? 1 : 0;
+  for (let j = B.y0; j <= B.y1; j++) for (let i = B.x0; i <= B.x1; i++) {
+    const t = j * W + i;
+    S.terrain[t] = up ? T_CHASM : T_GROUND;
+    S.dirtyTiles.push(t);
+    setRoad(i, j, !up, -1); // (the strip's road is permanent: S.road mirrors it only while the strip is ground, since a road on a void tile would read as drivable all over; it comes back with the same cache bumps)
+  }
+  S.orb.ver++;
+  terrainChanged();
+  for (const u of S.bots) if (!u.dead && u.path && u.path.slice(u.pi).some((v) => orbBridgeAt(v) === k)) dropPath(u); // (a route over it is a route no more)
+}
+/** A step: the warnings run out and the leaves swing. */
+function orbTick() {
+  const O = S.orb;
+  for (let k = 0; k < O.br.length; k++) {
+    const B = O.br[k];
+    if (!B.mv) continue;
+    const cx = (B.x0 + B.x1 + 1) / 2, cy = (B.y0 + B.y1 + 1) / 2;
+    if (B.mv === 1 && S.time >= B.t0 + ORBITAL.warn) {
+      if (orbOccupied(k)) {
+        B.mv = 0; B.cd = S.time + ORBITAL.fail; O.ver++;
+        postMsg(ME, `The ${orbName(k)} bridge stays down: a robot is on it.`, cx, cy, 'info');
+      } else { orbFlip(k, true); B.mv = 2; B.t0 = S.time; }
+    } else if (B.mv === 2 && S.time >= B.t0 + ORBITAL.lift) { B.mv = 0; B.cd = S.time + ORBITAL.cool; O.ver++; }
+    else if (B.mv === 3 && S.time >= B.t0 + ORBITAL.lift) {
+      orbFlip(k, false); B.mv = 0; B.cd = S.time + ORBITAL.cool;
+      postMsg(ME, `The ${orbName(k)} bridge is down.`, cx, cy, 'info');
+    }
+  }
+  if (S.tick % 30 === 12) orbBoxes();
+}
+/**
+ * Who holds each control box (once a second): the colony with more armed robots within ORBITAL.reach of it than any other
+ * (a tie leaves it as it was); with none near, the colony whose land it stands in; a box on no one's land keeps its holder.
+ */
+function orbBoxes() {
+  const O = S.orb, r2 = ORBITAL.reach * ORBITAL.reach;
+  for (const b of O.bx) {
+    let best = -1, bn = 0, tie = false;
+    const near = new Map();
+    for (const u of S.bots) {
+      if (u.dead || u.inside || u.dropping || u.owner < 0 || BOTS[u.type].air || !isArmy(u) || S.players[u.owner].out) continue;
+      if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= r2) near.set(u.owner, (near.get(u.owner) || 0) + 1);
+    }
+    for (const [o, n] of near) { if (n > bn) { bn = n; best = o; tie = false; } else if (n === bn) tie = true; }
+    let own = b.owner;
+    if (best >= 0 && !tie) own = best;
+    else if (!near.size) { const lo = S.owner[b.y * S.W + b.x]; if (lo >= 0 && S.players[lo] && !S.players[lo].out && !S.players[lo].absent) own = lo; }
+    if (own === b.owner) continue;
+    const was = b.owner;
+    b.owner = own; O.ver++;
+    if (own === ME) postMsg(ME, `You hold the control box of the ${orbName(b.br)} bridge (its ${orbDeckName(b.end ? O.br[b.br].b : O.br[b.br].a)} end).`, b.x + 0.5, b.y + 0.5, 'good');
+    else if (was === ME) postMsg(ME, `${own >= 0 ? playerName(own) + ' took' : 'You lost'} the control box of the ${orbName(b.br)} bridge (its ${orbDeckName(b.end ? O.br[b.br].b : O.br[b.br].a)} end).`, b.x + 0.5, b.y + 0.5, 'bad');
+  }
+}
+/** A new game's lowered bridges carry a road (see orbFlip): laid once the map's layers are made. */
+function orbRoads() { for (const B of S.orb.br) if (!B.up) for (let j = B.y0; j <= B.y1; j++) for (let i = B.x0; i <= B.x1; i++) setRoad(i, j, true, -1); }
+/** The orbital state a new game starts with, from the generator's decks, bridges and boxes: every bridge down, a colony's own home-deck boxes its own, the rest no one's. */
+function orbInit(o, bases) {
+  // (a box on a colony's home deck, the one its Command Base stands on, starts as its own; the others are no one's)
+  const homeOf = (x, y) => { const k = bases.findIndex((c) => c && o.plats.some((P) => P.kind === 'home' && c.x >= P.x0 && c.x <= P.x1 && c.y >= P.y0 && c.y <= P.y1 && x >= P.x0 && x <= P.x1 && y >= P.y0 && y <= P.y1)); return k; };
+  return { plats: o.plats, br: o.br.map((s) => ({ id: s.id, ax: s.ax, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, a: s.a, b: s.b, up: 0, mv: 0, t0: 0, cd: 0 })), bx: o.bx.map((b) => ({ id: b.id, br: b.br, end: b.end, x: b.x, y: b.y, owner: homeOf(b.x, b.y) })), ver: 1 };
 }
 
 /** m:ss */
@@ -15036,7 +15749,7 @@ function murmurFrom(k, g) {
 }
 
 /** Can a tunnel run under tile t? Under any ground, roads, buildings and Walls; not under water, chasms, rock, lava or the tide. */
-function tunnelable(t) { return S.terrain[t] === T_GROUND && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]); }
+function tunnelable(t) { return S.terrain[t] === T_GROUND && !(S.tidal && S.tidal[t]) && !(S.lava && S.lava[t]) && !(S.caveIn && S.caveIn[t]); } // (nor through a groove a Grader caved in: stage 4, CAVE)
 
 /** A night's digging for nest b: its branches, one tile at a time, at the pace that spends the night's tiles by dawn. */
 function murmurGrow(b) {
@@ -19168,7 +19881,7 @@ function airdropBlocked(owner, u, kind, i, j) {
   const t = tIdx(i, j);
   if (caveTile(t)) return 'The roof is in the way: nothing is dropped into the caves. Drop it out on the surface, by an entrance.';
   if (kind === 'outpost') {
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
+    if (S.terrain[t] !== T_GROUND || orbTile(t) || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
     if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
     if (S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
@@ -21651,6 +22364,16 @@ function hashState() {
   if (t2Any()) for (const k in S.burnt || {}) int(+k); // (scorched ground: groves burn to it and Reclaim clears it)
   for (const k of T3_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (Crystal Seedbeds: stage 3)
   for (const e of S.seams || []) { int(e.id); int(e.n); int(e.f); } // (the seams, once a Seam Drill has surveyed: stage 3)
+  for (const k of T4_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (earthworks, floods, caved tunnels: stage 4)
+  for (const b of S.buildings) { // (a Sluice's flood, a Sap Head's sap, what a flood knocked out: stage 4)
+    if (b.fl) { int(b.id); num(b.fl.t0); int(b.fl.n); num(b.fl.rs); int(b.fl.ts.length); }
+    if (b.slOpen || b.slReady) { int(b.id); int(b.slOpen || 0); num(b.slReady || 0); }
+    if (b.fldT) { int(b.id); num(b.fldT); }
+    if (b.sap) { int(b.id); int(b.sap.dug); num(b.sap.acc); int(b.sap.exit); int(b.sap.route.length); int(b.sap.dead || 0); }
+    if (b.head) { int(b.id); int(b.head); }
+  }
+  for (const u of S.bots) if (u.sapT) { int(u.id); num(u.sapT); int(u.sapFrom ?? -1); }
+  for (const r of S.tremors || []) { num(r.x); num(r.y); int(r.p); num(r.t); }
   for (const t in S.green || {}) { int(+t); int(S.green[t]); } // (the land the Atmosphere Engines changed, and the calm of fallen ones)
   for (const f of S.aeFade || []) { num(f.x); num(f.y); num(f.r); int(f.st); num(f.t0); int(f.p ?? -1); }
   for (const t in S.drought || {}) { int(+t); int(S.drought[t]); } // (crops under a Storm Front)
@@ -21661,6 +22384,7 @@ function hashState() {
   for (const w of S.wrecks || []) { int(w.id); num(w.x); num(w.y); num(w.a); num(w.t); } // (aircraft wrecks: crashLand)
   if (S.walker) { const w = S.walker; num(w.x); num(w.y); num(w.a); num(w.od); num(w.prog); num(w.t); int(w.ph); int(w.dir); int(w.owner); int(w.cap); int(w.hot); for (const id of w.kids) int(id); for (const r of S.rallies) if (r.walker) { int(r.id); num(r.x); num(r.y); } } // (the Walking Factory)
   if (S.town) for (const r of S.town.r) { int(r.id); int(r.gone); int(r.by); int(r.cache); num(r.sen); num(r.scd || 0); int(r.g.cement || 0); int(r.g.alloy || 0); int(r.g.chip || 0); } // (Passenger Town's buildings)
+  if (S.orb) { for (const B of S.orb.br) { int(B.up); int(B.mv); num(B.t0); num(B.cd); int(B.by ?? -1); } for (const b of S.orb.bx) int(b.owner); } // (Orbital platforms: the bridges and who holds the control boxes)
   if (S.dam) for (const d of S.dam.d) { num(d.hp); int(d.by); int(d.mend); num(d.hitT); int(d.hitBy); num(d.broke); int(d.fi); int(d.ri); int(d.li); int(d.wet.length); } // (The Dam: its dams and floods)
   for (const L of S.landmarks || []) { str(L.id); int(L.x); int(L.y); int(L.v); int(L.solid.length); int(L.on || 0); num(L.hold || 0); int(L.got || 0); } // (a Contingency battle's landmark: js/landmarks.js)
   // War scars: the blasts counted, the scrap (salvage plays: salvageRun) and the bones.
@@ -23405,6 +24129,7 @@ function scarDirty(i, j, wide) {
  */
 function scarBlast(x, y, r, o) {
   const lv = scarLevel();
+  if (S.ewK && o?.crater !== false) ewBlast(x, y, r); // (stage 4: the blast wears the earthworks in it)
   if (!lv || !S.crater) return;
   o = o || {};
   const ci = Math.floor(x), cj = Math.floor(y);
