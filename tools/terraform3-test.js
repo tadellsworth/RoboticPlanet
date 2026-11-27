@@ -4,7 +4,8 @@
 // power (none without), and a seam worked out is spent; a Seed Mast prepares and seeds beds round it, grows them
 // through seeded, sprouting and ripe with power, its beds starve and stop without it, and a ripe bed's Crystal is
 // gathered by a Crystal Tap and the bed prepared again; a growing field draws the Murmur a little; a Thermal Plant goes
-// only beside hot ground and powers what's round it with no Fuel; a Seed Mast is refused on Argos; a save made
+// only beside hot ground and powers what's round it with no Fuel (a Maglev Terminal and a Mass Driver end too, a
+// shot then costing no Fuel, but never a megastructure); a Seed Mast is refused on Argos; a save made
 // mid-process passes checkSave and plays on exactly as the game it came from; and the same game twice comes out the
 // same. Run: node tools/terraform3-test.js
 const fs = require('node:fs');
@@ -141,6 +142,62 @@ const th = run(cT, `
 `);
 check('a Thermal Plant only goes beside lava or hot water', th.hot && !th.coldOk && /Thermal Plant/.test(th.why || ''), th);
 check('a Thermal Plant powers a Seam Drill in reach with no Fuel (the drill surveys further)', th.svR > SEAM.survey[0] && th.thermalFuel === 0 && th.used === 0, th);
+// ---- the Thermal Plant powers a Maglev Terminal and a Mass Driver end (a shot on it costs no Fuel), never a megastructure
+const tw = run(cT, `
+  const p = S.buildings.find((b) => b.type === 'thermal'), hx = p.x, hy = p.y, R = THERMAL.radius;
+  // a spot for type within the plant's reach (its own tile's distance, as thermalNear reads it), or -1
+  const near = (type, ok) => { for (let r = 1; r <= R; r++) for (let j = hy - r; j <= hy + r; j++) for (let i = hx - r; i <= hx + r; i++) if (inMap(i, j) && dist2(i, j, hx, hy) <= R * R && (!ok || ok(i, j)) && canPlace(0, type, i, j).ok) return tIdx(i, j); return -1; };
+  const at = (type, t) => addBuilding(0, type, t % S.W, (t / S.W) | 0, true);
+  const mt = near('magterm'); const m = mt >= 0 ? at('magterm', mt) : null;
+  const ct = near('catcher'); const c = ct >= 0 ? at('catcher', ct) : null;
+  if (!m || !c) return { m: !!m, c: !!c };
+  const magOn = magPowered(m), catOn = magPowered(c), byThermal = thermalNear(c) === p;
+  // a fuelled Generator in reach of the Catcher too: on the Thermal Plant a shot draws none of its Fuel
+  let gt = -1; for (let r = 1; r <= 4 && gt < 0; r++) for (let j = c.y - r; j <= c.y + r && gt < 0; j++) for (let i = c.x - r; i <= c.x + r; i++) if (inMap(i, j) && dist2(i, j, c.x, c.y) <= 16 && canPlace(0, 'generator', i, j).ok) { gt = tIdx(i, j); break; }
+  const g = at('generator', gt); g.stock.fuel = 10; g.energy = 0;
+  const f0 = (S.players[0].used || {}).fuel || 0;
+  for (let k = 0; k < 6; k++) mdShotPower(c);
+  const freeShots = { fuel: g.stock.fuel, energy: g.energy, used: ((S.players[0].used || {}).fuel || 0) - f0 };
+  // the plant turned off: the Generator powers it, half a Fuel a shot
+  p.paused = true;
+  const genOn = magPowered(c);
+  for (let k = 0; k < 6; k++) mdShotPower(c);
+  const paidShots = { fuel: g.stock.fuel, used: ((S.players[0].used || {}).fuel || 0) - f0 };
+  g.stock.fuel = 0; g.energy = 0;
+  const offOff = magPowered(c) || magPowered(m);
+  p.paused = false;
+  const backOn = magPowered(c) && magPowered(m);
+  // a megastructure within its reach: never powered by it (no Generator Fuel, no boost, no Deep Core power)
+  return { magOn, catOn, byThermal, freeShots, genOn, paidShots, offOff, backOn };
+`);
+check('a Thermal Plant powers a Maglev Terminal and a Mass Driver Catcher in its reach (magPowered)', tw.magOn && tw.catOn && tw.byThermal, tw);
+check('a Mass Driver shot on a Thermal Plant costs no Fuel, though a fuelled Generator is in reach too', tw.freeShots && tw.freeShots.fuel === 10 && tw.freeShots.energy === 0 && tw.freeShots.used === 0, tw);
+check('turned off, the Generator powers the end instead: half a Fuel a shot (six shots, three Fuel)', tw.genOn && tw.paidShots.fuel === 7 && tw.paidShots.used === 3, tw);
+check('with neither, no power; the plant back on, power again', !tw.offOff && tw.backOn, tw);
+// a megastructure within a Thermal Plant's reach, on its own (a fresh colony each: there's room for one by the plant)
+const megaBy = (type) => run(mk(), `
+  ${colony(11, 'volcanic', 'Lakes')}
+  let hot = -1;
+  for (let j = 2; j < S.H - 2 && hot < 0; j++) for (let i = 2; i < S.W - 2; i++) { const t = tIdx(i, j); if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && thermalHeat(t) && canPlace(0, 'thermal', i, j).ok) { hot = t; break; } }
+  const hx = hot % S.W, hy = (hot / S.W) | 0, R = THERMAL.radius, p = addBuilding(0, 'thermal', hx, hy, true);
+  const t0 = S.time; S.time = Math.max(S.time, 21 * 60); // (the Deep Core opens 20 minutes in: placed as if then)
+  for (let j = hy - 8; j <= hy + 8; j++) for (let i = hx - 8; i <= hx + 8; i++) if (inMap(i, j) && S.owner[tIdx(i, j)] === -1) S.owner[tIdx(i, j)] = 0; // (our land round it)
+  const f = BDEFS['${type}'].foot;
+  let spot = -1;
+  for (let j = hy - R - f; j <= hy + R + 1 && spot < 0; j++) for (let i = hx - R - f; i <= hx + R + 1; i++) if (inMap(i, j) && canPlace(0, '${type}', i, j).ok && footDist({ x: i, y: j, type: '${type}' }, hx + 0.5, hy + 0.5) <= R + 0.5) { spot = tIdx(i, j); break; }
+  S.time = t0;
+  if (spot < 0) return { placed: false };
+  const m = addBuilding(0, '${type}', spot % S.W, (spot / S.W) | 0, true);
+  // a Seam Drill in reach too, so the plant runs (something in reach is working)
+  let ds = -1; for (let r = 1; r <= R && ds < 0; r++) for (let j = hy - r; j <= hy + r && ds < 0; j++) for (let i = hx - r; i <= hx + r; i++) if (inMap(i, j) && dist2(i, j, hx, hy) <= R * R && canPlace(0, 'seamdrill', i, j).ok) { ds = tIdx(i, j); break; }
+  if (ds >= 0) addBuilding(0, 'seamdrill', ds % S.W, (ds / S.W) | 0, true);
+  let boosted = false;
+  for (let k = 0; k < 30 * 8; k++) { charged(); simStep(SIM_STEP); if (m.boostUntil > S.time) boosted = true; }
+  return { placed: true, drill: ds >= 0, boosted, gens: megaGens(m, 8).length, deep: '${type}' === 'deepcore' ? deepPower(m) : null, pst: p.status };
+`);
+const mLift = megaBy('lift'), mCore = megaBy('deepcore');
+check('a megastructure in a Thermal Plant\'s reach is never powered by it (an Orbital Lift not boosted, a Deep Core without power)',
+  mLift.placed && mCore.placed && mLift.drill && /Powering/.test(mLift.pst) && !mLift.boosted && mLift.gens === 0 && mCore.gens === 0 && mCore.deep === '', { mLift, mCore });
 const lunar = run(mk(), `newGame({ seed: 5, mode: 'colony', size: 1, biome: 'lunar' }); return worldBan('seedmast');`);
 check('no Seed Mast on Argos', /Argos/.test(lunar), lunar);
 

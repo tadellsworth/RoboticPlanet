@@ -84,10 +84,10 @@ function t3Panel(b, mine) {
     out.push(`<div class="kv"><span>Beds</span><span>${n[4]} ripe · ${n[3]} sprouting · ${n[2]} seeded · ${n[1]} prepared (up to ${SEED.most})</span></div>`);
     if (starved) out.push(`<div class="kv"><span>Starved</span><span class="err">${starved} bed${starved === 1 ? '' : 's'}: no power, not growing</span></div>`);
     if (mine) out.push(`<div class="section-label">Seed Crystal</div><div class="goodlist">${goodTag('crystal', `${b.stock.crystal || 0}/${SEED.hopper}`, !(b.stock.crystal > 0))}</div>`);
-    out.push(`<p class="hint">A bed takes a Crystal to seed and about ${Math.round((SEED.ripe * SEED.step) / 60)} minutes of power to ripen into ${SEED.yield} Crystal, which a Crystal Tap within reach gathers; then it is seeded again. Without power the beds starve and stop. A growing field draws the Murmur.</p>`);
+    out.push(`<p class="hint">A bed takes a Crystal to seed and about ${Math.round((SEED.ripe * SEED.step) / 60)} minutes of power to ripen into ${SEED.yield} Crystal, which a Crystal Tap within reach gathers; then it is seeded again. A ripe bed is Crystal on the ground like any other: a rival's Tap nearby gathers it too, so defend your beds. Without power the beds starve and stop. A growing field draws the Murmur.</p>`);
   } else if (def.burner && def.burner.heat) {
     out.push(`<div class="kv"><span>Heat</span><span>${thermalHot(b) ? `${thermalHeat(tIdx(b.x, b.y))} hot tile${thermalHeat(tIdx(b.x, b.y)) === 1 ? '' : 's'} beside it` : '<span class="err">cold: nothing hot beside it</span>'}</span></div>`);
-    out.push(`<p class="hint">A Generator that burns no Fuel: factories within ${THERMAL.radius} tiles work a third faster while it runs, and it powers a Seam Drill or a Seed Mast. It runs only while something in reach is working.</p>`);
+    out.push(`<p class="hint">A Generator that burns no Fuel: factories within ${THERMAL.radius} tiles work a third faster while it runs, and it powers a Seam Drill, a Seed Mast, a Maglev Terminal or a Mass Driver end (whose shots then cost no Fuel). It never powers a megastructure: those want a Generator's Fuel. It runs only while something in reach is working.</p>`);
   }
   return out;
 }

@@ -5284,7 +5284,7 @@ function renderMagSection(b) {
     }
     const cut = lines.find((l) => l.cut);
     if (cut) h += `<p class="hint">${cut.fix && cut.fix.u ? 'A Worker is riding out to rebuild the pylon.' : cut.fix && !cut.fix.paid ? `Waiting for ${costText(magLineCost(MAGLEV.spacing))} in storage to rebuild the pylon; then a Worker rides out from the nearer Terminal.` : 'A Worker from the nearer Terminal rides out to rebuild it.'} The pods keep off that line until then.</p>`;
-    else if (lines.some((l) => !l.powered)) { const o = lines.find((l) => !l.powered).o; h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : `The Terminal ${dirText(b, o)}`} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles: build one, and keep it fuelled. Both ends of a line need power.`}</p>`; }
+    else if (lines.some((l) => !l.powered)) { const o = lines.find((l) => !l.powered).o; h += `<p class="hint">${flareOn() ? 'A solar flare: the line crawls until it passes.' : `${!magPowered(b) ? 'This end' : `The Terminal ${dirText(b, o)}`} has no Generator with Fuel within ${BDEFS.generator.burner.radius} tiles (or Thermal Plant within ${THERMAL.radius}): build one, and keep a Generator fuelled. Both ends of a line need power.`}</p>`; }
     const bent = ps.map((o) => { const K = magKey(b, o); return (K.magBends || []).length; }).reduce((a, n) => a + n, 0);
     if (bent) h += `<div class="kv"><span>Bends</span><span>${bent} (pods slow round the sharp ones)</span></div>`;
     if (ps.length > 1) h += `<div class="kv"><span>Pods through without stopping</span><span>${b.magThrough || 0}</span></div>`;
@@ -5677,8 +5677,8 @@ function renderMdSection(b) {
     const land = rates[k] === M.reloadLand, who = ps.length > 1 ? ` to the Driver ${dirText(b, o)}` : '';
     h += `<div class="kv"><span>Rate${who}</span><span>a shot every ${rates[k]} s each way: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
   });
-  h += `<div class="kv"><span>Power</span><span>${pow ? 'A Generator in reach: half a Fuel a shot' : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
-  if (!pow) h += `<p class="hint">It fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles, and each shot draws half a Fuel from it. Fuel can fly here by canister, in sealed drums.</p>`;
+  h += `<div class="kv"><span>Power</span><span>${pow ? (thermalNear(b) ? 'A Thermal Plant in reach: no Fuel a shot' : 'A Generator in reach: half a Fuel a shot') : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
+  if (!pow) h += `<p class="hint">It fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles, and each shot draws half a Fuel from it, or a <b>Thermal Plant</b> within ${THERMAL.radius} on hot ground, which needs none. Fuel can fly here by canister, in sealed drums.</p>`;
   if (fort) {
     h += `<p class="hint">One way: it keeps the ${BDEFS[live.type].name}'s Ammo${live.type === 'keep' ? ' and its cannon\'s Crystal' : ''} topped up for the warbots stationed there, out of what your colony holds beyond ${M.reserve} at home.${ships.length ? ` On its way: ${gl(Object.fromEntries(ships))}.` : ''}</p>`;
   } else if (ps.length) {

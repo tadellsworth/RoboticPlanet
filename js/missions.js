@@ -1035,7 +1035,7 @@ const MISSIONS = [
       'A <b>Maglev Terminal</b> is storage with a dock on its roof. A line runs straight between two, on pylons, over anything.',
       'Plan it in <b>Paths → Maglev</b>: tap a finished Terminal, then the far end. A Worker builds it out from the near end.',
       '<b>Maglev Pods</b> (ordered at a Terminal) carry 16 goods a trip at three times a Freight Train\'s speed, both ways.',
-      'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles, or the pods crawl. A pylon shot down cuts the line.',
+      'Each Terminal needs a <b>Generator</b> with Fuel within 4 tiles (or a Thermal Plant within 3), or the pods crawl. A pylon shot down cuts the line.',
       'The far Terminal stocks what the buildings round it need, and sends their spare goods home.',
       'A Terminal joins up to three lines: a <b>hub</b>. Pods carry goods on through it without stopping.',
       'A line can bend at a pylon: tap a spot on the way, then <b>Bend here</b>. Pods slow round sharp bends. <b>Edit bends</b> on a Terminal\'s panel moves them later (with a mouse, drag a bend\'s diamond).',
@@ -1085,7 +1085,7 @@ const MISSIONS = [
     intro: [
       'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
       'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
-      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles, and every shot draws half a Fuel from it. A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
+      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles, and every shot draws half a Fuel from it (a Thermal Plant within 3 needs none). A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
       'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
       'No foothold out there? A Driver throws a <b>Catcher kit</b> to open ground: it assembles itself into a Catcher.',
     ],
@@ -1504,8 +1504,8 @@ const MISSIONS = [
     intro: [
       'The last three buildings on <b>Build → Terraform</b> (<kbd>6</kbd>) take resources from the ground itself. All three are slow: they add to your Mines and Taps, never replace them.',
       'A <b>Seam Drill</b> (<kbd>I</kbd>) surveys for hidden Ore and Crystal seams the moment it stands, further while it has power, and drills the nearest one: glowing cracks inside a dashed outline, its marker\'s pips counting down.',
-      'A <b>Seed Mast</b> (<kbd>G</kbd>) prepares a ring of beds, seeds each with a Crystal, and charges them to grow. Ripe Crystal is gathered by a <b>Crystal Tap</b>: build one beside the Mast. Without power the beds starve.',
-      'Both need power: a <b>Generator</b> with Fuel within 4 tiles, or a <b>Thermal Plant</b> (<kbd>T</kbd>), which burns no Fuel but only stands right beside lava or hot water.',
+      'A <b>Seed Mast</b> (<kbd>G</kbd>) prepares a ring of beds, seeds each with a Crystal, and charges them to grow. Ripe Crystal is gathered by a <b>Crystal Tap</b>: build one beside the Mast. Anyone\'s Tap nearby can gather it too, so defend your beds. Without power the beds starve.',
+      'Both need power: a <b>Generator</b> with Fuel within 4 tiles, or a <b>Thermal Plant</b> (<kbd>T</kbd>), which burns no Fuel but only stands right beside lava or hot water. It powers a Maglev Terminal or a Mass Driver too, never a megastructure.',
     ],
     mode: 'colony', seed: 71, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 11, limit: [0, 0, 30],
     setup(S) {

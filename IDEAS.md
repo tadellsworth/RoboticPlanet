@@ -2941,8 +2941,8 @@ made, for the owner:
   Its survey then grows a tile every 30 s it has power, 4 to 8 tiles: the "periodic" survey has something to find.
 - **Power is the Generator's boost role**: a drill or Mast asks for power and a Generator in reach burns its Fuel for it
   as for a factory (1.5 Fuel a minute if it powers nothing else), or a Thermal Plant does it free. No separate fuel
-  hopper on the drill. The Thermal Plant powers factories, drills and Masts, **not** the megastructures, Maglev or the
-  Mass Driver (they still read a Generator's Fuel); say if it should.
+  hopper on the drill. The Thermal Plant powers factories, drills and Masts, and (the owner's decision below) the Maglev
+  and the Mass Driver, never the megastructures.
 - **Rates, against the economy audit's measures** (an Ore Mine 3.7 Ore a minute, a Crystal Tap 2.2 Crystal): a drill 2
   Ore or 1 Crystal a minute, a seam 60 Ore or 30 Crystal; six beds net about 1.6 Crystal a minute after their seed
   Crystal. Neither beats a deposit, so the late Chip and Crystal balance stays the deposits'
@@ -2957,15 +2957,23 @@ made, for the owner:
 - **Accents**: the canvas's indigo (Seed Mast) and sulfur (Thermal Plant) were too near the Refinery, the Generator and
   the Chip Fab; now rose `#f78fc0` and pale sulfur `#c9ef8f` (ART_GUIDE Batch 37 has the check).
 
-**Stage 3, open questions for the owner:**
-- **Ringfall refilling seams.** The canvas suggested seams refill with ringfall like deposits; built as one-off (a
-  worked-out seam is spent for good, as asked). A slow refill would make the drill a permanent fixture.
-- **Should the Thermal Plant power the megastructures and the Maglev** (a Fuel-free Deep Core on volcanic maps would be
-  strong), and should rivals use it on volcanic maps (the canvas suggested it; built player-only as asked)?
-- **Seedbeds and rival Taps**: a rival's Crystal Tap can gather a ripe bed on no-one's land. Keep (it's Crystal on the
-  ground), or make grown Crystal its grower's only?
-- **The Thermal Plant's reach (3) and cost** (6 Cement, 3 Alloy, 1 Chip) are first guesses for "nice, not a must"; worth
-  a look after play.
+**Stage 3, the owner's decisions (Nov 27 2026):**
+- **Spent seams don't refill.** A worked-out seam is spent for good (as built); no ringfall refill.
+- **The Thermal Plant powers the Maglev and the Mass Driver, not the megastructures.** A Maglev Terminal or a Mass
+  Driver end within its reach (3) has power as with a Generator (`thermalNear` in `magPowered`), and a Driver's shot on
+  it costs no Fuel (`mdShotPower` skips the half Fuel; the Thermal Plant comes first when a Generator is in reach too).
+  The megastructures ignore it: they read only a Generator's Fuel (`megaGens`, `atmosGens`, `deepPower`), and
+  `updateGenerator` leaves them out of a Thermal Plant's reach, since a Fuel-free Deep Core on volcanic maps would be too
+  strong. Checked in `tools/terraform3-test.js`.
+- **Rivals don't build Thermal Plants** (as built; nor Seam Drills or Seed Masts).
+- **Anyone nearby can gather ripe grown Crystal**, like any other Crystal, a rival's Tap included: players must defend
+  their seedbeds (as built; How to play says "defend your beds").
+- **The Thermal Plant's reach (3) and cost** (6 Cement, 3 Alloy, 1 Chip) stay as they are until play-testing.
+
+**Stage 3 and the economy audit (Nov 27 2026).** The audit's Long haul and Long Haul 2v2 fields hold half as much again
+(`haulRich`) and rivals keep their extraction chain going (`AI_THIN`); neither touches stage 3, which rivals never build,
+and a Seam Drill (2 Ore or 1 Crystal a minute) and six Seed Mast beds (about 1.6 Crystal a minute) still sit below a
+Mine or a Tap on a deposit, so the audit's Chip and Crystal conclusions hold (docs/economy-audit-nov26.md).
 
 ## Done: Argos on the main menu (owner, Nov 26)
 

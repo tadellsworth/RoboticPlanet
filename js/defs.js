@@ -353,7 +353,7 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
  * a Freight Train's loads are (railPlan: the far Terminals stock what the buildings round them need, each Terminal
  * keeps what the ones beyond it want, spare goods come home): a pod sets out once `fill` of its hold is worth it,
  * sooner when the far side runs low, or with at least `least` after `wait` s, dwelling `dwell` s at each end. Power: a
- * Generator with Fuel in it within its own radius of each Terminal (magPowered); without one at either end, or in a
+ * Generator with Fuel in it within its own radius of each Terminal, or a Thermal Plant's reach (magPowered, thermalNear); without one at either end, or in a
  * solar flare, the pods crawl at WORKER_SPEED. A pylon shot down (a Wall's toughness) cuts the line: pods stop short
  * and go back, one on the spans that rested on it is lost; a Worker from the nearer Terminal rides out and rebuilds it
  * in `repair` s at `spacing` tiles' cost. A Terminal lost suspends its lines (the guideway and pylons stand) until one
@@ -383,9 +383,10 @@ const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.
  * The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high at full range. Fuel
  * flies in sealed drums (no Crude), shipped beyond a reserve of `fuelReserve` (the far end's Generator powers its shots
  * home); a rival's automatic shipments keep `aiReserve` of a good, not `reserve` (its Alloy and Chips never sit in
- * storage). Power: an end fires only with a Generator (with Fuel) within the Generator's radius (magPowered), and each
- * shot takes `shot` seconds of that Generator's work, half a Fuel (mdShotPower; the economy audit of Nov 26 2026,
- * owner-approved); without one it waits (it still catches). The far end's cap, `full`, counts each good on its own. A canister has `hp`: an enemy Flak Gun
+ * storage). Power: an end fires only with a Generator (with Fuel) within the Generator's radius, or a Thermal Plant
+ * within its reach (magPowered, thermalNear), and each shot takes `shot` seconds of that Generator's work, half a Fuel
+ * (mdShotPower; the economy audit of Nov 26 2026, owner-approved), none on a Thermal Plant's; without either it waits
+ * (it still catches). The far end's cap, `full`, counts each good on its own. A canister has `hp`: an enemy Flak Gun
  * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
  * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
  * the Hollow (nothing flies under the cavern roof).
@@ -632,7 +633,9 @@ const SEAM = { cell: 12, chance: 0.6, size: [3, 6], crystalShare: 0.4, ore: 60, 
 const SEED = { reach: 2, most: 6, prepEvery: 10, seed: 1, hopper: 3, step: 5, sprout: 24, ripe: 84, yield: 3, murmur: 1, apart: 5 };
 /*
  * THERMAL: a Thermal Plant (BDEFS.thermal) is a Generator that burns no Fuel: it powers what's round it the same way
- * (the factories a third faster, and a Seam Drill's or Seed Mast's power), within `radius` (a tile less than a
+ * (the factories a third faster, a Seam Drill's or Seed Mast's power, and a Maglev Terminal's or Mass Driver end's,
+ * whose shots then cost no Fuel: thermalNear), but never a megastructure (the owner, Nov 27 2026: a Fuel-free Deep
+ * Core on volcanic maps would be too strong; they read only a Generator's Fuel), within `radius` (a tile less than a
  * Generator's), while lava, the Cinderlands' or Steamwells' hot water, or a Steamwells vent touches its tile
  * (thermalHot). It costs more than a Generator and only stands where the ground is hot: a reward on volcanic maps.
  */
@@ -1750,7 +1753,7 @@ const BDEFS = {
   },
   thermal: {
     name: 'Thermal Plant', short: 'Thermal',
-    desc: 'Power from the heat below, with no Fuel: built right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells vent. Like a Generator, every factory, Refinery, Oil Pump and Bot Foundry within 3 tiles works a third faster while it runs, and it powers a Seam Drill or a Seed Mast.',
+    desc: 'Power from the heat below, with no Fuel: built right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells vent. Like a Generator, every factory, Refinery, Oil Pump and Bot Foundry within 3 tiles works a third faster while it runs, and it powers a Seam Drill, a Seed Mast, a Maglev Terminal or a Mass Driver end (a shot on it costs no Fuel). It never powers a megastructure: those want a Generator\'s Fuel.',
     cost: { cement: 6, alloy: 3, chip: 1 }, t3: true, burner: { radius: THERMAL.radius, boost: 1 / 3, perFuel: 0, heat: true }, armor: 10, buildTime: 12,
   },
   repair: {
@@ -1802,7 +1805,7 @@ const BDEFS = {
   },
   magterm: {
     name: 'Maglev Terminal', short: 'Maglev',
-    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four for each line): they carry 16 goods a trip at three times a Freight Train\'s speed. A Terminal joins up to three lines (a hub): pods carry goods on through it, line by line. The Terminals work like a railway\'s stations (the far ones stock what the buildings round them need and send their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles, or the pods crawl. Lost, its lines stand broken until a Terminal is built on its tile again.',
+    desc: 'Storage at one end of a Maglev line: a glass-sided transit hall built to the Accord\'s Phase 2 standard, with a dock at deck height on its roof. Build one, then plan the line in Paths (Maglev): tap this Terminal, then the far end 6 to 40 tiles away in any direction, straight across water, cliffs and chasms; a Worker builds it out pylon by pylon and the far Terminal goes up last. Order Maglev Pods on its panel (4 Alloy, 2 Chips each, four for each line): they carry 16 goods a trip at three times a Freight Train\'s speed. A Terminal joins up to three lines (a hub): pods carry goods on through it, line by line. The Terminals work like a railway\'s stations (the far ones stock what the buildings round them need and send their spare goods home), and buildings touching a Terminal are joined to it by conveyor. Each Terminal needs a Generator within 4 tiles (or a Thermal Plant within 3), or the pods crawl. Lost, its lines stand broken until a Terminal is built on its tile again.',
     cost: { cement: 8, alloy: 6, chip: 3 }, store: true, magterm: true, armor: 14, buildTime: 14, yard: ['magpod'],
   },
   magpylon: {
@@ -1812,11 +1815,11 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles, and each shot draws half a Fuel from it. An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles, and each shot draws half a Fuel from it (a Thermal Plant within 3 powers it with no Fuel). An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
     cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
-    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles. Buildings touching it are fed by conveyor; one Catcher can take up to two Drivers.',
+    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles (or a Thermal Plant within 3). Buildings touching it are fed by conveyor; one Catcher can take up to two Drivers.',
     cost: { cement: 8, alloy: 5, chip: 3 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
   // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a

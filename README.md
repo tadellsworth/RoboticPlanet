@@ -972,7 +972,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     (`b.svR`), a tile further every `SEAM.surveyEvery` (30) s of power out to `SEAM.survey[1]` (8) (`seamSurvey`: a ring
     effect, the seams in reach found for its colony, a message), and works the nearest found unspent seam in its survey
     (`seamOf`, `b.seam`) at `SEAM.rate` (2 Ore or 1 Crystal a minute), into its stock (`SEAM.cap` 12 of each) for
-    Haulers. A seam at 0 is worked out: grey, its mark crossed out, its owner told; the drill moves on. Slower than a
+    Haulers. A seam at 0 is worked out for good (it never refills: the owner, Nov 27 2026): grey, its mark crossed out, its owner told; the drill moves on. Slower than a
     Mine or Tap on a deposit (the economy audit measured 3.7 Ore and 2.2 Crystal a minute), and a Generator alone
     spends 1.5 Fuel a minute on it. Drawn (yours only: `seamFound(s, ME)`): cracks, orange or violet, inside a dashed
     outline, baked with the map (`t3PaintTile`) and glowing at night (`t3Glow`); the survey mark, the goods' icon and
@@ -985,7 +985,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Hauler: `inp`), and grows its seeded beds a step every `SEED.step` (5) s: seeded, sprouting from `SEED.sprout`
     (24 steps, 2 minutes), ripe after `SEED.ripe` (84, 7 minutes), when the tile holds `SEED.yield` (3) Crystal as an
     ordinary Crystal cluster (`S.res`), which a Crystal Tap in reach gathers; gathered, the bed is prepared again and
-    seeded. Six beds net about 1.6 Crystal a minute, below one Tap on a deposit, so the late Chip and Crystal balance
+    seeded. Anyone's Tap in reach gathers it, a rival's too (the owner, Nov 27 2026: grown Crystal is Crystal on the
+    ground; players defend their beds). Six beds net about 1.6 Crystal a minute, below one Tap on a deposit, so the late Chip and Crystal balance
     stays the deposits' (IDEAS, the economy audit). Without power its beds starve (`S.sbS`, grey) and stop. Layers
     (`T3_LAYERS`, sparse in saves, hashed when present): `S.sbed` (1 prepared, 2.. growing, `SEED.ripe` + 1 ripe),
     `S.sbO` (owner + 1), `S.sbS` (starved). A bed built, paved or grown over, or hit by Ring Crystal while growing, is
@@ -998,8 +999,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     Chip; key T): a Generator (`burner`, `heat: true`) that burns no Fuel, within `THERMAL.radius` (3, a Generator's 4),
     placed only where a hot tile touches its tile (`thermalHeat`; `thermalHotTile`: lava, `S.lava`, or water in the
     Cinderlands or the Steamwells (`t2BaseBiome`), or a Steamwells steam vent, decor 4 or 6); gone cold (the lava
-    filled), it says so and stops. It powers factories (the third faster), Seam Drills and Seed Masts; not the
-    megastructures, the Maglev or the Mass Driver, which still want a Generator's Fuel. The Murmur count it as a
+    filled), it says so and stops. It powers factories (the third faster), Seam Drills, Seed Masts, Maglev Terminals and
+    Mass Driver ends (`thermalNear` in `magPowered`; a shot on it costs no Fuel, `mdShotPower`), but **never the
+    megastructures** (the owner, Nov 27 2026: a Fuel-free Deep Core on volcanic maps would be too strong): they read only
+    a Generator's Fuel (`megaGens`, `atmosGens`, `deepPower`), and `updateGenerator` leaves them out of a Thermal
+    Plant's reach (`!G.heat`). Rivals don't build it. Its reach and cost stay as they are until play-testing. The Murmur count it as a
     Generator (`murmurPower`, `chargeWorth`, `murmurCutPower`). Its plume is the shipped steam (`BUILDING_EMITTERS.thermal`).
   - Art (ART_GUIDE Batch 37): `renderer/b/seamdrill.js`, `seedmast.js`, `thermal.js`, `seedbed.js` (shared `t3kit.js`),
     `renderer/tools/render_t3.sh` then `install_t3.py`. Mission: **Deep Ground** (Sea and Sky, after Topsoil; the
@@ -1353,7 +1357,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   (`u.cargo`, `u.cargoTo`) and are lost with it (`podLost`); `b.magGot` counts what arrived (the mission and the colony
   goal). Pods are never haulers (`isIdleWorker`).
   **Power** (`magPowered`): a Generator of the owner's within its radius (4) of the Terminal with Fuel in it (or energy
-  left), not turned off nor cut by the Murmur; a line runs at speed with both its ends powered and no solar flare
+  left), not turned off nor cut by the Murmur, or a Thermal Plant within its reach (3) on hot ground (`thermalNear`: no
+  Fuel; stage 3); a line runs at speed with both its ends powered and no solar flare
   (`magPairPowered`, `flareOn`; `magLinePowered`: every line of a Terminal). A Terminal on a line counts as something in
   reach working to its Generator (`updateGenerator`; `b.working` while a pod runs to or from it), so the Generator burns
   Fuel for the line. Without power the pods run at `WORKER_SPEED` (`u.crawl`) and the guideway's night glow dims. The
@@ -1427,8 +1432,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   with power and a partner, once it has `load` (16) goods for one (or `partMin` 4, or the whole of a smaller need, after
   `partWait` 20 s) it charges (`b.mdFire`, `b.mdAt`, `charge` 1.6 s; `b.working`, so its Generator burns Fuel) and fires
   (`mdLaunch`: a unit of each good in turn), a shot every `reload` (8) s from each end, or `reloadLand` (10) s when a robot could walk from one end to the other (`mdOverland`: the two ends in one area of `walkZones`, the walking areas of `zoneFill` without the Ropeway, Viaduct, ferry and Airship links; `mdReload`; the owner, Nov 26 2026: then it is a shortcut over land, not a crossing; each end's panel shows its Rate and why) (6 s and 10/8/4 and 6/4/2 costs before the Nov 26 2026 balance pass, when a line out-carried a 4-pod Maglev line for a quarter of its cost). **Power**: an
-  end fires only with a Generator in reach (`magPowered`), and waits loaded without one (it still catches); each shot
-  takes `shot` (20) s of that Generator's work, half a Fuel (`mdShotPower`, from the one in reach with the most; the
+  end fires only with a Generator in reach, or a Thermal Plant's (`magPowered`, `thermalNear`), and waits loaded
+  without one (it still catches); each shot takes `shot` (20) s of that Generator's work, half a Fuel, none when a
+  Thermal Plant is in reach, which comes first (`mdShotPower`, from the Generator in reach with the most; the
   economy audit of Nov 26 2026, owner-approved: a line's Generators had burned 0.2 Fuel a minute, now about 3 at each
   end at full rate, against about 2 for a 4-pod Maglev line's and 1 to 2 for four Freight Trucks). **Canisters**
   (`S.cans`: id, owner, from, to, goods, t, dur, ends, hp): fly `flightMin` (2) to `flight` (4) s by range in an arc
@@ -4916,7 +4922,9 @@ Terraforming, stage 3: no seams, beds or anything else until a Seam Drill survey
 deeper survey without power, a Generator's Fuel making it drill at its rate and survey further, a seam worked out going
 spent; a Seed Mast preparing and seeding its beds, sprouting with power, starving without, ripening into Crystal a
 Crystal Tap gathers and the beds seeded again; a growing field drawing the Murmur; a Thermal Plant only beside hot
-ground, powering a drill with no Fuel; no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
+ground, powering a drill with no Fuel, powering a Maglev Terminal and a Mass Driver Catcher (a shot on it drawing none of
+a fuelled Generator's Fuel; turned off, the Generator's half a Fuel a shot) and never a megastructure (an Orbital Lift
+not boosted, a Deep Core without power); no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
 seam refused; and the same game twice giving the same hash.
 
 ```bash
