@@ -9,20 +9,20 @@ The four findings of `docs/standard-rival-persistence-audit.md` and `docs/warlor
 branch) were checked against main and fixed in `js/ai.js` (`docs/rival-persistence-review-nov27.md`,
 `tools/ai-persistence-test.js`): a loaded Smelter finishes its batch while the colony is out of Alloy (`b.drain`), a
 depleted-economy march goes with the band `finish` allows, the Storm Front has its own clock (`P.wxT`), and unsafe
-stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Open, seen while measuring and not fixed:
+stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Seen while measuring, and fixed the same day in a
+follow-up (the owner: "fix all 3"; the review's "Follow-up" section has the numbers):
 
-- **A Murmur Scuttler parked by the Harvesters.** On Standard seed 11 (Settler, rival on hold) one Scuttler about
-  nine tiles off made both Harvesters' workers turn back (`takeCover`) a hundred times in four minutes: Fiber stopped
-  at 28 for the rest of the game, and with it the Smelter and the army. Should a rival send a couple of warbots at a
-  creature that keeps its gatherers in, or should a gatherer's worker give way to the Murmur only when it is closer?
-- **Down to one Hauler.** The Warlord on the same seed kept full Mines ("Storage full, waiting for pickup") for
-  minutes with one Hauler left after a raid; triage (`few`) makes a Hauler only when there is none at all.
-- **Roads on paper through danger.** Standard seed 25, Warlord, rival on hold at 12: from minute 12 the colony mined
-  nothing (Ore 0, 88 mined all game). Its replacement Mines, Harvesters and Terminal sat "No road to storage yet" with
-  their whole road planned and 11 Workers idle: paving skips tiles where enemy warbots are about or its robots were
-  shot (`hotFor`, `dangerAt`), so a road that has to leave the network there is never laid; after four minutes the site
-  is given up and the next one goes up the same way. Should a rival escort its road crew, clear the warbots parked on
-  its land first, or plan the road round the danger?
+- **A Murmur Scuttler parked by the Harvesters** (Standard seed 11, Settler, rival on hold: Fiber stopped at 28). It was
+  one of a nest's guards; the only way up to the groves crossed the padded ring kept round them by one tile. Done: robots
+  turn back only from where the guards bite (`GUARD_BITE`, bit 4 of the danger map), Workers pave the ring, a gatherer
+  that turns back waits longer each time in a row and passes over that node (`GATHER_SHY`), and a rival with a small
+  army sends two warbots at a lone Murmur or two keeping its gatherers in (`aiRoadGuard`).
+- **Down to one Hauler.** Done: triage keeps one Hauler for every four working buildings that make goods (2 to 4), and
+  one more while goods wait with none free (`aiTriageHaulers`).
+- **Roads on paper through danger** (Standard seed 25, Warlord). Done: after 45 s the road is planned again round what
+  its Workers won't pave, or with no way round the site is given up and its spot avoided (`aiRoadDetour`).
+- **Standard 11, Settler, regular game: undecided at 75** after the follow-up (C1 won at 22 before). Both armies wore
+  down to nothing late; colony 2 made no robot after minute 30 with Ore in store. Not looked into yet.
 - **One-sided measurements.** `tools/late-attack-audit.js` holds colony 1 only; the seed that showed the Warlord
   collapse now plays out differently (the attacker wins at 15½ minutes), so each fix is checked with its own test,
   and the holds were compared over several seeds instead.
@@ -109,6 +109,8 @@ Calls made, to confirm:
   tiles of your land), its site supplied by air. Before, nothing could be built on such a rock at all (there is no Drop
   Outpost in space), so a Dropship's Workers had nothing to do there. Space maps only; How to play and Into the Void's
   intro say so.
+  **Decided (the owner, Nov 27 2026): any building, not Outposts only.** The land rules still hold (within 10 tiles of
+  your land, and the building's own placing rules), so in practice an Outpost goes up first.
 
 Measured (followups, AI-vs-AI, Medium map, Normal, seeds 1 to 12 of each map):
 - **Fairness** (the follow-ups' code, games to 50 minutes): The Ring, P0 7 wins, P1 5, none undecided, decided in 16 to 42
@@ -126,8 +128,8 @@ Measured (followups, AI-vs-AI, Medium map, Normal, seeds 1 to 12 of each map):
 Open questions:
 - **Thin loops on The Ring.** Its gaps between rocks are narrow, so many of its loops are long thin ellipses; rounder ones
   only fit out by the map's edges. A smaller `DRIFT.clear` (one tile's step) would allow rounder loops nearer the rocks.
-- **Workers as a foothold** (above): should it be any building, as now, or an Outpost only? And should warbots landed
-  count too?
+- **Warbots landed as a foothold?** Workers landed count for any building (decided, above); should warbots landed count
+  too?
 - The Graveyard's deck plating (`ground-grave-*`, baked into the map) still loads on every map; its salvage, shards and
   relay load with the space art.
 - Phase 2: the Graveyard map (the Arbiter) is built (above); capital ships (the canvas's Tender and Line), more derelict

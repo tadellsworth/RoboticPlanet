@@ -121,8 +121,8 @@ function haulWhy(g, cons, have, who) {
     }
     if (linked.every((s) => shunned(s))) return { text: `enemy guns or robots cover the storage holding your ${G}, so haulers keep clear`, at: linked[0].id };
   }
-  if (murmurShy(cons)) return { text: `haulers turning back: Murmur near the road to ${who}. Send warbots to clear the road`, at: cons.id };
-  if (linked.every(murmurShy)) return { text: `haulers turning back: Murmur near the road to your ${BDEFS[linked[0].type].name} holding your ${G}. Send warbots to clear the road`, at: linked[0].id };
+  if (haulShy(cons)) return { text: `haulers turning back: Murmur near the road to ${who}. Send warbots to clear the road`, at: cons.id };
+  if (linked.every(haulShy)) return { text: `haulers turning back: Murmur near the road to your ${BDEFS[linked[0].type].name} holding your ${G}. Send warbots to clear the road`, at: linked[0].id };
   const connected = carriers.filter((u) => linked.some((s) => !BOTS[u.type].roadOnly || haulRoadConnected(u, s, cons)));
   if (carriers.length && !connected.length && !cons.airSupply && linked.every(onHomeNet)) {
     return { text: `your road carriers can’t reach the route from storage to ${who}: connect their roads to the supply route`, at: linked[0].id };
@@ -258,7 +258,7 @@ function goodWhy(g, cons, depth, seen, who) {
 function outWhy(b) {
   if (b.unlinked && needsRoad(b)) return { text: 'This building has no road to storage, so haulers can\'t take what it makes.', at: b.id, road: true };
   if (insGuns() && shunned(b)) { const gun = gunOver(ME, b.x, b.y); return { text: gun ? `An enemy ${BDEFS[gun.type].name} covers it, so haulers keep clear.` : 'Enemy robots are about, so haulers keep clear.', at: gun ? gun.id : b.id }; }
-  if (murmurShy(b)) return { text: 'Haulers turning back: Murmur near the road. Send warbots to clear the road; each turn-back in a row makes the next Hauler wait longer.', at: b.id };
+  if (haulShy(b)) return { text: 'Haulers turning back: Murmur near the road. Send warbots to clear the road; each turn-back in a row makes the next Hauler wait longer.', at: b.id };
   let n = 0, idle = 0;
   for (const u of S.bots) if (!u.dead && u.owner === ME && BOTS[u.type].haul && !BOTS[u.type].tanker && !BOTS[u.type].sea && !BOTS[u.type].rail) { n++; if (!u.carry && (!u.task || u.task.type === 'home')) idle++; }
   const f = insFoundry();
