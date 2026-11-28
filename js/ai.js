@@ -6386,7 +6386,7 @@ function aiVoidDefence(p, home, lvl) {
       if (d > 6 || d < 1.5) continue;
       let near = 9;
       for (const b of S.buildings) if (!b.dead && b.owner === p && (b.type === 'pdturret' || b.type === 'disruptor')) near = Math.min(near, dist(i, j, b.x, b.y));
-      const sc = Math.min(near, 4) * 2 - Math.abs(d - 3.5) - (i + j * 0.001) * 1e-6;
+      const ci = p === 0 ? i : S.W - 1 - i, cj = p === 0 ? j : S.H - 1 - j, sc = Math.min(near, 4) * 2 - Math.abs(d - 3.5) - (ci * 1e-7 + cj * 1e-5); // (a tie: the same spot as its twin would pick, turned half round)
       if (sc <= bs || !canPlace(p, type, i, j).ok || wouldBlock(tIdx(i, j))) continue;
       bs = sc; best = { i, j };
     }
@@ -6427,7 +6427,7 @@ function aiVoid(p, me, lvl) {
   const caps = S.bots.filter((u) => !u.dead && BOTS[u.type].capital && u.owner >= 0 && foes(u.owner, p));
   // Its station: where the Flagship holds on guard, over its home station's far edge (its Point-Defence and Disruptors
   // round it there: aiVoidDefence), and those defences.
-  const st = S.vf.st[p] || S.vf.st[0], home = P.vfHome || (P.vfHome = { x: F.x, y: p === 0 ? st.y0 + AI_VOID.hold : st.y1 - AI_VOID.hold });
+  const st = S.vf.st[p] || S.vf.st[0], home = P.vfHome || (P.vfHome = { x: F.x, y: p === 0 ? st.y0 + AI_VOID.hold : st.y1 + 1 - AI_VOID.hold }); // (the twins of each other: world units, a tile row y spanning y to y + 1)
   aiVoidDefence(p, home, lvl);
   // Strike: on with the edge (or late), off when the Flagship is hurt, the Line Ships are thinned out, or it has gone on too long.
   const mine = aiFleetPower(p), theirs = foe ? aiFleetPower(foe.id) : 0;
