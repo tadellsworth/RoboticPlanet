@@ -206,6 +206,7 @@ function mixBiomeRGB(a, b, weight) {
 function applyBiome() {
   if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt();
   if (S && ((S.landmarks && S.landmarks.length) || S.town) && typeof ensureLandmarkArt === 'function') ensureLandmarkArt(); // (js/landmarks.js; Passenger Town's welcome signs too)
+  if (S && spaceMap() && typeof ensureSpaceArt === 'function') ensureSpaceArt(); // (js/space.js: the space maps only)
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   const primary = R.primaryRegion = biomeRegion(biome());
   // (Half underground: the caves are a second region of their own, the Hollow's, over S.cave's tiles; no other second biome there.)
@@ -299,6 +300,7 @@ function bakedArtPending() { return artBakedLeft; }
  * resources, the pieces of bridges and track): only these arriving call for the map to be baked again.
  */
 function bakedArt(key) {
+  if (typeof spaceArtKey === 'function' && spaceArtKey(key)) return false; // (the drifting rocks are drawn each frame, not baked: js/space.js)
   return /^((ground|water|rock|cliff|chasm|lava)(-|$)|plant-|bridge-|skybridge-|railbridge-|rail-|scar-)/.test(key) || Object.values(RES).some((r) => r.key === key);
 }
 
@@ -365,7 +367,7 @@ function loadArt(onChange) {
   R.artChange = onChange;
   const entryOf = (key) => (typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
   // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
-  const keys = Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a)).filter((key) => !lazyBiomeOf(key) && !murmurArtKey(key) && !(typeof lmArtKey === 'function' && lmArtKey(key))); // (see ensureBiomeArt, ensureMurmurArt and ensureLandmarkArt)
+  const keys = Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a)).filter((key) => !lazyBiomeOf(key) && !murmurArtKey(key) && !(typeof lmArtKey === 'function' && lmArtKey(key)) && !(typeof spaceArtKey === 'function' && spaceArtKey(key))); // (see ensureBiomeArt, ensureMurmurArt, ensureLandmarkArt and ensureSpaceArt)
   if (typeof window !== 'undefined' && window.ART_BUNDLE) {
     // The single-file game: the art is in bundles beside the page (art-<group>.js, made by tools/build-single.js), loaded
     // now; each key loads as its bundle arrives. A bundle that's missing (the page copied without its folder) leaves its

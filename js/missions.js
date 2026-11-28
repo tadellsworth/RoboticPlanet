@@ -1653,7 +1653,7 @@ const MISSIONS = [
     intro: [
       'Out in space nothing flies on wings. A <b>Launch Pad</b> (2 by 2) builds spacecraft and is their home: they lift straight off, fly straight over the void and land on any flat, free ground.',
       'A <b>Shuttle</b> is the space Cargo Plane: it keeps the places you switch to <b>Supply by air</b> stocked, landing beside them, and it can tow a drifting asteroid home.',
-      'A <b>Dropship</b> lands up to six robots anywhere flat and free: across a raised drawbridge, or onto a rock no bridge reaches. They walk out down its ramp.',
+      'A <b>Dropship</b> lands up to six robots anywhere flat and free: across a raised drawbridge, or onto a rock no bridge reaches. They walk out down its ramp, and Workers landed there can build there.',
       'Derelict Accord modules drift off the decks. Like an Uplink, one is yours while your land reaches out over it: a <b>Solar Array</b> powers what stands near it.',
       'Your craft burn Fuel and fill up on their pad: Tankers bring the pad its Fuel.',
     ],

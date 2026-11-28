@@ -656,7 +656,10 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   or up to n Warbots from the garrisons (`rallySources`, `takeArmed`, as a march) or idle Workers. They walk to its pad and board (`doBoard`,
   `ferryWait` with `ferry` the Dropship: they ride with it), it waits for them (up to `SPACE.gather` s), flies to the spot, lands, lowers its
   stern ramp (`u.ramp`, `SPACE.ramp` s) and lets them out one every `SPACE.out` s onto the tile behind it (`rampTile`, `squadOut`): warbots
-  hold the spot under a flag (on the spot ordered, so a rival's band finds it: see `aiAir`), Workers go to work; then it flies home. The order
+  hold the spot under a flag (on the spot ordered, so a rival's band finds it: see `aiAir`), Workers go to work; then it flies home.
+  Out in space a deck or rock where your Workers stand is one you can build on (`buildZones` takes in their areas on a space map:
+  `workersLanded`), so Workers landed past a raised bridge or on a rock no Viaduct reaches can put up an Outpost (switch its site to
+  Supply by air: a Shuttle flies it the goods), as a Drop Outpost gives a foothold on a planet; `BUILD_REACH` still holds. The order
   for the AI is the Cargo Plane's (`u.mission.kind` 'warbot'). With a mouse, robots selected with a Dropship and a right-click on ground do it
   (`spaceCommand`).
 - **Gunship** (`BOTS.gunship`: `war`, 6 rounds of 2 Alloy and 2 Chips, 14 hit points). Army orders, not `army` (it is no warbot: no garrison,
@@ -672,18 +675,25 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   the nearest enemy craft in the air in reach, Gunships first (`craftNear`), else an enemy robot within `PDT.ground` (3); turns (`PDT.turn`),
   spins up (`PDT.spin` s), then a burst every `PDT.reload` s: `PDT.craft` (1.5) off a craft, `PDT.bot` (0.8) off a robot, `PDT.rounds` (30)
   bursts an Ammo. A Gunship lasts about 2 seconds under one.
-- **Drifting asteroids** (`S.space.lanes`, `S.space.rocks`; `spaceSetup` in `newGame`, after the Trade Posts and Uplinks, from the seed's own
-  `makeRng` stream so nothing else in the map changes). A lane is a straight run of void at least `DRIFT.clear` (2) tiles from any ground,
-  drawbridge strip or the map's edge (a Chebyshev clearance field), `DRIFT.len` (8 to 26) tiles long, through a point on colony 0's side;
-  an Ore or Crystal lane passes within `DRIFT.reach - 2` of some ground. Each lane has its twin by the half turn (and each rock its twin, in
-  step), so both colonies meet the same: `DRIFT.kinds` (The Ring: Ore, Crystal and two plain; Orbital platforms: Ore, Crystal and plain, each a
-  pair). A rock's place is worked out from the time alone (`rockPos`: it swings along its lane and back, easing at each end, at about
-  `DRIFT.speed` tiles a second; deterministic trig), so drifting costs nothing a tick and nothing is saved but each rock's `t0`, phase, `amt`,
-  `tow` and `gone`. Once a second (`rockTick`) a staffed Mine or Crystal Tap within `DRIFT.reach` (5) tiles of a passing Ore or Crystal rock
+- **Drifting asteroids** (`S.space.lanes`, the orbits, and `S.space.rocks`; `spaceSetup` in `newGame`, after the Trade Posts and Uplinks,
+  from the seed's own `makeRng` stream so nothing else in the map changes). An orbit is an ellipse (`{ cx, cy, a, b, rot }`, at least
+  `DRIFT.thin` across its narrow way) round a point on colony 0's side, or now and then round the map's very middle (its own twin: the two
+  rocks on it go round half a turn apart). Every point of it lies on a tile at least `DRIFT.clear` (2) steps from any ground or drawbridge strip
+  (a Chebyshev clearance field, tried a fifth of a tile round each point, the points never a third of a tile apart) and `DRIFT.edge` (1.5) from
+  the map's edge. Where the whole ellipse fits it is a **loop** (`loop: 1`, `DRIFT.loop` 12 to 64 tiles round) the rock goes round and round;
+  where only a stretch does, the longest clear **arc** of it (`a0` to `a1`, `DRIFT.len` 8 to 26 tiles) it swings along and back, easing at each
+  end. Loops are preferred, then rounder ones (`spaceSetup`'s score); an Ore or Crystal orbit passes within `DRIFT.reach - 2` of some ground.
+  Each orbit has its twin by the half turn (centre turned round, the same ellipse, `a0` and `a1` half a turn on; each rock its twin, in step),
+  so both colonies meet the same: `DRIFT.kinds` (The Ring: Ore, Crystal and two plain; Orbital platforms: Ore, Crystal and plain, each a pair;
+  Orbital's narrow gaps between decks get more arcs, The Ring's open void mostly loops). A rock's place is worked out from the time alone
+  (`rockPos` → `lanePoint`, `ellPoint`: at about `DRIFT.speed` tiles a second; deterministic trig), so drifting costs nothing a tick and nothing
+  is saved but each rock's `t0`, phase, `amt`, `tow` and `gone`. `lanePts` (points half a tile apart, worked out once an orbit, outside the
+  state) serve `laneDist` (mining reach, the modules kept off the orbits). A save from before the orbits keeps its straight lanes (`x0 y0 x1 y1`),
+  swinging as they did. Once a second (`rockTick`) a staffed Mine or Crystal Tap within `DRIFT.reach` (5) tiles of a passing Ore or Crystal rock
   mines it, `DRIFT.mine` a second, into its store (`driftReach` keeps such a gatherer from being "dry": `updateDepleted`); a rock mined out or
-  towed away comes back in on its lane `DRIFT.respawn` (240) s later, in step with its twin where it can be (`rockIn`).
+  towed away comes back in on its orbit `DRIFT.respawn` (240) s later, in step with its twin where it can be (`rockIn`).
 - **Derelict modules** (`S.space.mods`: `DERELICT`; a pair of each kind: Solar Array, Docking Ring, Salvage Hulk). Old Accord modules adrift,
-  moored off the decks and rocks: each is 2 by 2 tiles of void with ground within two tiles, off every lane, `DERELICT.apart` from the others,
+  moored off the decks and rocks: each is 2 by 2 tiles of void with ground within two tiles, off every orbit, `DERELICT.apart` from the others,
   the Trade Posts and Uplinks and `DERELICT.base` from every Command Base, outside every colony's starting land, the Solar Array nearest home and
   the Hulk furthest; its twin by the half turn. The void is no one's land (`computeTerritory`), so a module is held (`modTick`, once a second)
   by the colony whose land takes in its **shore tile** (`m.st`, `modShore`: the ground tile nearest its middle), unless an armed robot of
@@ -700,21 +710,38 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   landing out of Point-Defence's reach and `squadBlocked`). Its Shuttle supplies its places no road from home reaches (it switches their Supply by
   air on) and, short of Ore or Crystal, tows a passing rock home (once every `towGap` s). Its Gunships go after the richest building of yours
   (`AI_GUN_VALUE`) no Point-Defence covers (`aiGunTarget`), a new target every `gunEvery` s, else they wait on guard. Point-Defence: one from
-  `pd` (14 minutes), at once and one more for every two of your Gunships (`aiPDs`, up to `pdMost`). Its Outposts lean toward the derelict modules
-  no one holds (`aiSearchSpot`).
+  `pd` (14 minutes), at once and one more for every two of your Gunships (`aiPDs`, up to `pdMost`). **Derelicts**: its Outposts lean toward
+  the modules no one holds (`aiSearchSpot`: `AI_SPACE.grabValue` and 6 more for one whose shore tile its land would take in, and a pull toward
+  the nearest free one on the same ground, a chain of Outposts as toward an Uplink), and from `AI_SPACE.grab` (9 minutes), every `grabEvery` s,
+  it goes after one (`aiSpaceGrab`, `P.spGrab`): `aiGrabSpot` picks a module out in no one's land with no enemy warbots by it, the Salvage Hulk
+  while its haul is in it first (`grabValue`: Hulk 30, Docking Ring 20, Solar Array 16, less 0.3 a tile from home), and an Outpost spot whose
+  land takes its shore tile in. Where its Workers walk to it, the site goes up as any; on a rock no one can walk to (The Ring), Medium and up, it
+  orders a Dropship if it has none (`P.spWantDrop`), the site is switched to Supply by air (its Shuttle flies the goods) and the Dropship lands
+  `grabWorkers` (2) idle Workers beside it (`orderSquad` 'worker'; again if none got there after 150 s). No warbots go: not while it has fewer
+  than `grabArmy` of its attack threshold in its army (in a war), fewer than `AI_ENOUGH` + 2 Workers, a site slot or the Outpost's cost; one at
+  a time, a site not built in `grabGive` s is called off and the next waits `grabGap` s. AI-vs-AI on Medium, Normal (12 seeds of each map):
+  see IDEAS.md for how often derelicts are taken, before and after.
 - **State, saves and lockstep.** Orders: `tow`, `squad`, `gunships`, `craftHome` (and `command`, `yard`). `S.space` is saved with the game and
   checked by `checkSave` (`spaceCheckSave`); a space map saved before it gets its asteroids and derelicts on load. `hashState` takes in the
   rocks, the modules, every craft's flight and job and every Point-Defence Turret's aim, only where `S.space` exists, so a planet map's hash is
   as it was (seeded AI-vs-AI hashes on eight planet maps checked unchanged). Tests: `tools/space-test.js` (the ban, a pad and its yard, a Shuttle
   run and a Dropship landing on Into the Void's cut-off deck, Gunships and Point-Defence, the rocks' lanes, twins and determinism, mining in
-  passing, towing, a bump, the modules' effects and jamming, a save made mid-flight, two runs alike).
+  passing, towing, a bump, the modules' effects and jamming, a save made mid-flight, two runs alike; the orbits curved, two tiles' steps
+  clear, mirrored and worked out from the time alone over 8 seeds of each map; a rival's Dropship landing Workers to take a derelict; the
+  space art loaded only on the space maps).
 - **The look** (js/space.js, display only): the craft from the top, nose east (`craftArt`: flying, parked, the Dropship's ramp half and all the
   way down), drawn a touch up the screen and bigger the higher they fly, with a hover bob, their lift thrusters' glow pulsing in code and a
   shadow down-sun (`drawCraft`); parked ones on their pad with it (`spaceDrawBuilding`), the rest over everything after the aircraft
   (`spaceDrawAir`, from the air layer: the modules, the rocks, the craft, the lasers, the tracers). Point-Defence picks its heading of 8. The
   Gunship's laser (`drawLaserFx`) is a short bolt with a white-violet core (`#f3eeff`) and an indigo-violet glow (`#7d5cff`), its muzzle flash
   and a flare where it hits; Point-Defence's tracers (`drawPdTracerFx`) orchid-white dashes (`#fff3fd` on `#ffb8ff`); the Murmur's violet
-  (`#a46cff`) is neither. Art: ART_GUIDE.md, Batch 41.
+  (`#a46cff`) is neither. Art: ART_GUIDE.md, Batch 41. **The art loads only on a space map** (`ensureSpaceArt`, from `applyBiome` when
+  `spaceMap()`; `SPACE_ART`, `spaceArtKey`: the craft, the pad, Point-Defence, the rocks, the modules and the Graveyard's salvage, shards
+  and relay), as the landmarks' and the Murmur's
+  do: `loadArt` leaves those keys out, and their re-lit sets for the time of day are `SPACE_TOD_KEYS` (art/tod/tod-keys.js), joined to a set
+  only once the art is in (`todSpaceAdd`, `todSpaceIn` in js/daynight.js). Until then (and with no art) everything is drawn in code. In the
+  one-file build they are a bundle of their own beside the page (`dist/space-art.js`: `SPACE_DATA`, the day art and each time's set;
+  `SPACE_BUNDLE`), out of `art-*.js` and `tod-*.js`: about 2.8 MB a planet map no longer fetches.
 
 **The Graveyard** (`SHAPE_PRESETS` `graveyard`, under Heights and depths, two players; flat, `noMurmur`; space expansion phase 2, the owner's
 design, Nov 2026) is a wreck field of dead Accord ships adrift in space, from the first fights after the Accord fell. `graveMap` (js/world.js,
@@ -731,12 +758,12 @@ the backdrop is The Ring's (`R.void`: `ringSpace`). `graveShape()` tells it apar
 - **Economy.** The home hulk has the standard colony's starter fields (as Orbital's: Ore and Crystal each at least `GRAVE.field` (5) tiles),
   Stalk, fertile soil, three oil fields and Stone topped up to `GRAVE.stone`; `GRAVE.mul` richer. Past home only the wrecks' spilled cargo:
   a small Ore and a small Crystal field each (`GRAVE.spill`, at least 3 tiles), Stone, oil on the far one. The rest is **salvage**: `spaceSetup`
-  lays `DRIFT.kinds.graveyard` (four salvage lane pairs and three debris lane pairs, searched twice as long, a lane may be 2 tiles shorter and 3
+  lays `DRIFT.kinds.graveyard` (four salvage lane pairs and three debris lane pairs, searched longer, an arc may be 2 tiles shorter and orbits 3
   apart). A Shuttle tows a `salvage` wreck (`orderTow`) to its pad, where `salvageIn` breaks it down at once for `DRIFT.salvage` (8 Alloy, 5
   Chips) into the pad's store (`P.stats.towed`); it drifts back in `DRIFT.salvageBack` (150) s later. No new good.
 - **Dearer Viaducts**: `viaductCost` charges `GRAVE.via` a tile spanned here (4 Cement, 1.5 Alloy: three times the Alloy of `VIA_COST`),
-  so the way to the Arbiter is paid for in salvage (AI-vs-AI games on Medium: 18 to 36 minutes by Capture, a median of about 22). The first home stalk grove holds at least `GRAVE.stalk` (10) tiles.
-- **Debris lanes**: `junk` rocks, `DRIFT.junkN` (3) shards a lane spread along it (each with its twin), never towed or mined, a bigger size
+  so the way to the Arbiter is paid for in salvage (AI-vs-AI games on Medium: about 19 to 34 minutes). The first home stalk grove holds at least `GRAVE.stalk` (10) tiles.
+- **Debris lanes**: `junk` rocks, `DRIFT.junkN` (3) shards an orbit spread round it (each with its twin), never towed or mined, a bigger size
   (`DRIFT.r.junk`); `craftBumps` clips a craft that flies through, `SPACE.bump` (2) at most every `SPACE.bumpGap` (3) s.
 - **The Arbiter** (`graveTick`, once a second): its relay stands on `S.grave.core` (`GRAVE.arb.core`, 4 by 4, one wider on an odd width), bare
   ground where nothing is built (`canPlace`), laid (`canRoad`), spanned to (`viaductBlocked`), landed on (`craftLandable`) or broken up on, and no
@@ -2301,7 +2328,10 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     and on a **dead planet**, the enemy out of parts as well (`deadPlanet`, `aiThink`), with more armed warbots than the
     enemy's whole army, two at least, its attack threshold comes down to what it has (two fewer, two at least: the
     landings of `aiNaval` and `aiBeach` too, four warbots spare or the threshold), and a lead of two is enough for the
-    final push (Islands seed 21: the Ore ran out on every island by minute 40 and neither colony ever attacked again). At low Fuel, key industry Workers keep working if the available charge would not
+    final push (Islands seed 21: the Ore ran out on every island by minute 40 and neither colony ever attacked again).
+    That band (`finish`, four at least) is what the march planner (`aiMarch`) then asks for as well, where it used to
+    ask twice the enemy's army and two more again and send nobody; the target's garrison and guns (`aiTakeNeed`, the
+    guns over the flag) and its walls (the breach check) still count, so a base heavy guns cover still waits. At low Fuel, key industry Workers keep working if the available charge would not
     repay the trip. An Ore-starved rival can mine a single accessible vein and ignores distant, unclaimed veins
     when judging which nests to clear.
     **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
@@ -3322,6 +3352,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   fewest enemy guns reach with three tiles to spare (`aiStage`, on `DANGER.guns`); once three in five stand there the
   flag moves beside the base and they go in at the gun covering it first (`r.first`, the next one as each falls), then
   the base. It masses for it up to four minutes (`P.stormT`) and calls it off when under two in five are left armed.
+  (The Storm Front's own look at the weather has its own clock, `P.wxT`: sharing `P.stormT`, every look put the four
+  minutes back to the start, and the army kept massing for the base.)
   Against a crushed rival (twice its army and two more), it can storm a lightly defended base with a smaller force.
   It still wants at least eight warbots, twice the enemy's whole army and two more, and three in five of its armed
   army outside Bunkers (or the full count, if that is less). Heavy gun cover requires the full estimated force.
@@ -3402,7 +3434,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   and a site is short of it, or while a building it wants can't be started for lack of it (`P.fiberWait`): a busy
   Smelter used to burn every Fiber the Harvesters cut, and nothing that costs Fiber could go up. A site no road reaches
   yet doesn't count (it can't take any), and with no Harvester cutting they start again once there are 6 Fiber and
-  nothing waits for it, where they used to stay off while the Fiber a cut-out grove still gave piled up. On Medium,
+  nothing waits for it, where they used to stay off while the Fiber a cut-out grove still gave piled up. A Smelter
+  already holding a batch (2 Ore and 2 Fiber in its hopper, which the colony's goods don't count) finishes it while the
+  colony has under 3 Alloy, taking nothing more in (`b.drain`, see `needsOf`), whether it is going off for the Fiber
+  or kept off until there are 6, and rests again once the batch is done: resting on it, a Settler sat at 0 Alloy for
+  45 minutes with six Ore and five or six Fiber in its only Smelter. On Medium,
   Normal and Hard (`smart`; an Easy rival keeps the old habits) its Depots out toward the front (12 tiles or more from
   the Command Base) keep Cement and Ammo and take in no Ore, Crystal, Stone or Fiber (`reject`): a Depot among the far
   Mines used to collect their whole output, a long run from the Smelters waiting for it. Its Bot Foundry rests to save
@@ -3416,7 +3452,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   difficulty, once its Bot Foundry stands, with no Mine (or no Crystal Tap) at work, none on the way and under 4 Ore
   (or Crystal) in store, one goes up first, past the usual limit on sites (`starved`): a gatherer counts as at work
   while it has a node it can go to, on no rival's land and out of enemy guns (`aiGathers`), and a site as on the way
-  for 150 s or once a road reaches it. Sites stuck where its robots won't go (their road through ground where they were
+  for 150 s or once a road reaches it, but not once it has stood unsafe (`shunned`) with nothing coming in for 30 s
+  (`aiHotStalled`). Such a site of a Mine, Crystal Tap, Harvester, Quarry, Depot or Outpost (`aiHotSites`), unsafe now
+  and most of the time since anything last came in (goods, work, or goods on the way), is given up after two minutes
+  of that (`AI_HOT_SITE`, three minutes old at least) and its spot avoided for four (`P.avoid`); the haulers still
+  keep off it meanwhile (a Warlord on Standard seed 11 kept a replacement Mine like that for an hour as the answer to
+  its Ore running out, and its army never came back). With its Ore run dry (`oreLow`) its first Trade Terminal goes
+  past the usual limit on sites too, as for Crystal or Fuel (`tradeFirst`), and buys Ore (`aiTrade`). Sites stuck where its robots won't go (their road through ground where they were
   shot, see `noteDanger`) used to hold every place while the last field ran dry, and two rivals could sit at 0 Chips
   with a few warbots each for 20 minutes.
 - **The rival's roads and Ramps** (`aiRoads`, `aiRampCut` in `js/ai.js`): where its road to a site would run the long

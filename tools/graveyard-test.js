@@ -55,9 +55,9 @@ const HELP = `
       const coreSym = G.core.x0 === W - 1 - G.core.x1 && G.core.y0 === H - 1 - G.core.y1;
       // lanes: twin pairs over clear void; salvage and junk both there; each salvage rock as far from one base as its twin from the other
       const L = S.space.lanes, R2 = S.space.rocks;
-      let laneBad = 0; for (let k = 0; k < L.length; k += 2) { const a = L[k], b = L[k + 1]; if (Math.abs(a.x0 - (W - b.x0)) > 1e-6 || Math.abs(a.y1 - (H - b.y1)) > 1e-6) laneBad++; for (let q = 0; q <= 20; q++) { const x = a.x0 + (a.x1 - a.x0) * q / 20, y = a.y0 + (a.y1 - a.y0) * q / 20; if (S.terrain[tIdx(Math.floor(x), Math.floor(y))] !== T_CHASM) laneBad++; } }
+      let laneBad = 0; for (let k = 0; k < L.length; k += 2) { const a = L[k], b = L[k + 1]; if (Math.abs(a.cx - (W - b.cx)) > 1e-6 || Math.abs(a.cy - (H - b.cy)) > 1e-6) laneBad++; for (const p of lanePts(a)) if (S.terrain[tIdx(Math.floor(p.x), Math.floor(p.y))] !== T_CHASM) laneBad++; } // (the orbits: each twin's ellipse turned half round, every point over the void)
       const kinds = [...new Set(L.map((l) => l.k))].sort().join();
-      const fair = R2.filter((r) => r.k === 'salvage').every((r) => { const t = R2.find((q) => q.id === r.tw), la = L[r.lane], lb = L[t.lane]; return Math.abs(segDist(la, Ls[0].x + 0.5, Ls[0].y + 0.5) - segDist(lb, Ls[1].x + 0.5, Ls[1].y + 0.5)) < 1e-6; });
+      const fair = R2.filter((r) => r.k === 'salvage').every((r) => { const t = R2.find((q) => q.id === r.tw), la = L[r.lane], lb = L[t.lane]; return Math.abs(laneDist(la, Ls[0].x + 0.5, Ls[0].y + 0.5) - laneDist(lb, Ls[1].x + 0.5, Ls[1].y + 0.5)) < 1e-6; });
       out.push({ size, seed, W, H, asym, onHome, reach, tw, core, coreBad, coreSym, laneBad, kinds, salvage: R2.filter((r) => r.k === 'salvage').length, junk: R2.filter((r) => r.k === 'junk').length, fair, hulks: G.hulks.length, posts: S.posts.length });
     }
     return out;
