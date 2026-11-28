@@ -142,17 +142,17 @@ const th = run(cT, `
 `);
 check('a Thermal Plant only goes beside lava or hot water', th.hot && !th.coldOk && /Thermal Plant/.test(th.why || ''), th);
 check('a Thermal Plant powers a Seam Drill in reach with no Fuel (the drill surveys further)', th.svR > SEAM.survey[0] && th.thermalFuel === 0 && th.used === 0, th);
-// ---- the Thermal Plant powers a Maglev Terminal and a Mass Driver end (a shot on it costs no Fuel), never a megastructure
+// ---- the Thermal Plant powers a Maglev Terminal and a Mass Driver (a shot on it costs no Fuel), never a megastructure
 const tw = run(cT, `
   const p = S.buildings.find((b) => b.type === 'thermal'), hx = p.x, hy = p.y, R = THERMAL.radius;
   // a spot for type within the plant's reach (its own tile's distance, as thermalNear reads it), or -1
   const near = (type, ok) => { for (let r = 1; r <= R; r++) for (let j = hy - r; j <= hy + r; j++) for (let i = hx - r; i <= hx + r; i++) if (inMap(i, j) && dist2(i, j, hx, hy) <= R * R && (!ok || ok(i, j)) && canPlace(0, type, i, j).ok) return tIdx(i, j); return -1; };
   const at = (type, t) => addBuilding(0, type, t % S.W, (t / S.W) | 0, true);
   const mt = near('magterm'); const m = mt >= 0 ? at('magterm', mt) : null;
-  const ct = near('catcher'); const c = ct >= 0 ? at('catcher', ct) : null;
+  const ct = near('mdriver'); const c = ct >= 0 ? at('mdriver', ct) : null; // (a Driver: a Catcher never fires, so needs no power)
   if (!m || !c) return { m: !!m, c: !!c };
   const magOn = magPowered(m), catOn = magPowered(c), byThermal = thermalNear(c) === p;
-  // a fuelled Generator in reach of the Catcher too: on the Thermal Plant a shot draws none of its Fuel
+  // a fuelled Generator in reach of the Driver too: on the Thermal Plant a shot draws none of its Fuel
   let gt = -1; for (let r = 1; r <= 4 && gt < 0; r++) for (let j = c.y - r; j <= c.y + r && gt < 0; j++) for (let i = c.x - r; i <= c.x + r; i++) if (inMap(i, j) && dist2(i, j, c.x, c.y) <= 16 && canPlace(0, 'generator', i, j).ok) { gt = tIdx(i, j); break; }
   const g = at('generator', gt); g.stock.fuel = 10; g.energy = 0;
   const f0 = (S.players[0].used || {}).fuel || 0;
@@ -170,9 +170,9 @@ const tw = run(cT, `
   // a megastructure within its reach: never powered by it (no Generator Fuel, no boost, no Deep Core power)
   return { magOn, catOn, byThermal, freeShots, genOn, paidShots, offOff, backOn };
 `);
-check('a Thermal Plant powers a Maglev Terminal and a Mass Driver Catcher in its reach (magPowered)', tw.magOn && tw.catOn && tw.byThermal, tw);
+check('a Thermal Plant powers a Maglev Terminal and a Mass Driver in its reach (magPowered)', tw.magOn && tw.catOn && tw.byThermal, tw);
 check('a Mass Driver shot on a Thermal Plant costs no Fuel, though a fuelled Generator is in reach too', tw.freeShots && tw.freeShots.fuel === 10 && tw.freeShots.energy === 0 && tw.freeShots.used === 0, tw);
-check('turned off, the Generator powers the end instead: half a Fuel a shot (six shots, three Fuel)', tw.genOn && tw.paidShots.fuel === 7 && tw.paidShots.used === 3, tw);
+check('turned off, the Generator powers the Driver instead: half a Fuel a shot (six shots, three Fuel)', tw.genOn && tw.paidShots.fuel === 7 && tw.paidShots.used === 3, tw);
 check('with neither, no power; the plant back on, power again', !tw.offOff && tw.backOn, tw);
 // a megastructure within a Thermal Plant's reach, on its own (a fresh colony each: there's room for one by the plant)
 const megaBy = (type) => run(mk(), `

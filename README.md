@@ -701,7 +701,7 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   by the colony whose land takes in its **shore tile** (`m.st`, `modShore`: the ground tile nearest its middle), unless an armed robot of
   another colony stands within `DERELICT.jam` + 1 tiles of its middle (`m.jam`): then no one holds it (`modHolder`). **Solar Array**: its
   holder's factories and the like (`work`, `t3pow`) within `DERELICT.solar.reach` (6) tiles are boosted as by a Generator, with no Fuel
-  (`boostUntil`), and a Maglev Terminal or Mass Driver end there has power (`solarNear` in `magPowered`). **Docking Ring**: its holder's
+  (`boostUntil`), and a Maglev Terminal or Mass Driver there has power (`solarNear` in `magPowered`). **Docking Ring**: its holder's
   Shuttles fly `SPACE.dock` (1.35) times as fast (`dockHeld` in `craftSpeed`). **Salvage Hulk**: the first colony to hold it gets
   `DERELICT.hulk.haul` (18 Alloy, 10 Chips) into its Command Base, once (`m.done`, `m.by`). Salvage is Alloy and Chips, no good of its own.
   Placed in Versus on a space map (`newGame`); the missions *Into the Void* and *The Graveyard* place their own.
@@ -1005,8 +1005,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Maglev Terminal | 8 Cement, 6 Alloy, 3 Chips, one tile: storage at the end of a **Maglev line**, or a hub of up to three (Paths → Maglev: see Maglev lines below); its Pod bay builds Maglev Pods; a Generator within 4 tiles powers it |
 | Maglev Pylon | Not built by hand: one every 3 tiles along a Maglev line (over a road or track too, its feet at the side: the way stays open), 24 armour like a Wall; shot down it cuts the line until a Worker rebuilds it |
-| Mass Driver | 12 Cement, 10 Alloy, 5 Chips, two tiles (east-west or north-south, R turns it as you place it): storage at one end of a line to its **Catcher** 12–50 tiles away (or one way to an Outpost or Keep): canisters of 16 goods fly both ways over anything, every 8 s from each end across a gap (10 s when a robot could walk between the ends), supplied automatically; a Catcher takes 2 Drivers at most; each end fires only with a Generator within 4 tiles, half a Fuel a shot; it can throw a **Catcher kit** (the Catcher's cost) to open ground 12–50 tiles away, which assembles itself in 20 s and claims 3 tiles of land (see Mass Drivers below) |
-| Catcher | 8 Cement, 5 Alloy, 3 Chips, one tile: storage at the other end of a Mass Driver's line: it catches canisters and throws them back; out on an island it stocks what the buildings round it need and sends home what they can spare |
+| Mass Driver | 12 Cement, 10 Alloy, 5 Chips, two tiles (east-west or north-south, R turns it as you place it): storage at one end of a line, aimed at another of your **Mass Drivers** or at a **Catcher** 12–50 tiles away (nothing else): two Drivers aimed at each other are a pair, canisters of 16 goods flying both ways over anything, every 8 s from each across a gap (10 s when a robot could walk between the ends); to a Catcher it is one way; a Driver is in one line at most; supplied automatically; a Driver fires only with a Generator within 4 tiles, half a Fuel a shot; it can throw a **Catcher kit** (the Catcher's cost) to open ground 12–50 tiles away, which assembles itself in 20 s and claims 3 tiles of land (see Mass Drivers below) |
+| Catcher | 8 Cement, 5 Alloy, 3 Chips, one tile: storage at the far end of a Mass Driver's one-way line: it only catches (never fires, needs no power); up to 2 Drivers deliver to it; out on an island it stocks what the buildings round it need; nothing goes back from it by canister |
 | Mooring Mast | 6 Cement, 3 Alloy, one tile: storage at one end of an **Airship line** (Link two: see Airships and Mooring Masts below); keeps 8 Fuel for its Airships, by Tanker or pipeline |
 | Trade Terminal | A standing trade route, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies (where the map has room: Small and narrow maps can have one a colony), two in Colony, on ground every colony walks to where they walk to one another; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out. 8 Cement, 3 Alloy. One route per Terminal (`b.route` `{ give, get }`, the `tradeRoute` order, `setTradeRoute`): send one good, bring back another, until changed. The post's ledger takes one run per Terminal every `TERMINAL.every` (120 s: `b.tnext`, its window); the Terminal asks for its run (`syncTerminalOrders`: a supply order of `routeLot`) a trip ahead of the window (`terminalLead`: `TERMINAL.lead`, 60 s, at first, then the last trip's time and 15 s, `b.lead`). A convoy (a Road Train from storage holding the whole run, or a Freight Train where track runs beside it; never Haulers or Freight Trucks) brings `TERMINAL.lot` (15) of the good, waits at the dock if early (task `dock`, inside the Terminal), and the run is made (`terminalRun`): it takes home what was bought, and anything else spare there, in a mixed load (`convoyHome`; `convoyAtDock`). Bought Fuel or Crude goes by Tanker (logistics step 4e) or Fuel by pipeline to storage (`updatePipes`). The **market board** (`sellPrice`, `buyPrice`): a good sells for its worth (`TRADE_VALUE`) × `TERMINAL.sell` and costs its worth × `TERMINAL.buy`, raw goods (`TRADE_RAW`: Stone, Fiber, Ore, Crystal, Crude) 0.35 and 0.75, made goods 0.575 and 1, Fuel `fuelMarkup` (1.5) dearer; a run brings back lot × sell(give) × `terminalBonus` (+1.5%/tile beyond 16 from the Command Base, max +25%) ÷ buy(get), its fraction carried to the next run (`b.tfrac`). 15 Stone → 2.4 Alloy, 15 Cement → 2 Alloy, 15 Alloy → 16.9 Crystal; a rich good goes out in fewer so a run brings back at most `carryBack` (30). No raw good for a raw good, no made good for its ingredients (`TRADE_MADE_FROM`), Cement only for made goods (`TRADE_MADE`), Crude and Fuel only bought (`tradePairWhy`). Each run sold of a good knocks `TERMINAL.sat` (0.1) off its sell price for that colony (`P.trade.sat`, down to `satMin` 0.5), and each second it gets back `recover` (0.3%) of the gap (`tradeRecover`: about half in four minutes): one route on a good settles near 0.7, two drive it to the floor. Its goods can't be spent until a convoy takes them home (`terminalSpare`, never `supplyOf`). A convoy flies a gold pennant (`u.trade`, the Terminal's id, while it carries for it; `drawTradeFlag`), its lane is kept (`b.lane`, the path out) and drawn on the minimap with the convoys as gold dots, its owner is alerted when it's hit (`convoyHit`, every 20 s at most) and told when it's lost (`convoyLost`: the cargo spills as crates, `dropCarried`). Warbots holding a rally flag go after an enemy convoy passing within `TERMINAL.hunt` (6) tiles of it, wherever it is (`convoyNear`), not only in their own land as with other civilians, and raiders leave a rival's convoy lane be (`convoyLanes`: no road torn up there) to lie in wait for its convoys. A convoy with its escort near (`escorted`) doesn't give way to enemy warbots (`gunShy`); an unescorted one turns back like any hauler. (In a mission with `pressOn`, Convoy, the rival's Road Trains press on: `convoysPress` takes them off `gunShy`, so they never turn back and set out from a besieged Command Base, its run taken from storage enemy warbots are at.) **Escort** (`b.escort`, the `tradeEscort` order): `TERMINAL.escort` (2) armed warbots from the nearest garrisons within `escortReach` (24) tiles (the Command Base keeps its last) ride along with each convoy (task `escort`, `doEscort`: kept beside it as it drives), get off to fight armed enemies near it (the convoy holds back while they do, and at the start of a trip waits half a minute at most for them to get on: `convoyHolds`), wait beside the Terminal at the dock, and walk back once it's home. A Terminal holds no land round itself (`civClaims`: every other finished civilian building holds `CIV_CLAIM` tiles), so the post's ground stays open to everyone's roads; it still reaches out for building like one (`reachMap`). (It used to hold its ring, and as nothing on the post's ground can be attacked, a rival's shut roads out of there for good.) **No-fire zone** (`calmAt`, `TRADE_POST.calm` 3 tiles round the pad): nothing targets anything there (`nearestEnemyBot`, turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Flak, warbots, Howitzers, the Murmur), nothing there fires out, and no damage lands there (`damageBot` but for Ringfall and the ground giving way, `hitBuilding`, `rocketHit`, `bombHit`, Missiles, nukes), but for a Trade Terminal's construction site: enemy robots can wreck one there like any site, by an attack order, `sendAttack` or a flag held beside it (`calmShield`: only a finished building there is spared; bombs, shells and Missiles still spare the site; warbots used to fire at one for ever, the owner's call, Nov 2026); and only a Terminal (or a Ramp) can be built there (`canPlace`: an Outpost or Wall there would be a door no enemy could ever break), so **no deposit lies there** either, where nothing could ever mine it (the owner's call, Nov 2026: `clearCalmGround`, at the start of a game once the posts, Uplinks and a mission's setup are in, and as a save loads, moves each one, the same kind and amount, to the nearest open tile just off the ground, `calmSpill`/`calmSpillOk`, on the same land if it can, the edge of the ground first, the rest of a post's field of that kind gathering round where its first deposit went (`toward`: a field moved off stays a field beside the ground, not a line out to a deck's rim on Orbital platforms); on a new Versus planet made from the seed the map's own symmetry is kept (`uplinkOrbit`: the half turn, the quarter turns, Long Haul 2v2's two mirrors, the three-way turn): a deposit moves with its twins on every other colony's side, whether or not they lie on a post's ground (most posts have no twin), to a tile and its twins, one on a line of symmetry staying on it, so every side stays the same tile for tile while the posts and Uplinks keep their places (Long Haul 2v2's centre post, the middle Uplink); an Energy crop just goes; no dice, the same on every device and on a rejoin), Ringfall's pieces that would land there lie just off it (`meteorImpact`), the drizzle keeps off it (`drizzleOk`), Grove Planters and Bio Farms plant nothing there (`findPlantSpot`, `findCropSpot`), and the Hollow's falling rock (`rockfall`) has no posts to mind; warbots can't be sent at a Terminal there, and bombs, napalm, Missiles and nukes can't be aimed at it. The rival docks a Terminal from `AI_TRADE_AT` (8 minutes; an Architect 7) and runs a route with Escort on (`aiTrade`); the *Wren* keeps its one-off deals. |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
@@ -1353,7 +1353,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     placed only where a hot tile touches its tile (`thermalHeat`; `thermalHotTile`: lava, `S.lava`, or water in the
     Cinderlands or the Steamwells (`t2BaseBiome`), or a Steamwells steam vent, decor 4 or 6); gone cold (the lava
     filled), it says so and stops. It powers factories (the third faster), Seam Drills, Seed Masts, Maglev Terminals and
-    Mass Driver ends (`thermalNear` in `magPowered`; a shot on it costs no Fuel, `mdShotPower`), but **never the
+    Mass Drivers (`thermalNear` in `magPowered`; a shot on it costs no Fuel, `mdShotPower`), but **never the
     megastructures** (the owner, Nov 27 2026: a Fuel-free Deep Core on volcanic maps would be too strong): they read only
     a Generator's Fuel (`megaGens`, `atmosGens`, `deepPower`), and `updateGenerator` leaves them out of a Thermal
     Plant's reach (`!G.heat`). Rivals don't build it. Its reach and cost stay as they are until play-testing. The Murmur count it as a
@@ -1695,7 +1695,7 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
     (`rtTerrainKey`, a hash of terrain, levels, ramps, roads and fords). Viaducts, Ropeways, saps and Mass Driver lines are
     dashed links (`rtLinks`).
   - **Approach routes** (`rtOrigins`, `rtTargets`): from each rival's Command Base, its armed army robot nearest your
-    base and its Catchers (the nearest 3 Murmur nests when there is no rival) to your Command Base; from the nearest
+    base and its Mass Driver landings, Catchers and far Drivers (the nearest 3 Murmur nests when there is no rival) to your Command Base; from the nearest
     origin to your Bot Foundry, Keep and megastructures (3 targets at most). Found with `findPath` and the options of an
     armed army on the march (`rtOpts`: `breach`, `WARBOT_OFFROAD`, your guns' cover, `ew` 3, groves and radiation for an AI).
   - **Back doors** (`rtEntry`): the first tile of a route in your land, and the `RT_DEPTH` (6) tiles from 2 before it:
@@ -1971,37 +1971,45 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   (IDEAS.md has the measurements). The mission **Phase 2** (Industry and
   Trade: its last goal a hub) and the colony goal *Phase 2* teach it.
 - **Mass Drivers** (every map but the Hollow; `BDEFS.mdriver`, `BDEFS.catcher`, `MASSDRIVER`; the owner's look A, "Coil
-  Ramp"; two-way, automatic, 50 tiles and 16-good canisters since Nov 26 2026). A **Mass Driver** (12 Cement, 10 Alloy, 5
-  Chips; Build → Move, key V) and a **Catcher** (8 Cement, 5 Alloy, 3 Chips; key C) are stores, and both are **ends** of
-  a line (`mdEnd`): each fires and catches. The Driver is **two tiles** (`def.long`): its own tile and the one east
+  Ramp"; automatic, 50 tiles and 16-good canisters since Nov 26 2026; Driver to Driver both ways, Driver to Catcher one
+  way, no forts, since the owner's rules of Nov 28 2026). A **Mass Driver** (12 Cement, 10 Alloy, 5 Chips; Build → Move,
+  key V) and a **Catcher** (8 Cement, 5 Alloy, 3 Chips; key C) are stores, and both are **ends** of a line (`mdEnd`): a
+  Driver fires and catches, a Catcher **only catches** (it never fires, so needs no power). The Driver is **two tiles** (`def.long`): its own tile and the one east
   (`b.mdAxis` 'ew') or south ('ns') of it (`longTile`), set as it's placed (R or the banner's Turn: `UI.mdAxis`,
   `mdTurn`; the `place` and `moveBuilding` orders take the axis); `S.bAt` holds it on both (`longClaim`, `longRelease`,
   `setLongAxis`), so the second tile blocks the way and building and a tap there picks it; `canPlace` checks both tiles
   (level, the same rules each); `touching` looks round both, so conveyors join buildings at either; its door is its own
   tile; it's drawn over the middle of the two (`bCentre`); a save from before the two tiles lays it east-west. On the
   Driver's panel **Aim** (`startMdAim`, mode `mdaim`, `mdAimTap`, the `mdAim` order, `setMdAim`, `mdAimWhy`) sets
-  `b.mdTo`: a Catcher of yours `min` (12) to `max` (50) tiles away, or an Outpost or Keep (`forts`, `mdFortType`) to
-  keep supplied one way (`mdCatcher` gives the far end). A Catcher takes `drivers` (2) Drivers at most (`mdDriversOf`: the first two built; `mdAimWhy` refuses a third,
-  "That Catcher already takes 2 Mass Drivers") and fires to each in turn (`mdPartners`; `b.mdNext`). **The plan** (`mdPlan`, from `dispatch` every 2 s, nothing for a player with no ends):
-  the end farther from the Command Base is the far end (`mdIsFar`, `b.mdFar`); it keeps what the buildings round it need
+  `b.mdTo`: another Driver of yours (built) or a Catcher of yours `min` (12) to `max` (50) tiles away, nothing else
+  (`mdTarget` gives it; an Outpost or Keep, once supplied one way, is refused, and a save with a Driver aimed at one
+  loads with it stood down). Aimed at a Driver, the two are **paired**: `setMdAim` aims that one back, and each fires to
+  the other (`mdLinks`: a Driver's other end, when it is aimed back or the Catcher takes it; a Catcher's Drivers;
+  `mdPartners`: the ends one fires to, none for a Catcher). A Driver is in one line at most: `mdAimWhy` refuses a Driver
+  already in a line with another end (`mdBusy`: "already in a line") or still going up; standing down either end, or
+  aiming one elsewhere, stands down the Driver that was paired with it. A Catcher takes `drivers` (2) Drivers at most
+  (`mdDriversOf`: the first two built; `mdAimWhy` refuses a third, "That Catcher already takes 2 Mass Drivers"), all
+  delivering to it. **The plan** (`mdPlan`, from `dispatch` every 2 s, nothing for a player with no ends): the end
+  farther from the Command Base is the far end (`mdIsFar`, `b.mdFar`; a tie: the Catcher, or the higher id); where goods
+  fly to it (`mdFed`) it keeps what the buildings round it need
   (`b.auto`, worked out as a far Rail Station's in `railPlan`: within `STATION_REACH`, nearer it than the Command Base
   by `STATION_NEARER`, touching it, by road or on foot (`footNear`); twice a working building's fill, a site's lack;
-  Fuel too, never Crude), and Haulers leave its keep to the canisters (`dispatch`). Each end ships to each partner
-  (`b.mdAuto`: {partner id: {good: n}}) what that partner lacks (`mdLack`: its keep, its supply orders, or a fort's
-  `needsOf`, less what's in flight, `mdFlying`); a far end adds what it can spare going home (`spareForHome`, not what
-  the other end sends it: `mdSends`). **Goods list** (`b.mdSend`, on either end; `mdSend`/`mdReserve`/`mdAuto` orders:
+  Fuel too, never Crude), and Haulers leave its keep to the canisters (`dispatch`). Each Driver ships to its other end
+  (`b.mdAuto`: {partner id: {good: n}}) what that end lacks (`mdLack`: its keep, its supply orders, less what's in
+  flight, `mdFlying`); a far Driver adds what it can spare going home (`spareForHome`, not what the other end sends it:
+  `mdSends`). A Catcher ships nothing. **Goods list** (`b.mdSend`, on a Driver only; `mdSend`/`mdReserve`/`mdAuto` orders:
   up to `goods` (3), no Crude, each with the reserve kept home, `reserve` 20, ±`reserveStep` 10; automatic shipments
-  keep `reserve` too, but `fuelReserve` (6) of Fuel and, for a rival, `aiReserve` (6) of everything: `mdReserveOf`) overrides an end's plan
-  (not toward a fort). The near end's goods to send (`mdSendGoods`) are a standing supply order (`needsOf` → `mdWant`):
+  keep `reserve` too, but `fuelReserve` (6) of Fuel and, for a rival, `aiReserve` (6) of everything: `mdReserveOf`) overrides a Driver's plan.
+  The near end's goods to send (`mdSendGoods`) are a standing supply order (`needsOf` → `mdWant`):
   Haulers bring what the colony holds beyond the reserve (`tickTotal` less `mdHeld`), up to `hopper` (32) (or what it
   ships); that stock is for its canisters (`supplyOf` less `mdHold`). A far end ships what it holds (`mdAvail`:
   `keepSupply`). Conveyors (`mdConveyor`, every `feed` s): the near end takes the goods it sends from a Command Base or
   Depot touching it and from the factories touching it that make them; every end feeds the factories and sites touching
-  it (Fuel to a Generator); a far end takes the output of the factories touching it. **Firing** (`updateMassDriver`):
+  it (Fuel to a Generator); a far Driver takes the output of the factories touching it. **Firing** (`updateMassDriver`, a Driver's; a Catcher's only says what it catches):
   with power and a partner, once it has `load` (16) goods for one (or `partMin` 4, or the whole of a smaller need, after
   `partWait` 20 s) it charges (`b.mdFire`, `b.mdAt`, `charge` 1.6 s; `b.working`, so its Generator burns Fuel) and fires
-  (`mdLaunch`: a unit of each good in turn), a shot every `reload` (8) s from each end, or `reloadLand` (10) s when a robot could walk from one end to the other (`mdOverland`: the two ends in one area of `walkZones`, the walking areas of `zoneFill` without the Ropeway, Viaduct, ferry and Airship links; `mdReload`; the owner, Nov 26 2026: then it is a shortcut over land, not a crossing; each end's panel shows its Rate and why) (6 s and 10/8/4 and 6/4/2 costs before the Nov 26 2026 balance pass, when a line out-carried a 4-pod Maglev line for a quarter of its cost). **Power**: an
-  end fires only with a Generator in reach, or a Thermal Plant's (`magPowered`, `thermalNear`), and waits loaded
+  (`mdLaunch`: a unit of each good in turn), a shot every `reload` (8) s from each Driver, or `reloadLand` (10) s when a robot could walk from one end to the other (`mdOverland`: the two ends in one area of `walkZones`, the walking areas of `zoneFill` without the Ropeway, Viaduct, ferry and Airship links; `mdReload`; the owner, Nov 26 2026: then it is a shortcut over land, not a crossing; each end's panel shows its Rate and why) (6 s and 10/8/4 and 6/4/2 costs before the Nov 26 2026 balance pass, when a line out-carried a 4-pod Maglev line for a quarter of its cost). **Power**: a
+  Driver fires only with a Generator in reach, or a Thermal Plant's (`magPowered`, `thermalNear`), and waits loaded
   without one (it still catches); each shot takes `shot` (20) s of that Generator's work, half a Fuel, none when a
   Thermal Plant is in reach, which comes first (`mdShotPower`, from the Generator in reach with the most; the
   economy audit of Nov 26 2026, owner-approved: a line's Generators had burned 0.2 Fuel a minute, now about 3 at each
@@ -2011,8 +2019,9 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `mdCaught`), or, that gone, as crates on its tile (`canDown`, `addLoot`). **Flak**: an enemy Flak Gun with no aircraft
   in reach targets the nearest canister in the air (`canNear`, leading it; not in the first and last `low` of its
   flight), and its bursts take `hp` (4) off canisters in the splash (`canFlak`): a canister burst falls as crates where it
-  was. Saves keep `S.cans` and the ends' fields (`checkSave`); `hashState` hashes both; a save from before (a one-way
-  Driver, often with a goods list) loads as a two-way pair, its list kept as the Driver's override. **Catcher kit**
+  was. Saves keep `S.cans` and the ends' fields (`checkSave`); `hashState` hashes both; a save from before (a Driver
+  with a goods list, its Catcher) loads as a one-way line, its list kept as the Driver's override; a Catcher that fired
+  back in it loads stood still (no `mdFire`, no goods list), and a Driver aimed at an Outpost or Keep stood down. **Catcher kit**
   (Nov 26 2026): the Driver's panel **Throw a Catcher kit** (`startMdAim(b, true)`, `UI.mdKit`, the `mdKit` order,
   `setMdKit`, `mdKitWhy`) sets `b.mdKit` (the tile); the Driver asks Haulers for the Catcher's cost (`needsOf`, as
   urgently as a factory's inputs, not a supply order: a rival's Alloy never sits in storage) and holds it for the kit
@@ -2023,37 +2032,42 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   lands (`mdKitLand`) as a Catcher site on its tile (or the nearest that will take it within 2; none, its goods fall as
   crates) holding its cost, `b.kitT` 1: it assembles itself over `kitBuild` (20) s, no Worker needed (`updateBuilding`),
   then claims `kitClaim` (3) tiles of land (`b.claim`, a military claim as a Port founded by sea has); the Driver is
-  aimed at it. Flak bursts a kit as any canister (`canDown`: "A Catcher kit was shot down"). **Far end full**: what a
+  aimed at it, unless it is in a line already (a pair stays a pair). Flak bursts a kit as any canister (`canDown`: "A Catcher kit was shot down"). **Far end full**: what a
   far end has room for (`mdRoom`: `full` (64) of a good, or its keep if more, less what it holds and what's in flight)
   caps every load toward it (`mdAvail`), so a goods list to a far end nothing collects from stops; it counts each good on
   its own (the owner's question, decided Nov 26 2026: a cap on the whole stock would let 64 Cement nobody uses stop the
   Fuel its Generator burns); the near end's status
-  and panel say "Far end full" (`mdFullGoods`). **The rival** (`aiMassDriver`, `AI_MDRIVER`; Medium and up, one pair,
+  and panel say "Far end full" (`mdFullGoods`). **The rival** (`aiMassDriver`, `AI_MDRIVER`; Medium and up, one line,
   the Architect from 600 s, the others from 900 s, every 20 s): on a map of islands, mesas or canyons (`aiMdMap`:
   Islands, Sky islands, Four Isles, Canyon maze, Grand Canyon) to its nearest fort or store 16–52 tiles out on ground its
   robots can't walk to (another `walkZones` area: over a Viaduct, a landing's), elsewhere only to one no link or road
   reaches; with Cement in hand, a usual site free, a Bot Foundry and Chip Fab of its own and Fuel to spare (12, and a
   Refinery or two Bio Farms: the Driver fires by a Generator), not the Alloy and Chips (they never sit in its storage:
-  the sites ask for them), a Driver site 3–9 tiles from its Command Base facing it, a Generator by it, and a Catcher
-  site by the foothold (`aiMdFarSpots`) when its Workers and Haulers get there (the same `S.zone`), else a Catcher kit
-  once the Driver stands; the sites and the kit's load are High priority (`sitePrio`, `b.kitPrio`) and count as owed
+  the sites ask for them), a Driver site 3–9 tiles from its Command Base facing it, a Generator by it, and, when its
+  Workers and Haulers get to the foothold (the same `S.zone`), a second Driver site by it (`aiMdFarDriver`,
+  `aiMdFarSpots`) if mines or the like (an output, no input: `aiMdTwoWay`, `mines` 1) stand round it, goods both ways,
+  else a Catcher site; where they can't, a Catcher kit once the Driver stands; the sites and the kit's load are High priority (`sitePrio`, `b.kitPrio`) and count as owed
   like a seized megastructure's fee (`megaFeeOwed`: its conveyors don't hand on what they need, its Ammo Plant and then
-  its Foundry rest), and its usual 120 s give-up waits 420 s for them as for a Silo; then it aims the Driver, puts a
-  Generator by a Catcher its Workers reach, and `mdPlan` runs the line. Lost, it tries again after 300 s. Not in the Hollow (`worldBan`). **Drawn**: the Driver's art points along its tiles toward its far end
+  its Foundry rest), and its usual 120 s give-up waits 420 s for them as for a Silo; then it aims the Driver (pairing the
+  two), puts a Generator by a far Driver, and `mdPlan` runs the line. A line to a Catcher its Workers reach is upgraded
+  once mines stand round the Catcher: a Driver site beside it (`pair.up`), and once built the home Driver pairs with it
+  (the Catcher stays, as storage). Lost, it tries again after 300 s. Not in the Hollow (`worldBan`). **Drawn**: the Driver's art points along its tiles toward its far end
   (`mdriver-<dir>@T`, e/w lying east-west, n/s north-south, `mdDir`; framed wide, `MD_FRAME`), the Catcher's arms swing
   in as one lands (`catcher-closed@T`, `mdArmsIn`); `drawMassDrivers` (in the air layer) lights the coils in sequence
   while it charges, with arcs crackling up the rail from the breech, the shot's flash, a faint guidance beam while a
-  canister flies (from the muzzle or the cradle, to the cradle, the muzzle or a fort's roof: `mdPort`), the canister (a
+  canister flies (from a muzzle to the cradle or the other Driver's muzzle: `mdPort`), the canister (a
   stubby gunmetal cargo container, ribbed, with corner castings, a team-colour band and an amber running light, holding
   its heading) with its streak and shadow, the coils' faint glow after dark, and the aiming preview (the reach, your
-  Catchers and forts ringed, the arc to the one under the pointer); a Catcher charging gathers a glow and arcs in its
-  funnel and flashes as it fires (`drawCatcherLamps`), and a Driver catching one flashes at its muzzle; `MD_ART` holds
+  Catchers and other Drivers ringed, the arc to the one under the pointer); a Driver catching one flashes at its muzzle
+  and brakes it down the rail (a Catcher never fires: its arms swinging in are all it does); `MD_ART` holds
   the renders' marks. Sounds: `mdcharge`, `mdlaunch` (the crack and the whistle), `mdcatch`, `mdburst`, `mdthud`. The
-  mission **The Schedule** (Industry and Trade) teaches it: the line, power at both ends, Auto and a goods list, and
-  the camp's spare coming home. `node tools/massdriver-test.js` checks both ways, Auto, 50 tiles over the sea on
-  Islands, Outpost resupply, Flak, an old save, the Catcher kit (refusals, a save in flight, self-assembly, its land,
-  Flak), Far end full and a rival's pair. Measured over 30 tiles (kept loaded): 160 goods a minute each way
-  (the one-way Driver before: 72; a Maglev line with 4 pods: about 120).
+  mission **The Schedule** (Industry and Trade) teaches it: a Driver at home and one at the camp, paired, power at both,
+  Auto and a goods list, the camp's spare coming home, then a Catcher (one way) and a Catcher kit.
+  `node tools/massdriver-test.js` checks a pair both ways, a Catcher one way (it never fires), pairing (a third refused,
+  stand down and re-aiming breaking a pair), an Outpost or Keep refused, Auto, 50 tiles over the sea on Islands, Flak,
+  old saves, the Catcher kit (refusals, a save in flight, self-assembly, its land, Flak), Far end full and a rival's
+  line and its upgrade to a pair. Measured over 30 tiles (kept loaded): about 96 goods a minute each way over land,
+  about 118 across the sea.
 - **Vulcan Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
   (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
   keeps that much a bomber, `airKeep`) and `BOMBER.fuel` (3) Fuel on top of what its tank needs (`tankFuel`; it takes
@@ -5518,10 +5532,12 @@ changing the settings all game (and ordering Graders and Terraform jobs), one re
 node tools/massdriver-test.js
 ```
 
-The Mass Driver line: goods both ways between a Driver and its Catcher, automatic supply of the far end with no goods
-list, a 50-tile line across the sea on Islands (allowed on Sky islands and Four Isles, not in the Hollow), a goods list
-overriding Auto, an Outpost kept in Ammo, a rival's Flak bursting a canister, an old one-way save loading, and the
-measured pace over 30 tiles.
+The Mass Driver line: goods both ways between two paired Drivers and one way from a Driver to a Catcher (which never
+fires), pairing (a third Driver refused, Stand down and re-aiming breaking a pair), an Outpost or Keep refused (and a
+save aimed at one loading stood down), automatic supply of the far end with no goods list, a 50-tile line across the sea
+on Islands (allowed on Sky islands and Four Isles, not in the Hollow), a goods list overriding Auto, a rival's Flak
+bursting a canister, old saves loading, the Catcher kit, a rival's line and its upgrade to a pair, and the measured pace
+over 30 tiles.
 
 ```bash
 node tools/terraform-test.js
@@ -5556,7 +5572,7 @@ Terraforming, stage 3: no seams, beds or anything else until a Seam Drill survey
 deeper survey without power, a Generator's Fuel making it drill at its rate and survey further, a seam worked out going
 spent; a Seed Mast preparing and seeding its beds, sprouting with power, starving without, ripening into Crystal a
 Crystal Tap gathers and the beds seeded again; a growing field drawing the Murmur; a Thermal Plant only beside hot
-ground, powering a drill with no Fuel, powering a Maglev Terminal and a Mass Driver Catcher (a shot on it drawing none of
+ground, powering a drill with no Fuel, powering a Maglev Terminal and a Mass Driver (a shot on it drawing none of
 a fuelled Generator's Fuel; turned off, the Generator's half a Fuel a shot) and never a megastructure (an Orbital Lift
 not boosted, a Deep Core without power); no Seed Mast on Argos; a save mid-process playing on to the same hash, a damaged
 seam refused; and the same game twice giving the same hash.

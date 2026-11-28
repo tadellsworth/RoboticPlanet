@@ -380,39 +380,42 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
 const MAGLEV = { min: 6, max: 40, spacing: 3, gap: 6, cost: { alloy: 1, chip: 0.5, cement: 1 }, time: 3, perLine: 4, hub: 3, bends: 4, maxBent: 60, seg: 3, turn: 120, corner: 0.35, fill: 0.5, wait: 60, least: 2, dwell: 2.5, repair: 20,
   deck: 0.343, head: 0.464, podFrame: 1.0 }; // (drawing: the deck top this far up the screen over a pylon's foot, a Terminal's dock over its tile centre, the pod's frame in tiles)
 /**
- * The Mass Driver and its Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun line that throws sealed canisters of goods
- * in an arc over everything, both ways. The Driver is aimed (b.mdTo) at a Catcher `min` to `max` tiles away: the two
- * are one line, and either end fires to the other (a Catcher may take up to `drivers` Drivers, firing to each in turn). Both
- * are storage. Supply is automatic (mdPlan, every 2 s): the end farther from the Command Base (b.mdFar) stocks what the
- * buildings round it need (b.auto, as a far Rail Station does: within STATION_REACH, nearer it than the Command Base,
- * touching it, by road or on foot), and the other end ships what it lacks (b.mdAuto: {partner id: {good: n}}), out of
- * what its colony holds beyond `reserve` of each (Haulers bring it, up to `hopper`); what the far end holds beyond its
- * own needs that nothing round it uses goes home the other way. A goods list (b.mdSend: up to `goods` goods, each with
- * the reserve its colony keeps at home) overrides an end's automatic shipments: it sends just those. A Driver may be
- * aimed at one of its colony's `forts` (an Outpost or a Keep) instead, one way: it keeps that fort's Ammo (and a Keep's
- * Crystal) topped up. A full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more, or
- * the whole of a smaller need); the coils charge for `charge` s, then it fires, `reload` s between shots at each end,
- * or `reloadLand` s when a robot could walk from one end to the other (mdOverland: then it is a shortcut over land, not
- * a crossing; the owner, Nov 26 2026). A Catcher takes `drivers` Drivers at most.
- * The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high at full range. Fuel
- * flies in sealed drums (no Crude), shipped beyond a reserve of `fuelReserve` (the far end's Generator powers its shots
- * home); a rival's automatic shipments keep `aiReserve` of a good, not `reserve` (its Alloy and Chips never sit in
- * storage). Power: an end fires only with a Generator (with Fuel) within the Generator's radius, or a Thermal Plant
- * within its reach (magPowered, thermalNear), and each shot takes `shot` seconds of that Generator's work, half a Fuel
- * (mdShotPower; the economy audit of Nov 26 2026, owner-approved), none on a Thermal Plant's; without either it waits
- * (it still catches). The far end's cap, `full`, counts each good on its own. A canister has `hp`: an enemy Flak Gun
- * can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out of reach), and
- * its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as crates. None in
- * the Hollow (nothing flies under the cavern roof).
+ * The Mass Driver and the Catcher (BDEFS.mdriver, BDEFS.catcher): a coil-gun line that throws sealed canisters of goods
+ * in an arc over everything. A Driver is aimed (b.mdTo) at another of its colony's Drivers or at one of its Catchers,
+ * `min` to `max` tiles away, and at nothing else (the owner, Nov 28 2026). Two Drivers aimed at each other are one
+ * two-way line: each fires to the other, off the end of its ramp that faces it. A Driver is in one line at most: aiming
+ * at a Driver pairs the two (it is aimed back), one already in a line is refused, and standing down either end (or
+ * aiming it elsewhere) breaks the pair for both. A Driver and a Catcher are a one-way line: the Catcher only catches
+ * (it never fires, so it needs no power); a Catcher takes up to `drivers` Drivers, all delivering to it. Both are
+ * storage. Supply is automatic (mdPlan, every 2 s): the end farther from the Command Base (b.mdFar), when goods fly to
+ * it, stocks what the buildings round it need (b.auto, as a far Rail Station does: within STATION_REACH, nearer it than
+ * the Command Base, touching it, by road or on foot), and the Driver at the other end ships what it lacks (b.mdAuto:
+ * {partner id: {good: n}}), out of what its colony holds beyond `reserve` of each (Haulers bring it, up to `hopper`);
+ * what a far Driver holds beyond its own needs that nothing round it uses goes home. A goods list (b.mdSend: up to
+ * `goods` goods, each with the reserve its colony keeps at home) overrides a Driver's automatic shipments: it sends just
+ * those. A full canister is `load` goods (a part load goes after `partWait` s with `partMin` or more, or the whole of a
+ * smaller need); the coils charge for `charge` s, then it fires, `reload` s between shots at each Driver, or `reloadLand`
+ * s when a robot could walk from one end to the other (mdOverland: then it is a shortcut over land, not a crossing; the
+ * owner, Nov 26 2026). The flight takes `flight` s at full range (`flightMin` at the shortest), its arc `arc` tiles high
+ * at full range. Fuel flies in sealed drums (no Crude), shipped beyond a reserve of `fuelReserve` (a far Driver's
+ * Generator powers its shots home); a rival's automatic shipments keep `aiReserve` of a good, not `reserve` (its Alloy
+ * and Chips never sit in storage). Power: a Driver fires only with a Generator (with Fuel) within the Generator's radius,
+ * or a Thermal Plant within its reach (magPowered, thermalNear), and each shot takes `shot` seconds of that Generator's
+ * work, half a Fuel (mdShotPower; the economy audit of Nov 26 2026, owner-approved), none on a Thermal Plant's; without
+ * either it waits (it still catches). The far end's cap, `full`, counts each good on its own. A canister has `hp`: an
+ * enemy Flak Gun can burst it in flight (a canister low over either end, the first and last `low` of its flight, is out
+ * of reach), and its cargo falls as crates where it comes down; if its end is gone when it lands, it lands anyway, as
+ * crates. None in the Hollow (nothing flies under the cavern roof).
  * A Driver can also throw a Catcher kit (mdKit: the Catcher's cost, loaded at the Driver) to open ground `min` to `max`
  * tiles away that no one else holds (no Trade Post's ground): it lands as a Catcher site that assembles itself in
  * `kitBuild` s (no Worker needed), claims the land `kitClaim` tiles round it (b.claim, as a Port founded by sea does),
- * and the Driver is aimed at it: a foothold on an island or a mesa with none. Flak can burst it like any canister.
+ * and the Driver is aimed at it: a foothold on an island or a mesa with none.
  * A far end nothing collects from fills up: past `full` of a good there (or what it keeps, if more), no more of it is
- * shipped there ("Far end full"). The rival builds a pair to an island or mesa it holds that no road reaches (aiMassDriver).
+ * shipped there ("Far end full"). The rival builds a line to an island or mesa it holds that no road reaches
+ * (aiMassDriver): a Catcher (or a kit) for supply one way, two Drivers when the far end has goods to send home.
  */
 const MASSDRIVER = { min: 12, max: 50, kitClaim: 3, kitBuild: 20, full: 64, goods: 3, reserve: 20, fuelReserve: 6, aiReserve: 6, shot: 20, reserveStep: 10, reserveMax: 200, hopper: 32, load: 16, partWait: 20, partMin: 4, charge: 1.6, reload: 8, reloadLand: 10, drivers: 2,
-  flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, forts: ['outpost', 'keep'], muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
+  flight: 4, flightMin: 2, arc: 6, hp: 4, low: 0.1, feed: 1, muzzle: 0.55, catch: 0.42 }; // (drawing: the muzzle this far up the screen over the Driver's tile centre, the cradle over the Catcher's)
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground you hold or no-one does; it climbs a level at a time over a Ramp (RAIL_GRADE
@@ -655,7 +658,7 @@ const SEAM = { cell: 12, chance: 0.6, size: [3, 6], crystalShare: 0.4, ore: 60, 
 const SEED = { reach: 2, most: 6, prepEvery: 10, seed: 1, hopper: 3, step: 5, sprout: 24, ripe: 84, yield: 3, murmur: 1, apart: 5 };
 /*
  * THERMAL: a Thermal Plant (BDEFS.thermal) is a Generator that burns no Fuel: it powers what's round it the same way
- * (the factories a third faster, a Seam Drill's or Seed Mast's power, and a Maglev Terminal's or Mass Driver end's,
+ * (the factories a third faster, a Seam Drill's or Seed Mast's power, and a Maglev Terminal's or Mass Driver's,
  * whose shots then cost no Fuel: thermalNear), but never a megastructure (the owner, Nov 27 2026: a Fuel-free Deep
  * Core on volcanic maps would be too strong; they read only a Generator's Fuel), within `radius` (a tile less than a
  * Generator's), while lava, the Cinderlands' or Steamwells' hot water, or a Steamwells vent touches its tile
@@ -2088,7 +2091,7 @@ const BDEFS = {
   },
   thermal: {
     name: 'Thermal Plant', short: 'Thermal',
-    desc: 'Power from the heat below, with no Fuel: built right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells vent. Like a Generator, every factory, Refinery, Oil Pump and Bot Foundry within 3 tiles works a third faster while it runs, and it powers a Seam Drill, a Seed Mast, a Maglev Terminal or a Mass Driver end (a shot on it costs no Fuel). It never powers a megastructure: those want a Generator\'s Fuel.',
+    desc: 'Power from the heat below, with no Fuel: built right beside lava, the hot water of the Cinderlands or the Steamwells, or a Steamwells vent. Like a Generator, every factory, Refinery, Oil Pump and Bot Foundry within 3 tiles works a third faster while it runs, and it powers a Seam Drill, a Seed Mast, a Maglev Terminal or a Mass Driver (a shot on it costs no Fuel). It never powers a megastructure: those want a Generator\'s Fuel.',
     cost: { cement: 6, alloy: 3, chip: 1 }, t3: true, burner: { radius: THERMAL.radius, boost: 1 / 3, perFuel: 0, heat: true }, armor: 10, buildTime: 12,
   },
   // Terraforming, stage 4 (SLUICE, SAP): on the Terraform tab too, `t4`; the player's alone. A Sluice is two tiles (long).
@@ -2166,11 +2169,11 @@ const BDEFS = {
   },
   mdriver: {
     name: 'Mass Driver', short: 'Driver',
-    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces its Catcher). Aim it at a Catcher 12 to 50 tiles away, across water, cliffs or anything: the two are one line, and canisters of 16 goods fly both ways, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Supply is automatic: the far end stocks what the buildings round it need, the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what the far end can spare comes home. A goods list on its panel overrides that. Or aim it at an Outpost or Keep to keep its Ammo topped up. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. Each end fires only with a Generator within 4 tiles, and each shot draws half a Fuel from it (a Thermal Plant within 3 powers it with no Fuel). An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
+    desc: 'Storage at the breech of a coil-gun rail on a concrete ramp two tiles long (R turns it as you place it: east-west or north-south; it fires off whichever end faces the end it is aimed at). Aim it at another of your Mass Drivers or at one of your Catchers, 12 to 50 tiles away, across water, cliffs or anything. Two Drivers aimed at each other are one line both ways: canisters of 16 goods fly from each, a shot every 8 seconds from each end over water, a chasm or cliffs (every 10 seconds when a robot could walk between the ends: a shortcut over land). Aimed at a Catcher it is one way: the Driver throws, the Catcher only catches. A Driver is in one line at most. Supply is automatic: the far end stocks what the buildings round it need, the Driver at the near end ships it from what your colony holds beyond a reserve of 20 (Haulers bring it), and what a far Driver can spare comes home. A goods list on its panel overrides that. With no foothold out there, throw a Catcher kit (the Catcher\'s cost, loaded here) to open ground no one else holds: it assembles itself into a Catcher in 20 seconds and claims a little land. A Driver fires only with a Generator within 4 tiles, and each shot draws half a Fuel from it (a Thermal Plant within 3 powers it with no Fuel). An enemy Flak Gun can burst a canister in flight: its goods fall as crates.',
     cost: { cement: 12, alloy: 10, chip: 5 }, store: true, mdriver: true, long: true, armor: 16, buildTime: 18,
   },
   catcher: {
-    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands, and whose coils throw one back the other way. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need and sends home what they can spare, all by itself. It throws back only with a Generator within 4 tiles (or a Thermal Plant within 3). Buildings touching it are fed by conveyor; one Catcher can take up to two Drivers.',
+    name: 'Catcher', desc: 'Storage under a wide funnel cradle whose four magnetic arms swing in to brake a Mass Driver\'s canister as it lands. It only catches: it never fires, so it needs no Generator. Aim a Mass Driver at it from the Driver\'s panel, 12 to 50 tiles away: out on an island or a mesa, it stocks what the buildings round it need, all by itself. Nothing goes back the other way by canister (Haulers or other transport fetch what it holds; for goods both ways, pair two Mass Drivers instead). Buildings touching it are fed by conveyor; one Catcher can take up to two Drivers, both delivering to it.',
     cost: { cement: 8, alloy: 5, chip: 3 }, store: true, catcher: true, armor: 12, buildTime: 12,
   },
   // The megastructures (LANCE, DOME; the Megastructures setting: megaOn). Both stand on more than one tile (`foot`: a
@@ -3112,7 +3115,7 @@ const FLAVOR = {
   reservoir: 'Reservoir, settlement plan phase 3. Capacity: a town of forty thousand. Condensing. Filling.',
   leveller: 'Grade the site to standard. Standard: level.',
   gup: 'Landing beacon for the arks. Transmitting on all channels. Listening on all channels.',
-  catcher: 'A canister every eight seconds, each way, around the clock, for settlements still on the drawing board.',
+  catcher: 'A canister every eight seconds, around the clock, for settlements still on the drawing board.',
   magpylon: 'Phase 2, structure type 4. Built to the standard, thirty years late.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
   crawlerbase: 'A depot on tracks, parked where the road ends.',

@@ -3389,7 +3389,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     const m = b && b.id && b.built ? siloNuke(b) : null;
     icbm = { m, up: m ? 1 : b && b.id ? (b.built ? siloRise(b, !!b.armed) : 0) : 1 };
   }
-  // A Mass Driver's ramp points along its two tiles toward its Catcher (mdriver-<dir>: e, w, n, s); a Catcher's arms swing in as a
+  // A Mass Driver's ramp points along its two tiles toward the end it is aimed at (mdriver-<dir>: e, w, n, s); a Catcher's arms swing in as a
   // canister lands (catcher-closed).
   if (art && b && b.built && type === 'mdriver') art = artFor('mdriver-' + mdDir(b), owner) || art;
   if (art && b && b.built && type === 'catcher' && mdArmsIn(b)) art = artFor('catcher-closed', owner) || art;
@@ -7528,8 +7528,7 @@ function render(dtReal) {
       const c0 = BDEFS[e.type].long || BDEFS[e.type].foot ? bCentre(e) : null; // (a Mass Driver: drawn over the middle of its two tiles; a megastructure, of its square)
       const cx = ox + (c0 ? c0.x : e.x + 0.5) * z, cy = oy + (c0 ? c0.y : e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
-      if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z);
-      else if (e.built && BDEFS[e.type].catcher) drawCatcherLamps(ctx, e, cx, cy, z);
+      if (e.built && BDEFS[e.type].mdriver) drawMassDriverLamps(ctx, e, cx, cy, z); // (a Catcher never fires: its arms swinging in are its art, catcher-closed)
       if (buildingNightOn(e)) drawStructureMarkers(ctx, e, cx, cy, z);
       if (e.built && (e.mDown || e.mOff) && BDEFS[e.type].mega && R.clean < 2) drawMegaDark(ctx, e, cx, cy, z); // (knocked out: its seize ring; offline: a dark veil)
       if (e.type === 'lander' && R.clean < 2 && fallenBaseOf(e) >= 0) drawFallenBase(ctx, e, cx, cy, z); // (a fallen ally's: its retake ring, FALLEN)
@@ -11953,14 +11952,15 @@ const MD_ART = {
 };
 
 /**
- * Which way Mass Driver b's ramp points: along its two tiles (b.mdAxis), toward the end nearer its Catcher, so an
+ * Which way Mass Driver b's ramp points: along its two tiles (b.mdAxis), toward the end nearer the end it is aimed at (a Catcher, or the Driver it is paired with), so an
  * east-west Driver fires east or west and a north-south one north or south (east, or north, with none yet).
  */
 function mdDir(b) {
   const ns = b && b.mdAxis === 'ns', c = b && b.mdTo ? getE(b.mdTo) : null;
   if (!c || b.x === undefined) return (b && b.mdFace) || (ns ? 'n' : 'e');
   const o = bCentre(b);
-  b.mdFace = ns ? (c.y + 0.5 >= o.y ? 's' : 'n') : (c.x + 0.5 >= o.x ? 'e' : 'w'); // (it keeps pointing that way if its Catcher goes)
+  const t = BDEFS[c.type] && BDEFS[c.type].long ? bCentre(c) : { x: c.x + 0.5, y: c.y + 0.5 }; // (a Driver at the other end: the middle of its two tiles)
+  b.mdFace = ns ? (t.y >= o.y ? 's' : 'n') : (t.x >= o.x ? 'e' : 'w'); // (it keeps pointing that way if its far end goes)
   return b.mdFace;
 }
 
@@ -13187,40 +13187,13 @@ function drawMassDriverLamps(ctx, b, cx, cy, z) {
     ctx.strokeStyle = `rgba(200,232,255,${0.6 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f);
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();
   } else if (S.time - (b.mdCaught ?? -99) < 0.6) {
-    // a canister back from its Catcher: caught at the muzzle, the coils braking it down the rail
+    // a canister from the Driver it is paired with: caught at the muzzle, the coils braking it down the rail
     const f = 1 - (S.time - b.mdCaught) / 0.6, [mx, my] = P(A.m);
     mdGlow(ctx, mx, my, z * 0.4, BLUE, f * 0.7);
     for (let k = A.c.length - 1; k >= 0; k -= 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, f * 0.4 * (k / A.c.length)); }
   } else if (!charging && dark > 0.3 && buildingNightOn(b)) {
     // after dark the coils glow faintly between shots
     for (let k = 0; k < A.c.length; k += 2) { const [x, y] = P(A.c[k]); mdGlow(ctx, x, y, z * 0.12, BLUE, 0.18 * dark); }
-  }
-  ctx.restore();
-}
-
-/**
- * A Catcher throwing a canister back: its cradle's coils gather light as they charge (a blue glow swelling in the
- * funnel, arcs crackling between its arms), then a flash and a ray straight up as it fires. A Driver catching one
- * back flashes at its muzzle (drawMassDriverLamps).
- */
-function drawCatcherLamps(ctx, b, cx, cy, z) {
-  const charging = b.mdFire && b.mdFire > S.time, since = S.time - (b.mdShot ?? -99);
-  if (!charging && since >= 0.5) return;
-  const BLUE = 'rgba(191,227,255,A)', x = cx + MD_ART.cradle[0] * z, y = cy + MD_ART.cradle[1] * z;
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  if (charging) {
-    const p = clamp(1 - (b.mdFire - S.time) / MASSDRIVER.charge, 0, 1);
-    mdGlow(ctx, x, y, z * (0.2 + 0.25 * p), BLUE, 0.25 + 0.45 * p);
-    for (let k = 0; k < 1 + Math.floor(p * 3); k++) {
-      const a0 = (k / 4) * Math.PI * 2 + R.time * 3, a1 = a0 + Math.PI * (0.6 + 0.3 * Math.random());
-      mdBolt(ctx, x + Math.cos(a0) * z * 0.3, y + Math.sin(a0) * z * 0.14, x + Math.cos(a1) * z * 0.3, y + Math.sin(a1) * z * 0.14, Math.max(1, z * 0.01), 5, z * 0.05, 'rgba(120,195,255,1)');
-    }
-  } else {
-    const f = 1 - since / 0.5;
-    mdGlow(ctx, x, y, z * (0.35 + 0.4 * (1 - f)), BLUE, f * 0.85);
-    ctx.strokeStyle = `rgba(200,232,255,${0.5 * f})`; ctx.lineWidth = Math.max(1.5, z * 0.05 * f); ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - z * 0.9); ctx.stroke();
   }
   ctx.restore();
 }
@@ -13246,7 +13219,7 @@ function drawStructureMarkers(ctx, b, x, y, s) {
 function drawMassDrivers(ctx, ox, oy, z, inView) {
   const ui = typeof UI !== 'undefined' ? UI : {}, BLUE = 'rgba(191,227,255,A)';
   ctx.save();
-  // the aiming preview: the Driver's reach (12 to 50 tiles), its Catchers (and forts) ringed, an arc to the one under the pointer
+  // the aiming preview: the Driver's reach (12 to 50 tiles), its Catchers and other Drivers ringed, an arc to the one under the pointer
   const aimB = R.mode === 'mdaim' ? getE(ui.mdAim) : null, selB = getE(R.selected);
   const showLine = (b) => b && !b.dead && BDEFS[b.type] && BDEFS[b.type].mdriver;
   if (showLine(aimB)) {
@@ -13257,17 +13230,17 @@ function drawMassDrivers(ctx, ox, oy, z, inView) {
     for (const r of [MASSDRIVER.min, MASSDRIVER.max]) { ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.stroke(); }
     ctx.setLineDash([]);
     for (const c of S.buildings) {
-      if (c.dead || c.owner !== b.owner || !(BDEFS[c.type].catcher || mdFortType(c.type))) continue;
+      if (c.dead || c === b || c.owner !== b.owner || !mdEnd(c)) continue;
       const ok = !mdAimWhy(b.owner, b, c);
       ctx.strokeStyle = ok ? col : 'rgba(255,107,107,0.7)'; ctx.lineWidth = Math.max(2, z * 0.05);
       ctx.beginPath(); ctx.arc(ox + (c.x + 0.5) * z, oy + (c.y + 0.5) * z, z * 0.7, 0, Math.PI * 2); ctx.stroke();
     }
     const h = R.aimHover;
     if (h) {
-      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = ui.mdKit ? !mdKitWhy(b.owner, b, h.i, h.j) : !!c && (BDEFS[c.type].catcher || mdFortType(c.type)) && !mdAimWhy(b.owner, b, c); // (a Catcher kit: open ground)
+      const c = getE(S.bAt[tIdx(h.i, h.j)]), ok = ui.mdKit ? !mdKitWhy(b.owner, b, h.i, h.j) : !!c && mdEnd(c) && !mdAimWhy(b.owner, b, c); // (a Catcher kit: open ground)
       mdArc(ctx, b, h.i + 0.5, h.j + 0.5, ox, oy, z, ok ? col : '#ff6b6b');
     }
-  } else if (showLine(selB) && mdCatcher(selB)) { const c = mdCatcher(selB); mdArc(ctx, selB, c.x + 0.5, c.y + 0.5, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }
+  } else if (showLine(selB) && mdTarget(selB)) { const c = mdTarget(selB), t = BDEFS[c.type].long ? bCentre(c) : { x: c.x + 0.5, y: c.y + 0.5 }; mdArc(ctx, selB, t.x, t.y, ox, oy, z, PLAYER_COLORS[selB.owner] || '#fff'); }
   ctx.globalCompositeOperation = 'lighter';
   // canisters in flight: the guidance beam from the muzzle toward the Catcher, the canister and its glowing streak
   for (const m of S.cans || []) {

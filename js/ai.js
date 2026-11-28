@@ -1038,7 +1038,7 @@ function aiThink(p) {
     if (!b.paused && have >= hi) setPaused(b, true);
     else if (b.paused && have < lo) setPaused(b, false);
   }
-  // A seized megastructure of its own still owed Alloy or Chips to come online (megaFeeOwed; or a Mass Driver pair's
+  // A seized megastructure of its own still owed Alloy or Chips to come online (megaFeeOwed; or a Mass Driver line's
   // sites or kit it put first, aiMassDriver): the Ammo Plant rests at
   // once, and the Bot Foundry too once the fee has waited a while, so what the Smelters and Chip Fabs make reaches it
   // (they ate it all, and a seized Lance sat a few Alloy and Chips short for ten minutes). The wait scales with the
@@ -2590,30 +2590,55 @@ function aiMaglev(p, me, lander) {
 }
 
 /**
- * A Mass Driver pair (MASSDRIVER) to an island or mesa of its own: on a map of islands, mesas or canyons (aiMdMap), a
+ * A Mass Driver line (MASSDRIVER) to an island or mesa of its own: on a map of islands, mesas or canyons (aiMdMap), a
  * rival holding a fort or store on ground its robots can't walk to from home (an Outpost over a Viaduct, a landing's, a
  * Port founded by sea, a Drop Outpost), and on any other map one no road, Viaduct or ferry reaches, AI_MDRIVER.near
- * to MASSDRIVER.max tiles from its Command Base builds a Driver at home (a Generator by it) and a Catcher by that
- * foothold, or throws a Catcher kit there when its robots can't get there at all; then it aims the Driver at the Catcher and the line supplies itself (mdPlan). The Architect from AI_MDRIVER.from,
- * the others from AI_MDRIVER.others; one pair each; not on Easy. Lost, it tries again after AI_MDRIVER.retry.
+ * to MASSDRIVER.max tiles from its Command Base builds a Driver at home (a Generator by it). At the far end: where its
+ * Workers get (the same area as home, links and all) and the ground round the foothold has mines or the like with goods
+ * to send home (aiMdTwoWay), a second Driver (a Generator by it too), and the two are paired: goods both ways. Otherwise
+ * a Catcher there, or a Catcher kit thrown there when its robots can't get there at all: supply one way, and the Catcher
+ * is the foothold. A line to a Catcher its Workers reach is upgraded later, once mines stand round it: a Driver beside
+ * the Catcher, and the home Driver pairs with it (the Catcher stays, as storage). The line supplies itself (mdPlan).
+ * The Architect from AI_MDRIVER.from, the others from AI_MDRIVER.others; one line each; not on Easy. Lost, it tries
+ * again after AI_MDRIVER.retry. (The owner's Mass Driver rules of Nov 28 2026: a Catcher only catches.)
  */
-const AI_MDRIVER = { from: 600, others: 900, every: 20, near: 16, retry: 300, cement: 10, fuel: 12 };
+const AI_MDRIVER = { from: 600, others: 900, every: 20, near: 16, retry: 300, cement: 10, fuel: 12, mines: 1 };
 function aiMdMap() { const sh = SHAPE_PRESETS[S.settings.shape] || {}; return !!(sh.islands || sh.sky || /Canyon/.test(sh.name || '')); }
+/** Has player p goods to send home from round (x, y): AI_MDRIVER.mines or more of its mines, quarries and the like (an output and no input) there? */
+function aiMdTwoWay(p, x, y) {
+  const z = S.zone[tIdx(x, y)], r2 = (STATION_REACH + 3) * (STATION_REACH + 3);
+  let n = 0;
+  for (const b of S.buildings) {
+    const d = BDEFS[b.type];
+    if (b.dead || !b.built || b.owner !== p || !d.out || d.inp || d.store || S.zone[tIdx(b.x, b.y)] !== z || dist2(b.x, b.y, x, y) > r2) continue;
+    if (++n >= AI_MDRIVER.mines) return true;
+  }
+  return false;
+}
+/** A Driver site for player p by foothold T, its ramp toward (x, y) (the Driver at the other end): its id, or 0. */
+function aiMdFarDriver(p, T, x, y) {
+  for (const [fi, fj] of aiMdFarSpots(p, T, x, y)) {
+    const axis = Math.abs(x - fi) >= Math.abs(y - fj) ? 'ew' : 'ns', [i2, j2] = longTile(fi, fj, axis);
+    if (!inMap(i2, j2) || dist(i2, j2, x, y) < MASSDRIVER.min || !canPlace(p, 'mdriver', fi, fj, true, axis).ok || wouldBlock(tIdx(fi, fj)) || wouldBlock(tIdx(i2, j2))) continue;
+    const q = placeSite(p, 'mdriver', fi, fj, undefined, false, axis);
+    if (q && q.ok !== false) return S.bAt[tIdx(fi, fj)] || 0;
+  }
+  return 0;
+}
 function aiMassDriver(p, me, lander) {
   const P = S.players[p], A = AI_MDRIVER, M = MASSDRIVER;
   if (S.difficulty === 'easy' || S.time < (P.style === 'tycoon' ? A.from : A.others) || aiBan(p, 'mdriver') || aiBan(p, 'catcher') || S.time - (P.lastMd || -999) < A.every) return;
   P.lastMd = S.time;
-  const pair = P.mdPair;
+  const pair = P.mdPair, hz = S.zone[tIdx(lander.x, lander.y)];
   if (pair) {
     const D = getE(pair.d);
     if (!D || D.dead || D.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
     // Its sites (and a kit's load) come first: High priority, back to Normal once built (sitePrio), as for a
     // megastructure's (its Alloy and Chips otherwise all went to the Foundry and the Missile programme, and the sites
     // were given up unbuilt after seven minutes on Sky islands).
-    for (const b of [D, getE(pair.c), ...me.filter((g) => g.type === 'generator' && !g.built && dist(g.x, g.y, D.x, D.y) <= 3)]) if (b && !b.dead && !b.built && !b.prio) { b.prio = 'high'; b.sitePrio = 1; }
+    for (const b of [D, getE(pair.c), getE(pair.up), ...me.filter((g) => g.type === 'generator' && !g.built && dist(g.x, g.y, D.x, D.y) <= 3)]) if (b && !b.dead && !b.built && !b.prio) { b.prio = 'high'; b.sitePrio = 1; }
     if (D.built && D.kitPrio && !D.mdKit) { delete D.prio; delete D.kitPrio; }
-    // A Generator by the Driver (it fires only with power), and by its Catcher once it stands where Workers get (so
-    // the far end's spare goes home too).
+    // A Generator by each Driver (a Driver fires only with power; a Catcher needs none).
     const gen = (E) => {
       if (me.some((g) => g.type === 'generator' && !g.dead && dist(g.x, g.y, E.x, E.y) <= (g.built ? BDEFS.generator.burner.radius : 3))) return;
       let best = null, bd = Infinity;
@@ -2622,15 +2647,35 @@ function aiMassDriver(p, me, lander) {
     };
     gen(D);
     if (!D.built) return;
-    const C = pair.c ? getE(pair.c) : null, aimed = D.mdTo ? getE(D.mdTo) : null;
-    if (aimed && !aimed.dead && aimed.owner === p && BDEFS[aimed.type].catcher) { // (the line stands; mdPlan runs it)
-      pair.c = aimed.id;
-      if (aimed.built && S.zone[tIdx(aimed.x, aimed.y)] === S.zone[tIdx(lander.x, lander.y)] && (playerGoods(p).fuel || 0) >= A.fuel) gen(aimed);
+    const C = pair.c ? getE(pair.c) : null, up = pair.up ? getE(pair.up) : null, aimed = mdTarget(D);
+    const fuelOk = (playerGoods(p).fuel || 0) >= A.fuel;
+    // The upgrade: a Driver going up beside its Catcher. Once it stands, the two Drivers are paired.
+    if (up && !up.dead && up.owner === p) {
+      if (up.built) { if (!setMdAim(p, D, up)) { pair.c = up.id; pair.up = 0; } else if (mdBusy(up, D)) pair.up = 0; }
+      else if (fuelOk) gen(up);
       return;
     }
-    if (C && !C.dead && C.owner === p) { if (C.built) setMdAim(p, D, C); return; }
+    if (pair.up) pair.up = 0; // (lost while it went up)
+    if (aimed && BDEFS[aimed.type].mdriver && mdLinks(D).includes(aimed)) { // (a pair: mdPlan runs it)
+      pair.c = aimed.id;
+      if (S.zone[tIdx(aimed.x, aimed.y)] === hz && fuelOk) gen(aimed);
+      return;
+    }
+    if (aimed && BDEFS[aimed.type].catcher) { // (one way: mdPlan runs it; a Driver beside the Catcher once it pays)
+      pair.c = aimed.id;
+      if (S.zone[tIdx(aimed.x, aimed.y)] === hz && fuelOk && aiSiteCount(p) < 2 && (playerGoods(p).cement || 0) >= BDEFS.mdriver.cost.cement + A.cement && aiMdTwoWay(p, aimed.x, aimed.y)) {
+        const id = aiMdFarDriver(p, aimed, D.x, D.y);
+        if (id) pair.up = id;
+      }
+      return;
+    }
+    if (C && !C.dead && C.owner === p) {
+      if (C.built && !setMdAim(p, D, C)) return;
+      if (BDEFS[C.type].mdriver && fuelOk) gen(C); // (the far Driver's Generator goes up with it)
+      return;
+    }
     if (D.mdKit || (S.cans || []).some((m) => m.kit && m.from === D.id)) return; // (a kit on its way)
-    // No Catcher (or it was lost): a kit to the foothold's ground, when there's one to throw it to and it can pay.
+    // No far end (or it was lost): a kit to the foothold's ground, when there's one to throw it to and it can pay.
     const T = getE(pair.to);
     if (!T || T.dead || T.owner !== p) { P.mdPair = null; P.mdRetry = S.time + A.retry; return; }
     for (const [i, j] of aiMdFarSpots(p, T, D.x, D.y)) if (!mdKitWhy(p, D, i, j)) { if (!setMdKit(p, D, i, j) && !D.prio) { D.prio = 'high'; D.kitPrio = 1; } return; }
@@ -2638,7 +2683,7 @@ function aiMassDriver(p, me, lander) {
   }
   if (S.time < (P.mdRetry || 0) || me.some((b) => b.type === 'mdriver')) return;
   // The foothold: the nearest of its own forts and stores out on ground its robots can't walk to from home, no road joining it.
-  const wz = walkZones(), hw = wz[tIdx(lander.x, lander.y)], hz = S.zone[tIdx(lander.x, lander.y)], onMap = aiMdMap();
+  const wz = walkZones(), hw = wz[tIdx(lander.x, lander.y)], onMap = aiMdMap();
   let T = null, bt = Infinity;
   for (const b of me) {
     const d = BDEFS[b.type];
@@ -2673,11 +2718,13 @@ function aiMassDriver(p, me, lander) {
     if (!fars.length) continue;
     const r = placeSite(p, 'mdriver', i, j, undefined, false, axis);
     if (!r || r.ok === false) return;
-    P.mdPair = { d: S.bAt[tIdx(i, j)], to: T.id, c: 0 };
-    // A Catcher site by the foothold if its Workers and Haulers get there (a Viaduct, a ferry line: the same area as
-    // home, links and all); otherwise a kit, thrown once the Driver stands.
+    P.mdPair = { d: S.bAt[tIdx(i, j)], to: T.id, c: 0, up: 0 };
+    // Where its Workers and Haulers get to the foothold (a Viaduct, a ferry line: the same area as home, links and
+    // all): a second Driver there when that ground has goods to send home, else a Catcher; otherwise a kit, thrown
+    // once the Driver stands.
     if (S.zone[tIdx(T.x, T.y)] === hz) {
-      for (const [fi, fj] of fars) {
+      if (aiMdTwoWay(p, T.x, T.y)) P.mdPair.c = aiMdFarDriver(p, T, i, j);
+      if (!P.mdPair.c) for (const [fi, fj] of fars) {
         if (!canPlace(p, 'catcher', fi, fj, true).ok || wouldBlock(tIdx(fi, fj))) continue;
         const q = placeSite(p, 'catcher', fi, fj);
         if (q && q.ok !== false) { P.mdPair.c = S.bAt[tIdx(fi, fj)]; break; }
@@ -2687,7 +2734,7 @@ function aiMassDriver(p, me, lander) {
   }
 }
 
-/** Spots by foothold T (2 to 5 tiles off, on its ground) for a Catcher or a kit, MASSDRIVER.min + 1 to max - 1 tiles from (x, y): nearest T first. */
+/** Spots by foothold T (2 to 5 tiles off, on its ground) for a Catcher, a kit or a far Driver, MASSDRIVER.min + 1 to max - 1 tiles from (x, y): nearest T first. */
 function aiMdFarSpots(p, T, x, y) {
   const M = MASSDRIVER, z = S.zone[tIdx(T.x, T.y)], out = [];
   for (let j = T.y - 5; j <= T.y + 5; j++) for (let i = T.x - 5; i <= T.x + 5; i++) {

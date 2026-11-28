@@ -127,16 +127,16 @@ const ORDERS = {
   cancelMove(p, id) { const b = ownB(p, id); if (b && b.moving) cancelMove(b); },
   pack(p, id) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mobile) return 0; const u = packCrawler(b); return u ? u.id : 0; },
   gate(p, id) { const b = ownB(p, id); return b ? wallToGate(p, b) : 'That Wall is gone.'; },
-  /** Aim Mass Driver `id` at Catcher `to`, or an Outpost or Keep to keep supplied (0: stand down). '' or why not. */
-  mdAim(p, id, to) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; const c = to ? ownB(p, to) : null; if (to && !c) return 'Tap one of your Catchers.'; return setMdAim(p, b, c); },
+  /** Aim Mass Driver `id` at Catcher `to`, or pair it with Mass Driver `to` (0: stand down; a pair breaks both ways). '' or why not. */
+  mdAim(p, id, to) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; const c = to ? ownB(p, to) : null; if (to && !c) return 'Tap one of your Catchers, or another of your Mass Drivers.'; return setMdAim(p, b, c); },
   /** Mass Driver `id` throws a Catcher kit to tile (i, j), paid from storage now (i < 0: the kit not yet thrown is called off). '' or why not. */
   mdKit(p, id, i, j) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; i = Math.floor(+i); j = Math.floor(+j); if (!Number.isFinite(i) || !Number.isFinite(j)) return 'Outside the map.'; return setMdKit(p, b, i, j); },
-  /** Send good g from Mass Driver or Catcher `id` (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. */
-  mdSend(p, id, g, on) { const b = ownB(p, id); if (!b || !mdEnd(b)) return 'That Mass Driver is gone.'; return setMdSend(b, String(g), !!on); },
-  /** Mass Driver or Catcher `id` back to automatic supply (its goods list goes). */
-  mdAuto(p, id) { const b = ownB(p, id); if (!b || !mdEnd(b)) return 'That Mass Driver is gone.'; return setMdAuto(b); },
-  /** The reserve of good g Mass Driver or Catcher `id` leaves at home, d more (or less). */
-  mdReserve(p, id, g, d) { const b = ownB(p, id); if (b && mdEnd(b)) setMdReserve(b, String(g), +d || 0); },
+  /** Send good g from Mass Driver `id` (on), or stop sending it: its goods list, which overrides automatic supply. '' or why not. (A Catcher sends nothing.) */
+  mdSend(p, id, g, on) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; return setMdSend(b, String(g), !!on); },
+  /** Mass Driver `id` back to automatic supply (its goods list goes). */
+  mdAuto(p, id) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mdriver) return 'That Mass Driver is gone.'; return setMdAuto(b); },
+  /** The reserve of good g Mass Driver `id` leaves at home, d more (or less). */
+  mdReserve(p, id, g, d) { const b = ownB(p, id); if (b && BDEFS[b.type].mdriver) setMdReserve(b, String(g), +d || 0); },
   ferryLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Port is gone.'; return setFerryLine(b, to ? ownB(p, to) : null); },
   /**
    * Plan a Maglev line from Maglev Terminal `id` (built, with a line to spare) to tile (bi, bj): the far Terminal (or a

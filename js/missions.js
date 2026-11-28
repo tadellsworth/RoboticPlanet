@@ -1148,12 +1148,12 @@ const MISSIONS = [
   },
   {
     id: 'driver', name: 'The Schedule', chapter: 'Industry and Trade',
-    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver and a Catcher, and keep the camp supplied over everything, on the old schedule.',
+    brief: 'A survey camp waits far to the north, at the end of a long road. Build a Mass Driver at home and another at the camp, pair them, and keep the camp supplied over everything, on the old schedule.',
     intro: [
-      'A <b>Mass Driver</b> and a <b>Catcher</b> 12 to 50 tiles apart are one line: canisters of goods fly both ways, over anything.',
-      'On the Driver\'s panel, <b>Aim</b>, then tap your Catcher. Supply is automatic: the far end stocks what the buildings round it need.',
-      'Each end fires only with a <b>Generator</b> (with Fuel) within 4 tiles, and every shot draws half a Fuel from it (a Thermal Plant within 3 needs none). A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
-      'What the far end can spare flies home. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
+      'Two <b>Mass Drivers</b> 12 to 50 tiles apart, aimed at each other, are one line: canisters of goods fly both ways, over anything.',
+      'On a Driver\'s panel, <b>Aim</b>, then tap the other Driver: the two are paired. A Driver is in one line at most. Supply is automatic: the far end stocks what the buildings round it need, and what it can spare flies home.',
+      'Each Driver fires only with a <b>Generator</b> (with Fuel) within 4 tiles, and every shot draws half a Fuel from it (a Thermal Plant within 3 needs none). A canister of 16 goods flies every 10 seconds from each end over land (every 8 across water or a chasm).',
+      'A <b>Catcher</b> is the cheaper end: it only catches. Aim a Driver at it for supply one way; it needs no power, and nothing comes back. A <b>Goods list</b> sends just what you pick. Enemy Flak can burst a canister.',
       'No foothold out there? A Driver throws a <b>Catcher kit</b> to open ground: it assembles itself into a Catcher.',
     ],
     mode: 'colony', seed: 7321, size: 2, rough: 1, rich: 3, biome: 'savanna', shape: 0, limit: [0, 0, 30],
@@ -1168,7 +1168,7 @@ const MISSIONS = [
       }
       computeTerritory();
       if (camp) { const route = roadRouteTo(0, camp) || []; for (const t of route) setRoad(t % S.W, (t / S.W) | 0, true, 0); computeTerritory(); }
-      // The camp's survey samples, crated beside it: Haulers take them to the nearest storage (the Catcher, once it stands).
+      // The camp's survey samples, crated beside it: Haulers take them to the nearest storage (the camp's Mass Driver, once it stands).
       let crate = null;
       if (camp) for (let r = 2; r <= 4 && !crate; r++) for (let j = camp.y - r; j <= camp.y + r && !crate; j++) for (let i = camp.x - r; i <= camp.x + r && !crate; i++) {
         const t = inMap(i, j) ? tIdx(i, j) : -1;
@@ -1181,27 +1181,30 @@ const MISSIONS = [
     },
     goals: [
       { kind: 'built', type: 'mdriver', n: 1,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Mass Driver</b> (<kbd>V</kbd>) by a road; <kbd>R</kbd> turns it.',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Mass Driver</b> (<kbd>V</kbd>) by a road at home; <kbd>R</kbd> turns it.',
         ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='mdriver']" },
-      { kind: 'built', type: 'catcher', n: 1,
-        hint: '<b>Build</b> → <b>Move</b> → <b>Catcher</b> (<kbd>C</kbd>) by the survey camp\'s Outpost, far to the north.',
-        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='catcher']" },
-      { kind: 'mdAim', n: 1, text: 'Aim the Mass Driver at the Catcher', at: 'mdriver',
-        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdCatcher(b) && BDEFS[mdCatcher(b).type].catcher) ? 1 : 0),
-        hint: 'Tap the <b>Mass Driver</b> → <b>Aim</b>, then tap your Catcher in the north.',
+      { kind: 'built', type: 'mdriver', n: 2, text: 'Build a second Mass Driver at the survey camp',
+        hint: '<b>Build</b> → <b>Move</b> → <b>Mass Driver</b> (<kbd>V</kbd>) right by the survey camp\'s crates, far to the north.',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='mdriver']" },
+      { kind: 'mdAim', n: 1, text: 'Pair the two Mass Drivers', at: 'mdriver',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && mdLinks(b).some((o) => BDEFS[o.type].mdriver)) ? 1 : 0),
+        hint: 'Tap the home <b>Mass Driver</b> → <b>Aim</b>, then tap the camp\'s Driver: each is aimed at the other.',
         ui: '#sh-mdaim' },
-      { kind: 'mdPower', n: 1, text: 'Power both ends: a Generator by each', at: 'catcher',
-        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && magPowered(b) && mdCatcher(b) && magPowered(mdCatcher(b))) ? 1 : 0),
-        hint: 'A <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each end: half a Fuel a shot.',
+      { kind: 'mdPower', n: 1, text: 'Power both Drivers: a Generator by each', at: 'mdriver',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].mdriver && magPowered(b) && mdLinks(b).some((o) => BDEFS[o.type].mdriver && magPowered(o))) ? 1 : 0),
+        hint: 'A <b>Generator</b> (<kbd>B</kbd> <kbd>2</kbd> <kbd>G</kbd>) within 4 tiles of each Driver: half a Fuel a shot.',
         ui: "#btn-build, #build-tabs [data-g='make'], .bcard[data-t='generator']" },
-      { kind: 'mdFreight', n: [16, 24, 32], text: 'Catch {n} goods by canister', at: 'catcher',
-        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].catcher ? b.mdGot || 0 : 0), 0),
-        hint: 'Auto ships what the camp needs. For more: Driver → <b>Goods list</b> → <b>Cement</b>.',
+      { kind: 'mdFreight', n: [16, 24, 32], text: 'Throw {n} goods out to the camp', at: 'mdriver',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].mdriver && b.mdFar ? b.mdGot || 0 : 0), 0),
+        hint: 'Auto ships what the camp needs. For more: home Driver → <b>Goods list</b> → <b>Cement</b>.',
         ui: "#sh-mdmode [data-v='list'], #sh-mdadd [data-g='cement']" },
       { kind: 'mdBack', n: [8, 16, 24], text: 'Throw {n} goods back home', at: 'mdriver',
-        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].mdriver ? b.mdGot || 0 : 0), 0),
-        hint: 'Haulers crate the camp\'s survey Crystal into the Catcher, and its spare flies home. Keep it powered.',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && BDEFS[b.type].mdriver && !b.mdFar ? b.mdGot || 0 : 0), 0),
+        hint: 'Haulers crate the camp\'s survey Crystal into the camp\'s Driver, and its spare flies home. Keep both powered.',
         ui: '#sh-md' },
+      { kind: 'built', type: 'catcher', n: 1, text: 'Build a Catcher: an end that only catches',
+        hint: '<b>Build</b> → <b>Move</b> → <b>Catcher</b> (<kbd>C</kbd>): cheaper, no power, but nothing flies back from it.',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='catcher']" },
       { kind: 'mdKit', n: 1, text: 'Throw a Catcher kit to open ground', at: 'mdriver',
         count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].catcher && b.claim > 0) ? 1 : 0),
         hint: 'Mass Driver → <b>Throw a Catcher kit</b>, then open ground 12 to 50 tiles off: it builds itself.',

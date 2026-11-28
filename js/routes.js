@@ -7,7 +7,7 @@
  *    could take a Ramp, red where the drop is two levels or more); Ramps, fords, bridges and tunnels marked; and the
  *    narrow gaps (RT_GATE_W tiles or less, with open ground either side) as bright gates. Viaducts, Ropeways, saps and
  *    Mass Driver lines are drawn as links between their two ends.
- *  - Approach routes: from each rival's Command Base, its nearest armed robot and its Mass Driver Catchers (the
+ *  - Approach routes: from each rival's Command Base, its nearest armed robot and its Mass Driver landings (the
  *    Murmur's nests in a colony), the route its army would march to your Command Base and key buildings, found with
  *    the game's own route search (findPath, with the options a rival's army marches with: earthworks, groves, the
  *    cover of your guns, breaking through walls). Where a route comes into your land with nothing of yours covering
@@ -93,7 +93,7 @@ function rtFoes(me) {
 
 /**
  * Where the routes start, for the mover: [{ x, y, p, kind, label }]. Ground: each rival's Command Base, its armed
- * robot nearest your base (when well clear of the base) and its Mass Driver Catchers; the Murmur's nests if there's
+ * robot nearest your base (when well clear of the base) and its Mass Driver landings (Catchers, far Drivers); the Murmur's nests if there's
  * no rival. Air: rival Airfields and bases. Sea: rival Ports.
  */
 function rtOrigins(me, mover, home) {
@@ -105,7 +105,7 @@ function rtOrigins(me, mover, home) {
     if (mover === 'air') { for (const b of S.buildings) if (!b.dead && b.built && b.owner === p && BDEFS[b.type].airfield) add(b.x, b.y, p, 'airfield', 'Airfield'); }
     if (L && !L.dead && L.owner === p) add(L.x, L.y, p, 'base', 'Command Base');
     if (mover !== 'ground') continue;
-    for (const b of S.buildings) if (!b.dead && b.built && b.owner === p && BDEFS[b.type].catcher) add(b.x, b.y, p, 'catcher', 'Mass Driver landing');
+    for (const b of S.buildings) if (!b.dead && b.built && b.owner === p && (BDEFS[b.type].catcher || (BDEFS[b.type].mdriver && b.mdFar))) add(b.x, b.y, p, 'catcher', 'Mass Driver landing'); // (its Catchers and far Drivers)
     let best = null, bd = Infinity;
     for (const u of S.bots) {
       if (u.dead || u.owner !== p || u.inside || !isArmy(u) || BOTS[u.type].air || BOTS[u.type].sea || !botArmed(u)) continue;
@@ -320,7 +320,7 @@ function rtLinks() {
     if (b.type === 'viaduct') { u = viaLink(t); kind = 'viaduct'; }
     else if (b.type === 'ropeway') { u = ropeLink(t); kind = 'ropeway'; }
     else if (def.saphead && typeof sapLink === 'function') { u = sapLink(t, b.owner); kind = 'sap'; }
-    else if (def.mdriver && typeof mdCatcher === 'function') { const c = mdCatcher(b); if (c) u = tIdx(c.x, c.y); kind = 'driver'; }
+    else if (def.mdriver && typeof mdTarget === 'function') { const c = mdTarget(b); if (c) u = tIdx(c.x, c.y); kind = 'driver'; }
     if (u < 0) continue;
     const key = Math.min(t, u) + ':' + Math.max(t, u);
     if (seen.has(key)) continue;

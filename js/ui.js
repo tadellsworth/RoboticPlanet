@@ -5733,7 +5733,7 @@ function mdSection(b) {
   return `<div class="section-label">${BDEFS[b.type].mdriver ? 'Mass Driver' : 'Catcher'}</div><div id="sh-md"></div>`;
 }
 
-/** Where Catcher (or fort) c is, for a panel: from the Command Base. */
+/** Where Catcher or Mass Driver c is, for a panel: from the Command Base. */
 function mdWhere(c) {
   const L = getE(S.players[c.owner] && S.players[c.owner].lander);
   return L && !L.dead ? `the ${BDEFS[c.type].name} ${dirText(L, c)} of the Command Base` : `the ${BDEFS[c.type].name}`;
@@ -5743,13 +5743,13 @@ function mdWhere(c) {
 function renderMdSection(b) {
   const el = $('sh-md');
   if (!el) return;
-  const M = MASSDRIVER, def = BDEFS[b.type], drv = !!def.mdriver, pow = magPowered(b), list = b.mdSend || null;
-  const T = drv && b.mdTo ? getE(b.mdTo) : null, live = T && !T.dead && T.owner === b.owner && (BDEFS[T.type].catcher || mdFortType(T.type)) ? T : null;
-  const fort = !!(live && mdFortType(live.type)), ps = mdPartners(b), far = !!b.mdFar, manual = !!list || UI.mdList === b.id;
+  const M = MASSDRIVER, def = BDEFS[b.type], drv = !!def.mdriver, pow = drv && magPowered(b), list = b.mdSend || null;
+  const T = drv && b.mdTo ? getE(b.mdTo) : null, live = T && !T.dead && T.owner === b.owner && mdEnd(T) ? T : null;
+  const pair = !!(live && BDEFS[live.type].mdriver), ps = mdLinks(b), far = !!b.mdFar, manual = !!list || UI.mdList === b.id;
   const ships = mdSendGoods(b).map((g) => [g, list ? Math.floor(b.stock[g] || 0) : mdAutoN(b, g)]);
-  const served = far ? S.buildings.filter((c) => !c.dead && c.owner === b.owner && !BDEFS[c.type].store && b.auto && needsOf(c).some(([g]) => b.auto[g]) && dist(c.x, c.y, b.x, b.y) <= STATION_REACH).length : 0;
-  const rates = ps.map((o) => mdReload(b, o));
-  const full = [...new Set(ps.flatMap((o) => mdFullGoods(b, o)))], kit = drv ? (b.mdKit ? 'load' : (S.cans || []).some((m) => m.kit && m.from === b.id) ? 'fly' : '') : '';
+  const served = far && mdFed(b) ? S.buildings.filter((c) => !c.dead && c.owner === b.owner && !BDEFS[c.type].store && b.auto && needsOf(c).some(([g]) => b.auto[g]) && dist(c.x, c.y, b.x, b.y) <= STATION_REACH).length : 0;
+  const rates = drv ? ps.map((o) => mdReload(b, o)) : [];
+  const full = drv ? [...new Set(ps.flatMap((o) => mdFullGoods(b, o)))] : [], kit = drv ? (b.mdKit ? 'load' : (S.cans || []).some((m) => m.kit && m.from === b.id) ? 'fly' : '') : '';
   const sig = JSON.stringify([b.mdTo, live && live.built, ps.map((o) => o.id), rates, pow, far, list, manual, ships, b.auto, served, b.mdSent || 0, b.mdGot || 0, full, kit, b.mdKit, b.mdKit ? Object.keys(BDEFS.catcher.cost).map((g) => Math.floor(b.stock[g] || 0)) : 0]);
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
@@ -5757,32 +5757,38 @@ function renderMdSection(b) {
   let h = '';
   // The line: where the other end is.
   if (drv) {
-    if (live) h += `<div class="status">Aimed at ${mdWhere(live)} (${dirText(b, live)} from here)${live.built ? '' : ': still going up'}.</div><div class="actions"><button class="btn" id="sh-mdaim">Aim elsewhere</button><button class="btn ghost" id="sh-mdoff">Stand down</button></div>`;
-    else h += `<div class="status">${b.mdTo ? 'Its far end is gone.' : 'Not aimed yet.'}</div><p class="hint">Tap <b>Aim</b>, then one of your Catchers ${M.min} to ${M.max} tiles away (over anything: water, cliffs, rivals' ground), or an Outpost or Keep to keep its Ammo topped up.</p><button class="btn primary" id="sh-mdaim">Aim</button>`;
+    if (live) h += `<div class="status">${pair ? 'Paired with' : 'Aimed at'} ${mdWhere(live)} (${dirText(b, live)} from here)${live.built ? '' : ': still going up'}.</div><div class="actions"><button class="btn" id="sh-mdaim">Aim elsewhere</button><button class="btn ghost" id="sh-mdoff">Stand down</button></div>`;
+    else h += `<div class="status">${b.mdTo ? 'Its far end is gone.' : 'Not aimed yet.'}</div><p class="hint">Tap <b>Aim</b>, then another of your Mass Drivers ${M.min} to ${M.max} tiles away (over anything: water, cliffs, rivals' ground) for a line both ways, or one of your Catchers for one way.</p><button class="btn primary" id="sh-mdaim">Aim</button>`;
     // A Catcher kit: thrown to open ground with no foothold, it assembles itself into a Catcher there.
     if (kit === 'load') h += `<div class="kv"><span>Catcher kit</span><span>for the ground ${dirText(b, { x: b.mdKit[0], y: b.mdKit[1] })} from here: ${mdKitLoaded(b) ? 'loaded, it flies when the coils can fire' : `loading ${Object.keys(BDEFS.catcher.cost).map((g) => `${Math.min(BDEFS.catcher.cost[g], Math.floor(b.stock[g] || 0))}/${BDEFS.catcher.cost[g]} ${GOOD[g].name}`).join(', ')} (Haulers bring them)`}</span></div><button class="btn ghost" id="sh-mdkitoff">Call off the kit</button>`;
     else if (kit === 'fly') h += '<div class="kv"><span>Catcher kit</span><span>in flight</span></div>';
-    else h += `<button class="btn" id="sh-mdkit">Throw a Catcher kit <small>${costText(BDEFS.catcher.cost)}</small></button><p class="hint">For an island or a mesa with no foothold: tap open ground ${M.min} to ${M.max} tiles away that no one else holds. Haulers bring the Catcher's cost to the Driver, loaded into the kit; it flies, lands, assembles itself into a Catcher in ${M.kitBuild} s (no Worker needed), claims the land ${M.kitClaim} tiles round it, and this Driver aims at it.</p>`;
+    else h += `<button class="btn" id="sh-mdkit">Throw a Catcher kit <small>${costText(BDEFS.catcher.cost)}</small></button><p class="hint">For an island or a mesa with no foothold: tap open ground ${M.min} to ${M.max} tiles away that no one else holds. Haulers bring the Catcher's cost to the Driver, loaded into the kit; it flies, lands, assembles itself into a Catcher in ${M.kitBuild} s (no Worker needed), claims the land ${M.kitClaim} tiles round it, and this Driver aims at it, unless it is in a line already.</p>`;
   } else {
     h += ps.length ? ps.map((d) => `<div class="kv army-row"><span>Mass Driver ${dirText(b, d)} from here</span><span><button class="btn small ghost" data-md="${d.id}">Driver ›</button></span></div>`).join('')
       : `<p class="hint"><b>No Mass Driver is aimed here yet.</b> Build one ${M.min} to ${M.max} tiles away (Build → Move → Mass Driver), then on its panel: <b>Aim</b>, and tap this one.</p>`;
     h += `<div class="kv"><span>Drivers</span><span>${ps.length} of ${M.drivers} at most</span></div>`;
+    h += '<p class="hint">A Catcher only catches: it never fires and needs no power. Nothing goes back by canister: Haulers or other transport fetch what it holds. For goods both ways, pair two Mass Drivers instead.</p>';
   }
-  // The rate, and why: a shortcut over land fires slower than a crossing (mdOverland).
-  ps.forEach((o, k) => {
-    const land = rates[k] === M.reloadLand, who = ps.length > 1 ? ` to the Driver ${dirText(b, o)}` : '';
-    h += `<div class="kv"><span>Rate${who}</span><span>a shot every ${rates[k]} s each way: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
-  });
-  h += `<div class="kv"><span>Power</span><span>${pow ? (thermalNear(b) ? 'A Thermal Plant in reach: no Fuel a shot' : 'A Generator in reach: half a Fuel a shot') : `<span class="err">None: it catches, but doesn't fire</span>`}</span></div>`;
-  if (!pow) h += `<p class="hint">It fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles, and each shot draws half a Fuel from it, or a <b>Thermal Plant</b> within ${THERMAL.radius} on hot ground, which needs none. Fuel can fly here by canister, in sealed drums.</p>`;
-  if (fort) {
-    h += `<p class="hint">One way: it keeps the ${BDEFS[live.type].name}'s Ammo${live.type === 'keep' ? ' and its cannon\'s Crystal' : ''} topped up for the warbots stationed there, out of what your colony holds beyond ${M.reserve} at home.${ships.length ? ` On its way: ${gl(Object.fromEntries(ships))}.` : ''}</p>`;
-  } else if (ps.length) {
-    h += `<div class="kv"><span>This end</span><span>${far ? `the far end: it stocks what ${served} building${served === 1 ? '' : 's'} round it need${served === 1 ? 's' : ''}` : 'the near end: it ships what the far end needs'}</span></div>`;
+  if (drv) {
+    // The rate, and why: a shortcut over land fires slower than a crossing (mdOverland).
+    ps.forEach((o, k) => {
+      const land = rates[k] === M.reloadLand;
+      h += `<div class="kv"><span>Rate</span><span>a shot every ${rates[k]} s${pair ? ' each way' : ', one way (a Catcher only catches)'}: ${land ? `over land (a robot could walk between the ends; ${M.reload} s over water, a chasm or cliffs)` : `a crossing (no walking way between the ends; ${M.reloadLand} s over land)`}</span></div>`;
+    });
+    h += `<div class="kv"><span>Power</span><span>${pow ? (thermalNear(b) ? 'A Thermal Plant in reach: no Fuel a shot' : 'A Generator in reach: half a Fuel a shot') : `<span class="err">None: ${pair ? 'it catches, but doesn\'t fire' : 'it doesn\'t fire'}</span>`}</span></div>`;
+    if (!pow) h += `<p class="hint">It fires only with a <b>Generator</b> (with Fuel) within ${BDEFS.generator.burner.radius} tiles, and each shot draws half a Fuel from it, or a <b>Thermal Plant</b> within ${THERMAL.radius} on hot ground, which needs none. Fuel can fly to it by canister from a Driver it is paired with, in sealed drums.</p>`;
+  }
+  if (ps.length) {
+    const servedText = `it stocks what ${served} building${served === 1 ? '' : 's'} round it need${served === 1 ? 's' : ''}`;
+    h += `<div class="kv"><span>This end</span><span>${!drv ? (far ? `the far end: ${servedText}` : 'the near end: it takes what its Drivers send')
+      : far && !pair ? 'the far end: it sends home what it can spare'
+        : far ? `the far end: ${servedText}, and sends home what it can spare` : 'the near end: it ships what the far end needs'}</span></div>`;
     if (far && b.auto) h += `<div class="kv"><span>Keeps here</span><span>${gl(b.auto)}</span></div>`;
+  }
+  if (drv && ps.length) {
     h += `<div class="section-label">Goods to send <span class="label-note">${manual ? `a goods list: up to ${M.goods}; the number is what stays home` : 'Auto: what the other end needs'}</span></div>`;
     h += `<div class="seg" id="sh-mdmode"><button data-v="auto" class="${manual ? '' : 'on'}">Auto</button><button data-v="list" class="${manual ? 'on' : ''}">Goods list</button></div>`;
-    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each (Fuel beyond ${M.fuelReserve}, for the far end's Generator).`}</p>`;
+    if (!manual) h += `<p class="hint">${ships.length ? `Shipping now: ${gl(Object.fromEntries(ships))}.` : far ? 'Nothing to ship: the other end needs nothing, and nothing here is spare.' : 'Nothing to ship: the far end needs nothing yet.'} ${far ? 'What this end holds beyond its own needs, and nothing round it uses, goes home.' : `Haulers bring it what your colony holds beyond ${M.reserve} of each (Fuel beyond ${M.fuelReserve}, for a far Driver's Generator).`}</p>`;
     else {
       const gs = Object.keys(list || {});
       h += gs.length ? `<div class="keep-list" id="sh-mdlist">${gs.map((g) => `<div class="keep-cell on" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name} <small>(${Math.floor(b.stock[g] || 0)} loaded)</small></span><b class="n">${list[g]}</b>
@@ -5795,8 +5801,9 @@ function renderMdSection(b) {
     }
   }
   if (full.length) h += `<div class="kv"><span>Far end full</span><span class="err">${full.map((g) => GOOD[g].name).join(', ')}: nothing there collects ${full.length === 1 ? 'it' : 'them'}, so no more is sent (${M.full} at most of each, or what it keeps)</span></div>`;
-  h += `<div class="kv"><span>Goods thrown</span><span>${b.mdSent || 0}</span></div><div class="kv"><span>Goods caught</span><span>${b.mdGot || 0}</span></div>`;
-  h += `<p class="hint">A canister of ${M.load} goods flies every ${M.reload} s from each end over water, a chasm or cliffs, every ${M.reloadLand} s when a robot could walk between the ends (a part load after ${M.partWait} s), in an arc over everything; buildings touching it hand over their output and are fed by conveyor. A Catcher takes ${M.drivers} Drivers at most. An enemy Flak Gun can burst one in flight; its goods fall as crates.</p>`;
+  if (drv) h += `<div class="kv"><span>Goods thrown</span><span>${b.mdSent || 0}</span></div>`;
+  h += `<div class="kv"><span>Goods caught</span><span>${b.mdGot || 0}</span></div>`;
+  if (drv) h += `<p class="hint">A canister of ${M.load} goods flies every ${M.reload} s from each Driver over water, a chasm or cliffs, every ${M.reloadLand} s when a robot could walk between the ends (a part load after ${M.partWait} s), in an arc over everything; buildings touching it hand over their output and are fed by conveyor. Two Drivers aimed at each other are a line both ways; a Driver is in one line at most, and a Catcher takes ${M.drivers} Drivers. An enemy Flak Gun can burst a canister in flight; its goods fall as crates.</p>`;
   el.innerHTML = h;
   const done = (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); };
   if ($('sh-mdaim')) $('sh-mdaim').onclick = () => { sfx('click'); startMdAim(b); };
@@ -5890,7 +5897,7 @@ function renderGupSection(b) {
   if ($('sh-gup-stop')) $('sh-gup-stop').onclick = () => act('gupStop', [b.id], (why2) => { if (why2) { sfx('error'); toast(why2, 'warn'); } else sfx('click'); el.dataset.sig = ''; refreshSheet(); });
 }
 
-/** Aim a Mass Driver: pick its far end on the map (a tap on a Catcher, an Outpost or a Keep aims the Driver). */
+/** Aim a Mass Driver: pick its far end on the map (a tap on a Catcher, or another Mass Driver to pair with, aims the Driver). */
 function startMdAim(b, kit) {
   closeSheet();
   setMode('mdaim');
@@ -5901,7 +5908,7 @@ function startMdAim(b, kit) {
 
 function showMdAimBanner(problem) {
   if (UI.mdKit) { showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap open ground ${MASSDRIVER.min} to ${MASSDRIVER.max} tiles away (inside the ring) that no one else holds: a <b>Catcher kit</b> (${costText(BDEFS.catcher.cost)}, loaded at the Driver) flies there and assembles itself.`, null, 'Cancel'); return; }
-  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap one of your <b>Catchers</b> ${MASSDRIVER.min} to ${MASSDRIVER.max} tiles away (ringed) to make a line with it, or an <b>Outpost</b> or <b>Keep</b> to keep its Ammo topped up.`, null, 'Cancel');
+  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap another of your <b>Mass Drivers</b> ${MASSDRIVER.min} to ${MASSDRIVER.max} tiles away (ringed) for a line both ways, or one of your <b>Catchers</b> for one way.`, null, 'Cancel');
 }
 
 function mdAimTap(i, j, wx, wy) {
@@ -5920,12 +5927,12 @@ function mdAimTap(i, j, wx, wy) {
     return;
   }
   const c = inMap(i, j) ? buildingAtTap(i, j, wx, wy) : null;
-  const why = mdAimWhy(ME, a, c && (BDEFS[c.type].catcher || mdFortType(c.type)) ? c : null);
+  const why = mdAimWhy(ME, a, c && c !== a && mdEnd(c) ? c : null);
   if (why) { sfx('error'); showMdAimBanner(why); return; }
   act('mdAim', [a.id, c.id], (r) => {
     if (r) { sfx('error'); showMdAimBanner(r); return; }
     sfx('order');
-    toast(mdFortType(c.type) ? `Aimed: it keeps the ${BDEFS[c.type].name}'s Ammo topped up, once it has power.` : 'Aimed: the two ends now supply each other, once each has power.', 'good');
+    toast(BDEFS[c.type].mdriver ? 'Paired: the two Drivers now supply each other, once each has power.' : 'Aimed: it throws to the Catcher, once it has power. The Catcher only catches.', 'good');
     setMode('normal');
     openBuildingSheet(a);
   });

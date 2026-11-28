@@ -7648,6 +7648,12 @@ function deserializeGame(json) {
       if (BDEFS[b.type].long) { b.mdAxis = b.mdAxis === 'ns' ? 'ns' : 'ew'; const [i2, j2] = longTile(b.x, b.y, b.mdAxis); if (inMap(i2, j2)) S.bAt[tIdx(i2, j2)] = b.id; } // (a save from before the Mass Driver's two tiles: laid east)
       if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
     }
+    // A save from before the Mass Driver rules of Nov 28 2026: a Driver aimed at an Outpost or Keep stands down, and a
+    // Catcher only catches (no shot back, no goods list).
+    for (const b of S.buildings) {
+      if (BDEFS[b.type].mdriver && b.mdTo) { const c = S.byId.get(b.mdTo); if (c && !(BDEFS[c.type].mdriver || BDEFS[c.type].catcher)) { b.mdTo = 0; b.mdFire = 0; } }
+      if (BDEFS[b.type].catcher) { b.mdFire = 0; b.mdAt = 0; delete b.mdSend; delete b.mdAuto; }
+    }
     for (const u of S.bots) {
       S.byId.set(u.id, u);
       if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
