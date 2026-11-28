@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), The Graveyard (two players; `graveMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), The Graveyard (two players; `graveMap` in js/world.js), Hollowgate (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -327,7 +327,7 @@ on their own, to the same count). Before that, it lays again just outside the to
 `HOME_CUT_R` (16) tiles of a base, as many tiles and as rich: Passenger Town's streets ran over the second fields out in front of
 each base (on Small for two, seed 7, the Ore within 16 tiles went from 10 to 2). A
 field that already holds 4 is left alone; the richer fields beyond are untouched. The Ring (`RING.field`, 4) and Orbital
-platforms (`ORBITAL.field.home`, 5) lay their own; the Hollow's (3, `hollowMap`) and Half underground's inside colonies' are
+platforms (`ORBITAL.field.home`, 5) lay their own; the Hollow's (3, `hollowMap`) and Hollowgate's inside colonies' are
 their own too, and its surface colonies have no Ore or Crystal by design. `tools/map-audit.js` fails any home with fewer than 4
 Ore or 4 Crystal tiles in walking reach within 16 tiles (more on The Ring and Orbital platforms).
 **Fuel at home** (Nov 27 2026): each colony has an oil seep it can walk to within `HOME_OIL.r` (14) tiles of its Command
@@ -335,7 +335,7 @@ Base. On Small most map types had none: the "beyond" oil field and the middle on
 massif, the town, the factory's yard, the maze walls). `homeFieldFloor` checks the ground the colony walks to (`walkFrom`:
 from the base, before any road) and, short of a seep, lays one of `HOME_OIL.tiles` (3) on open ground `near` to `far` (6 to
 11.5) tiles out, on ground this colony walks to and each twin on ground its own colony walks to, with the map's symmetry. Not
-on the Hollow, Half underground, The Ring or Orbital platforms (they lay their own) nor on Sky islands, whose oil lies on the
+on the Hollow, Hollowgate, The Ring or Orbital platforms (they lay their own) nor on Sky islands, whose oil lies on the
 mesas between (it never needed one). `placePosts` keeps a post's ground off each colony's nearest seep (it would move it off).
 `tools/map-audit.js` fails a colony with no oil seep in walking reach within 14 tiles.
 **Trade Posts and Uplinks on walked ground** (Nov 27 2026): where every colony stands on one walkable area (`S.zone`) at the
@@ -352,7 +352,7 @@ With Planetary events enabled, Immense Ringfall targets up to nine sites per col
 eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
 type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
 The primary biome covers about 65% of the land and sets weather and world rules. Argos and the Hollow use their own
-scenery (The Ring is always on Argos's, whatever the Biome setting; Half underground has the Biome on its surface and the Hollow's look in its caves, and no second biome). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
+scenery (The Ring is always on Argos's, whatever the Biome setting; Hollowgate has the Biome on its surface and the Hollow's look in its caves, and no second biome). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
 Immense and seven at Planetary. Immense Four Isles has larger home and central islands. The Hollow has richer Ore
 and Oil deposits at the two largest sizes, and up to ten nest sites per side at Planetary. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
@@ -798,7 +798,7 @@ the backdrop is The Ring's (`R.void`: `ringSpace`). `graveShape()` tells it apar
   flashing red while jammed); salvage and debris (`drawGraveRock`, from `drawRock`); a diamond on the minimap (`graveMinimap`); the Arbiter's
   panel (`openArbSheet`). Art: ART_GUIDE.md, Batch 44.
 
-**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
+**Hollowgate** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
 the size's (49 × 84 at Medium; an odd width, so there is a middle column to mirror about, and 1.45 times wider for four colonies), mirrored west to east
 (every tile made to its twin, the noise read at each tile's canonical column; `tools/map-symmetry-test.js` checks it for every size and player
@@ -4708,7 +4708,7 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 41): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Hollowgate's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 41): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
 of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
 a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
 then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),

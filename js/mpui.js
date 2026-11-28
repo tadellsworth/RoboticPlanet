@@ -194,7 +194,7 @@ function mpMenuSettings(final, people) {
   m.players = total;
   const pick = final ? resolveRandom() : { shape: m.shape || 0, biome: m.biome || 0 };
   m.players = keep;
-  const up = (people || 0) >= 3, tot = snapPlayers(pick.shape, total, up); // (Half underground: two or four; three people in the lobby make it four)
+  const up = (people || 0) >= 3, tot = snapPlayers(pick.shape, total, up); // (Hollowgate: two or four; three people in the lobby make it four)
   const cols = !final && m.shapeRnd ? (colony ? 2 : total) : playerCount(mode, pick.shape, tot);
   const size = mapSizeForPlayers(m.size[mode] ?? DEFAULT_SIZE[mode], cols);
   return {

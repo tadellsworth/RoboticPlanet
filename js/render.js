@@ -209,7 +209,7 @@ function applyBiome() {
   if (S && spaceMap() && typeof ensureSpaceArt === 'function') ensureSpaceArt(); // (js/space.js: the space maps only)
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   const primary = R.primaryRegion = biomeRegion(biome());
-  // (Half underground: the caves are a second region of their own, the Hollow's, over S.cave's tiles; no other second biome there.)
+  // (Hollowgate: the caves are a second region of their own, the Hollow's, over S.cave's tiles; no other second biome there.)
   const second = R.secondRegion = S.cave ? biomeRegion('hollow') : S.settings?.biome2 ? biomeRegion(S.settings.biome2) : null;
   THEME = primary.theme;
   R.biome = primary.biome;
@@ -1277,7 +1277,7 @@ function paintTile(ctx, i, j, other, blend) {
       const cx = x + 6 + hash2(i, j, 21) * 18, cy = y + 6 + hash2(i, j, 22) * 14;
       ctx.fillRect(cx, cy, 6, 2);
     }
-    if (S.hollow || R.biome === 'hollow') hollowRockDark(ctx, i, j, x, y); // (R.biome is the tile's own look: the caves of Half underground too)
+    if (S.hollow || R.biome === 'hollow') hollowRockDark(ctx, i, j, x, y); // (R.biome is the tile's own look: the caves of Hollowgate too)
   }
 
   // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
@@ -7226,9 +7226,9 @@ function render(dtReal) {
   if (R.void) { ctx.save(); ringClipLand(ctx, ox, oy, z); } // (The Ring: the day's light is on the asteroids only)
   if (typeof tfGround === 'function') tfGround(ctx, ox, oy, z, inView); // (the ground of Earthworks being dug and filled, fresh soil, track marks: js/terraform.js)
   if ((S.grove || S.wet) && typeof t2Ground === 'function') t2Ground(ctx, ox, oy, z, v0, v1); // (groves, sprinklers and their spray, graded with the ground: js/terraform2.js)
-  if (S.caves && typeof mouthsFloor === 'function') mouthsFloor(ctx, ox, oy, z); // (Half underground: the cave mouths' scree and shadows, graded with the ground: js/mouths.js)
+  if (S.caves && typeof mouthsFloor === 'function') mouthsFloor(ctx, ox, oy, z); // (Hollowgate: the cave mouths' scree and shadows, graded with the ground: js/mouths.js)
   if (S.cave) caveGrade(ctx, ox, oy, z); else todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
-  if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); } // (Half underground: the sky's light, sunset and weather stay out of the caves)
+  if (S.cave) { ctx.save(); caveClip(ctx, ox, oy, z, false); } // (Hollowgate: the sky's light, sunset and weather stay out of the caves)
   if (typeof duskGround === 'function') duskGround(ctx, ox, oy, z, v0, v1); // (sunset and sunrise over the ground: js/sunset.js)
   if (S.cave) ctx.restore();
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
@@ -7724,11 +7724,11 @@ function render(dtReal) {
   if (fw) fw.draw += performance.now() - began;
 }
 
-/* ------------------------------------------------------------------ Half underground */
+/* ------------------------------------------------------------------ Hollowgate */
 
 /**
  * Clip ctx (as at the start of a frame's drawing: device-pixel transform) to the surface (`inside` false) or to the caves (true) of
- * Half underground, S.cave's tiles; the wall between them (S.cave 2) draws as the caves' rock. The path is kept for the game.
+ * Hollowgate, S.cave's tiles; the wall between them (S.cave 2) draws as the caves' rock. The path is kept for the game.
  */
 function caveClip(ctx, ox, oy, z, inside) {
   if (RSP.caveFor !== S.cave || !RSP.cave) {
@@ -10688,7 +10688,7 @@ function renderMinimap() {
     ctx.fillStyle = WILD_COLOR; ctx.beginPath(); ctx.arc(x, y, Math.max(3.2, sx * 1.45), 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 2; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(x, y, Math.max(4, sx * 1.6) + f * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
   }
-  if (S.caves && typeof mouthsMinimap === 'function') mouthsMinimap(ctx, sx, sy); // (Half underground: the ways through the wall)
+  if (S.caves && typeof mouthsMinimap === 'function') mouthsMinimap(ctx, sx, sy); // (Hollowgate: the ways through the wall)
   // The Hollow's breaches: soft pools of pale gold, the only daylight down there.
   if (S.hollow) for (const b of S.hollow.breaches) {
     ctx.fillStyle = 'rgba(255,214,140,0.4)';

@@ -466,7 +466,7 @@ function faunaTrySpawn(c, e) {
   if (!faunaQuiet(c) || (e.hab !== 'any' && c.hab[e.hab].length < K.min)) return;
   if ((K.mode === 'soar' || K.mode === 'flit' || K.mode === 'vee') && F.storm > 0.35) return;
   const cx = c.x0 + FAUNA_CELL / 2, cy = c.y0 + FAUNA_CELL / 2;
-  if (S.cave && S.cave[tIdx(clamp(Math.floor(cx), 0, S.W - 1), clamp(Math.floor(cy), 0, S.H - 1))] > 0) return; // (Half underground: no wildlife in the caves or on the wall)
+  if (S.cave && S.cave[tIdx(clamp(Math.floor(cx), 0, S.W - 1), clamp(Math.floor(cy), 0, S.H - 1))] > 0) return; // (Hollowgate: no wildlife in the caves or on the wall)
   if (M.on && (M.night || M.lull) && (faunaNearest(M.danger, cx, cy, 12) || faunaNearest(M.packs, cx, cy, 9))) return;
   if (M.lull && K.mode === 'small') return;
   // How it appears: in a cell just come on screen it was there all along; otherwise it wakes where it sleeps, or (chased

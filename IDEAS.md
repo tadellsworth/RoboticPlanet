@@ -562,8 +562,8 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   home asteroid each round a rich middle one: only two now); the rival flies Cargo Planes but builds **no Airships or Mooring Masts**
   and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
   a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
-- **Half underground** (caves and surface): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
-  js/defs.js; README, Half underground). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
+- **Hollowgate** (caves and surface; called Half underground until the owner renamed it, Nov 28 2026): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
+  js/defs.js; README, Hollowgate). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
   inside, the Hollow's dark look, plenty of Ore and Crystal, nothing grows, and no Missile, bomb, aircraft or Mass Driver canister reaches
   in; outside, the Biome's surface with the stalk groves and crop soil and **no Ore or Crystal at all** (nor from Ringfall: tuned Nov 27 for forced mutual encroachment with the Murmur off). A solid wall (no road tunnels through it) runs between
   them with two or three mouths, narrow gates or wide mouths by seed; each side starts with an extra stock of what it lacks
@@ -3353,7 +3353,7 @@ Done (Nov 27 2026), the rest of the list. Measured with `tools/map-audit.js` on 
   Base; short of one, a 3-tile seep is laid 6 to 11.5 tiles out on ground it walks to, with the map's symmetry. Small
   colonies with one: 1,292 of the 1,924 on map types that lay their home from the generic fields → all 1,924; maps with a
   colony short, all sizes: 829 → 0 (Crossroads 158, Dam 108, Passenger Town 106, Long Haul 2v2 86, the Walking Factory 71,
-  Canyon maze 68, Ring valley 56...). Not on the Hollow, Half underground, The Ring and Orbital platforms (their own) nor
+  Canyon maze 68, Ring valley 56...). Not on the Hollow, Hollowgate, The Ring and Orbital platforms (their own) nor
   Sky islands (it always had one). A Trade Post's ground keeps off each colony's nearest seep. In 15-minute computer games on
   Small (seed 21) the rivals pumped it from minute 3 to 7 on Ring valley, Canyon maze and Passenger Town (none before).
 - **Sites on walked ground** (`placePosts`, `placeUplinks`, `walkFrom`): where every colony walks to every other (fords and

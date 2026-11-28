@@ -12536,7 +12536,7 @@ function fireMissileAt(silo, i, j) {
 function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
-    // (Half underground: a Missile, bomb, napalm canister or nuclear missile that comes down on the caves bursts on the roof: nothing reaches in.)
+    // (Hollowgate: a Missile, bomb, napalm canister or nuclear missile that comes down on the caves bursts on the roof: nothing reaches in.)
     if (S.cave && !m.shell && !m.rocket && m.t >= m.dur && caveAt(m.x1, m.y1)) { addFx('puff', m.x1, m.y1, { r: 0.7, life: 1 }); continue; }
     if (m.shell) {
       if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
@@ -14806,7 +14806,7 @@ function hollowRingfall(rng, t0, dur) {
 }
 
 /**
- * Ringfall on Half underground falls on the surface only (the roof keeps it out of the caves), each strike with its mirror on the other
+ * Ringfall on Hollowgate falls on the surface only (the roof keeps it out of the caves), each strike with its mirror on the other
  * side (west to east), half of them near player 0's own ground: the same number of strikes as on any map.
  */
 function cavesRingfall(rng, t0, dur) {
@@ -14904,7 +14904,7 @@ function meteorImpact(E, h) {
   const spots = [];
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
-  let placed = S.caves ? 99 : 0; // (Half underground: a strike on the surface leaves its crater but no Ore or Crystal there)
+  let placed = S.caves ? 99 : 0; // (Hollowgate: a strike on the surface leaves its crater but no Ore or Crystal there)
   for (const [, i0, j0] of spots) {
     if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : S.orb ? ORBITAL.ringfall : 3) || !inMap(i0, j0)) continue;
     // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
@@ -14933,7 +14933,7 @@ function meteorImpact(E, h) {
  * Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it, and never
  * in the Hollow: it's underground, where only Ringfall reaches, through the breaches (as no Mass Driver works there).
  */
-function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow && !S.caves; } // (nor on Half underground: the surface has no Ore or Crystal, the roof keeps the sky out of the caves)
+function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow && !S.caves; } // (nor on Hollowgate: the surface has no Ore or Crystal, the roof keeps the sky out of the caves)
 
 /** Can a drizzle deposit lie on tile t? Open, bare ground no one holds, with nothing on it or planned for it. */
 function drizzleOk(t) {
@@ -15393,7 +15393,7 @@ function placeHollowNests(rng) {
 }
 
 /**
- * Half underground: the Murmur live in the caves and on the surface (only with the Murmur setting on). Inside, an ordinary nest on each of the
+ * Hollowgate: the Murmur live in the caves and on the surface (only with the Murmur setting on). Inside, an ordinary nest on each of the
  * sites cavesMap laid out in twin pairs, west and east (CAVES.nests of them by Size); outside, the same on the surface sites (S.caves.nestsOut: as
  * many as a map of the surface's size gets, MURMUR.active's rule). Half the pairs (rounded up) with the Murmur Quiet, on each side. No mound and no
  * tremors (those are the Hollow's). They dig tunnels and open exits like any nest, so what grows below the caves comes up through them, and out of
@@ -20646,7 +20646,7 @@ function airNeeds(c) {
 function airSuppliable(b) {
   const def = b && BDEFS[b.type];
   if (!def || b.dead || def.airfield || def.pad || def.wild || b.type === 'lander') return false;
-  if (caveTile(tIdx(b.x, b.y))) return false; // (Half underground: no plane flies into the caves)
+  if (caveTile(tIdx(b.x, b.y))) return false; // (Hollowgate: no plane flies into the caves)
   if (!b.built) return !storeFunded(b);
   return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
 }

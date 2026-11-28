@@ -1,5 +1,5 @@
 #!/bin/bash
-# Half underground's cave mouths: the game's layers for one concept (b/cavemouth.js), both faces, in parallel.
+# Hollowgate's cave mouths: the game's layers for one concept (b/cavemouth.js), both faces, in parallel.
 # usage: tools/render_mouths.sh <outDir> [concept]   then: python3 tools/install_mouths.py <outDir> <concept> ../art
 cd "$(dirname "$0")/.."
 OUT=${1:-out/mouths}; c=${2:-arch}

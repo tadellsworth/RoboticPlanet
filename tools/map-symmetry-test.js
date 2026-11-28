@@ -18,7 +18,7 @@ const check = new Function('assert', 'sfx', source + `
   // Independent of the production orbit helper, including the two distinct four-colony transforms.
   function symmetry(shape, players, teams, width, height) {
     const half = (x, y) => [width - 1 - x, height - 1 - y];
-    if (shape.caves) return [(x, y) => [width - 1 - x, y]]; // (Half underground: mirrored west to east; an inside colony and an outside one differ by design)
+    if (shape.caves) return [(x, y) => [width - 1 - x, y]]; // (Hollowgate: mirrored west to east; an inside colony and an outside one differ by design)
     if (shape.haul4) return [(x, y) => [width - 1 - x, y], half, (x, y) => [x, height - 1 - y]];
     if (players === 2 || shape.twin || (shape.isles4 && teams)) return [half];
     if (shape.cross || shape.quad4 || ((shape.city || shape.walker || shape.dam || shape.std4) && players === 4)) return [(x, y) => [width - 1 - y, x], half, (x, y) => [y, height - 1 - x]];
@@ -104,7 +104,7 @@ const check = new Function('assert', 'sfx', source + `
       if (game.res[t] && calmAt(x + 0.5, y + 0.5)) throw new Error('deposit left on a Trade Post at (' + x + ',' + y + ')');
     }
     if (teams) assert.equal(game.uplinks, undefined, 'Teams use Capture');
-    // Half underground with the Murmur on: every nest has its twin west to east, and there are nests in the caves and on the surface alike.
+    // Hollowgate with the Murmur on: every nest has its twin west to east, and there are nests in the caves and on the surface alike.
     if (shape.caves && game.wildlife) {
       const nests = game.buildings.filter((b) => !b.dead && isNestB(b)), at = new Set(nests.map((b) => b.y * width + b.x));
       let inside = 0, outside = 0;
@@ -123,12 +123,12 @@ const check = new Function('assert', 'sfx', source + `
 
   for (const [shape, preset] of SHAPE_PRESETS.entries()) {
     for (let players = minPlayers(shape); players <= maxPlayers(shape); players++) {
-      if (!playersFit(shape, players)) continue; // (Half underground: two or four colonies, never three)
+      if (!playersFit(shape, players)) continue; // (Hollowgate: two or four colonies, never three)
       for (let size = 0; size < SIZE_PRESETS.length; size++) {
         if (mapSizeForPlayers(size, players) !== size) continue;
         for (const teams of players === 4 ? [false, true] : [false]) {
           for (const seed of [11, 21, 37]) {
-            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids && !preset.orbital && !preset.graveyard && !preset.caves; // (The Ring is always on Argos: no second biome; nor Half underground, whose caves are the second region)
+            const mixed = size >= IMMENSE_SIZE && seed === 37 && !preset.hollow && !preset.asteroids && !preset.orbital && !preset.graveyard && !preset.caves; // (The Ring is always on Argos: no second biome; nor Hollowgate, whose caves are the second region)
             const opts = { seed, shape, players, size, teams, mode: 'versus', victory: 'uplinks',
               murmur: preset.hollow || preset.caves || seed === 37 ? 'active' : 'off', biome: 'desert', biome2: mixed ? 'jungle' : undefined };
             const label = [preset.name, SIZE_PRESETS[size].name, players, teams ? 'Teams' : 'Versus', 'seed ' + seed].join(' / ');

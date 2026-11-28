@@ -1020,13 +1020,13 @@ const SHAPE_PRESETS = [
   // Murmur, no weather, no dust storm.
   { name: 'The Ring', group: 'heights', noMurmur: true, blurb: 'Out in space among the Ring\'s great asteroids: a home rock each, a rich one in the middle and stepping stones between, with empty space all round. Cross by Viaduct or Ropeway, or fly.', w: 1.15, h: 1.45, asteroids: true, flat: true,
     tip: 'The Ring: your colony stands on a home asteroid in space, with a rich rock in the middle and a chain of stepping stones between you and your rival. There is nothing in the space between: no floor, no way across on foot and no road to lay. Span a gap with a Viaduct or a Ropeway (Paths), or fly: Cargo Plane drops, Airships between Mooring Masts, Vulcan Bombers. Ring Crystal keeps craft aloft out here, so flight works as it does anywhere. Every rock has oil for your Fuel. Argos\'s ground, no weather, no Murmur.' },
-  // Half underground (the owner's idea, Nov 2026): a surface half and a cave half, joined by two or three entrances (cavesMap in
+  // Hollowgate (the owner's idea, Nov 2026): a surface half and a cave half, joined by two or three entrances (cavesMap in
   // world.js, CAVES in defs.js). Two or four colonies, half of them starting inside the caves and half outside. Inside: the Hollow's
   // look, plenty of Ore and Crystal, nothing grows, nothing flies or falls in; outside: the Biome's surface with the growing goods.
-  { name: 'Half underground', group: 'heights', blurb: 'Half caves, half surface, joined by two or three cave mouths, narrow gates or wide mouths. Half the colonies start inside (Ore and Crystal, but nothing grows, and no Missile or aircraft reaches in) and half out on the surface (farms and crops, little Ore): each has to branch out through the mouths.', w: 1.2, h: 1.5, caves: true, flat: true, players: 4, evenOnly: true,
-    tip: 'Half underground: a surface half and a cave half joined by two or three mouths in a solid wall. The caves hold the Ore and Crystal, the surface the Fiber and crops; nothing grows or is harvested in the caves, and no Missile, bomb or aircraft reaches in. Each colony starts with a stock of what its side lacks, but it runs out: expand through the mouths early.',
-    tipIn: 'Half underground, starting in the caves: Ore and Crystal all round you, safe from Missiles and aircraft, but nothing grows here. Your stock of Fiber lasts a while; Fuel comes from the oil seeps (Oil Pump, then a Refinery). Push Outposts out through the cave mouths to the stalk groves and crop soil on the surface before the Fiber runs out.',
-    tipOut: 'Half underground, starting on the surface: farms, crops and stalk groves, but little Ore or Crystal. Your stock of Ore and Crystal lasts a while; the caves hold plenty more. Push Outposts in through the cave mouths early, and watch the air: your rival inside cannot be bombed or hit by Missiles, but you can.' },
+  { name: 'Hollowgate', group: 'heights', blurb: 'Half caves, half surface, joined by two or three cave mouths, narrow gates or wide mouths. Half the colonies start inside (Ore and Crystal, but nothing grows, and no Missile or aircraft reaches in) and half out on the surface (farms and crops, little Ore): each has to branch out through the mouths.', w: 1.2, h: 1.5, caves: true, flat: true, players: 4, evenOnly: true,
+    tip: 'Hollowgate: a surface half and a cave half joined by two or three mouths in a solid wall. The caves hold the Ore and Crystal, the surface the Fiber and crops; nothing grows or is harvested in the caves, and no Missile, bomb or aircraft reaches in. Each colony starts with a stock of what its side lacks, but it runs out: expand through the mouths early.',
+    tipIn: 'Hollowgate, starting in the caves: Ore and Crystal all round you, safe from Missiles and aircraft, but nothing grows here. Your stock of Fiber lasts a while; Fuel comes from the oil seeps (Oil Pump, then a Refinery). Push Outposts out through the cave mouths to the stalk groves and crop soil on the surface before the Fiber runs out.',
+    tipOut: 'Hollowgate, starting on the surface: farms, crops and stalk groves, but little Ore or Crystal. Your stock of Ore and Crystal lasts a while; the caves hold plenty more. Push Outposts in through the cave mouths early, and watch the air: your rival inside cannot be bombed or hit by Missiles, but you can.' },
   // Orbital platforms (the owner's idea, Nov 2026): a few Accord station decks high over the planet, joined by drawbridges that a
   // control box at each end raises and lowers (orbitalMap in world.js, ORBITAL in defs.js, the rules in sim.js, the look in js/orbital.js).
   // Two colonies. Argos's rules whatever the Biome setting (no Murmur, no weather, no dust storm).
@@ -1269,7 +1269,7 @@ const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or 
 const HOME_FIELD = 4;
 /**
  * Fuel at home: every colony has an oil seep it can walk to within `r` tiles of its Command Base, on every map that lays
- * its home ground from the generic fields (homeFieldFloor in world.js; not the Hollow, Half underground, The Ring or
+ * its home ground from the generic fields (homeFieldFloor in world.js; not the Hollow, Hollowgate, The Ring or
  * Orbital platforms, which lay their own). Where the map's own features cover the oil fields (a massif, a town, a yard,
  * maze walls: most Small maps), a seep of `tiles` is laid `near` to `far` tiles out, on ground the colony walks to.
  */
@@ -1338,7 +1338,7 @@ const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, widt
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }
 /**
- * Half underground (SHAPE_PRESETS caves: cavesMap in world.js). One map half is the surface (the Biome's look and rules), the
+ * Hollowgate (SHAPE_PRESETS caves: cavesMap in world.js). One map half is the surface (the Biome's look and rules), the
  * other the caves (the Hollow's look, always dark, no weather); a solid wall between them is broken only by two or three
  * entrances. S.cave tiles: 0 surface, 1 inside the caves, 2 the wall (rock nothing tunnels through).
  *   stock     the opening stock on top of START_STOCK for a colony that starts inside (no Fiber source there) and for one
@@ -1355,9 +1355,9 @@ const CAVES = {
   nests: [2, 3, 4, 5, 7, 9],
   inside: { ore: 7, crystal: 5, stone: 4, oil: 1.2 }, outside: { stalk: 5.5, fert: 6, stone: 3, ore: 0, crystal: 0, oil: 1 },
 };
-/** Does map type `shape` (or, with none given, the current game's) have the caves (Half underground)? */
+/** Does map type `shape` (or, with none given, the current game's) have the caves (Hollowgate)? */
 function cavesShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.caves); }
-/** Is tile t inside the caves of Half underground (S.cave 1)? Missiles, bombs and aircraft don't reach it, nothing grows there, the sky's weather stays out. */
+/** Is tile t inside the caves of Hollowgate (S.cave 1)? Missiles, bombs and aircraft don't reach it, nothing grows there, the sky's weather stays out. */
 function caveTile(t) { return !!(typeof S !== 'undefined' && S && S.cave && S.cave[t] === 1); }
 /** Is the point (x, y) (tile units, anywhere on a tile) inside the caves? */
 function caveAt(x, y) { return !!(S && S.cave && x >= 0 && y >= 0 && x < S.W && y < S.H && S.cave[(y | 0) * S.W + (x | 0)] === 1); }

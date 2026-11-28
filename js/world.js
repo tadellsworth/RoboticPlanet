@@ -29,7 +29,7 @@ function generateMap(seed, W, H, cfg) {
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).orbital) return orbitalMap(seed, W, H, cfg); // (Orbital platforms: station decks and drawbridges, see orbitalMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).graveyard) return graveMap(seed, W, H, cfg); // (The Graveyard: hulks of dead ships in space, see graveMap)
-  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Hollowgate: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
@@ -2896,10 +2896,10 @@ function ringMap(seed, W, H, cfg) {
   };
 }
 
-/* ------------------------------------------------------------------ Half underground */
+/* ------------------------------------------------------------------ Hollowgate */
 
 /**
- * Half underground (SHAPE_PRESETS caves, CAVES in defs.js): a surface half and a cave half, a solid wall between them
+ * Hollowgate (SHAPE_PRESETS caves, CAVES in defs.js): a surface half and a cave half, a solid wall between them
  * broken by two or three entrances. Its own generator, called by generateMap first thing. The whole map is laid out with the
  * caves to the north and then, on half the seeds, turned over end to end (so player 0 is inside on those). It is
  * mirror-symmetric (every tile made to its twin, west to east: the noise read at each tile's canonical place), so the two
@@ -3642,7 +3642,7 @@ function maxPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return 
 function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.minPlayers || 2; }
 
 /**
- * Map types with `evenOnly` (Half underground) take two or four colonies, never three (the owner's call, Nov 2026; its three-colony layout
+ * Map types with `evenOnly` (Hollowgate) take two or four colonies, never three (the owner's call, Nov 2026; its three-colony layout
  * is parked in cavesMap). A three that arrives (a saved setting, a lobby, a link) becomes two, or four with `up` (a lobby of three people:
  * all of them need a place).
  */
@@ -3675,7 +3675,7 @@ function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; r
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
   const d = mapDims0(st), sh = SHAPE_PRESETS[st.shape || 0];
-  // Half underground: an odd width (a middle column to mirror about), and wider for four colonies (two side by side in each half).
+  // Hollowgate: an odd width (a middle column to mirror about), and wider for four colonies (two side by side in each half).
   if (sh.caves) return { W: (st.players === 4 ? Math.round(d.W * 1.45) : d.W) | 1, H: d.H };
   return d;
 }
@@ -3842,7 +3842,7 @@ function newGame(opts) {
   settings.biome = biomeAllowed(opts.biome, settings.shape) && !(horde && !murmurGround(opts.biome)) ? opts.biome : 'desert'; // (Horde: never the silent moon)
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
-  if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
+  if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Hollowgate: the surface's biome is one, the caves' look is the Hollow's)
   if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital || SHAPE_PRESETS[settings.shape].graveyard) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring, Orbital platforms and The Graveyard have Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
@@ -3899,7 +3899,7 @@ function newGame(opts) {
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
-  // Half underground: the cave mask (S.cave) and where its seats, entrances and the Murmur's nest sites are (see cavesMap).
+  // Hollowgate: the cave mask (S.cave) and where its seats, entrances and the Murmur's nest sites are (see cavesMap).
   if (m.caves) { S.cave = m.cave; S.caves = { south: m.caves.south, seats: m.caves.seats, entrances: m.caves.entrances, nests: m.caves.nests, nestsOut: m.caves.nestsOut, variant: m.caves.variant }; }
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
@@ -3953,7 +3953,7 @@ function newGame(opts) {
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
-    // (Half underground: a colony that starts inside has no way to make Fiber, one outside little Ore or Crystal: its opening stock is bigger by what it lacks, CAVES.stock.)
+    // (Hollowgate: a colony that starts inside has no way to make Fiber, one outside little Ore or Crystal: its opening stock is bigger by what it lacks, CAVES.stock.)
     const inCave = !!(m.caves && m.caves.seats[p] && m.caves.seats[p].inside);
     if (m.caves) for (const g in CAVES.stock[inCave ? 'inside' : 'outside']) L.stock[g] = (L.stock[g] || 0) + CAVES.stock[inCave ? 'inside' : 'outside'][g];
     // (The Hollow, and a colony inside the caves: nothing grows, so a Worker comes down in the Agribot's place.)
@@ -4201,7 +4201,7 @@ function worldBan(type, t) {
   if (BDEFS[type] && BDEFS[type].rsv && biome() === 'lunar') return 'No Reservoir on Argos: there is no air here to condense water from.';
   if (BDEFS[type] && BDEFS[type].lvl && biome() === 'lunar') return 'No Leveller on Argos: the moon was never on the settlement plan.';
   if (BDEFS[type] && (BDEFS[type].rsv || BDEFS[type].lvl) && hollowOn()) return `No ${BDEFS[type].name} in the Hollow: the settlement plan never reached the caverns.`;
-  if (S && S.caves) { // (Half underground: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
+  if (S && S.caves) { // (Hollowgate: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
     if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts on this map: the Pathfinder never mapped the caves, so there is nowhere to dock a Trade Terminal.';
     return t === undefined ? '' : caveBan(type, t);
   }
@@ -4220,7 +4220,7 @@ function worldBan(type, t) {
 }
 
 /**
- * Why a `type` can't be built on tile t inside the caves of Half underground ('' if it can): nothing grows without light (no Bio Farms or
+ * Why a `type` can't be built on tile t inside the caves of Hollowgate ('' if it can): nothing grows without light (no Bio Farms or
  * Grove Planters), no aircraft or missile can fly in or out through the roof (no Airfields, Mooring Masts, Mass Drivers, Silos, Lance, Sundering Ray,
  * Orbital Lift, Atmosphere Engine or Great Uplink). The same buildings go up on the surface.
  */
@@ -4258,7 +4258,7 @@ function canyonMeadow(t) {
  */
 function makeDecor() {
   const W = S.W, H = S.H, d = new Uint8Array(W * H), sd = S.seed % 100000;
-  const primary = BIOMES[biome()], second = S.cave ? BIOMES.hollow : BIOMES[S.settings?.biome2]; // (Half underground: the caves wear the Hollow's plants)
+  const primary = BIOMES[biome()], second = S.cave ? BIOMES.hollow : BIOMES[S.settings?.biome2]; // (Hollowgate: the caves wear the Hollow's plants)
   const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
   // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
@@ -5479,7 +5479,7 @@ function canRoad(owner, i, j) {
   if (S.space && spaceModAt(t)) return false; // (a derelict module: space)
   if (S.grave && graveCoreAt(t)) return false; // (the Arbiter's relay: The Graveyard)
   if (orbTile(t)) return false; // (a drawbridge's strip carries its own road while it is down: orbFlip)
-  if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
+  if (S.cave && S.cave[t] === 2) return false; // (Hollowgate: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
@@ -6937,7 +6937,7 @@ const TYPED_FIELDS = {
   pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
   heat: Float32Array, // (the traffic map's flow: see HEAT)
   tun: Uint8Array, // (the Murmur's tunnels: see murmurTick)
-  cave: Uint8Array, // (Half underground: 0 surface, 1 inside the caves, 2 the wall; see cavesMap)
+  cave: Uint8Array, // (Hollowgate: 0 surface, 1 inside the caves, 2 the wall; see cavesMap)
 };
 
 function serializeGame() {
@@ -7027,7 +7027,7 @@ function checkSave(o) {
     if (M.huntFrom != null && !(Number.isInteger(M.huntFrom) && M.huntFrom >= 0)) bad(); // (a mission's: the hunt sooner)
     if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
-  // Half underground (S.caves, with the S.cave layer): where the colonies, the entrances and the Murmur's nest sites are, plain numbers on the map.
+  // Hollowgate (S.caves, with the S.cave layer): where the colonies, the entrances and the Murmur's nest sites are, plain numbers on the map.
   if (o.caves != null) {
     const C = o.caves, pt = (q, ks) => obj(q) && ks.every((k) => Number.isFinite(q[k])) && q.x >= 0 && q.y >= 0 && q.x < o.W && q.y < o.H;
     if (!obj(C) || !Array.isArray(C.seats) || C.seats.length > 4 || !C.seats.every((q) => pt(q, ['x', 'y']) && typeof q.inside === 'boolean')) bad();

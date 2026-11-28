@@ -12,9 +12,9 @@ const AI_FUEL_TANK_PUMPS = 1; // Oil Pumps at work (and a Refinery built) before
 // toward the middle won at 0.3: a pump 18 tiles out among the nests, unstaffed and dry for minutes, while a seep 6
 // tiles from home went unused.
 const AI_HOLLOW_PUMP_FAR = 0.8;
-/** Why colony p's own ground (its Command Base's tile) won't take a `type` ('' if it will): worldBan, and in Half underground what the caves' roof rules out for a colony that starts inside. */
+/** Why colony p's own ground (its Command Base's tile) won't take a `type` ('' if it will): worldBan, and in Hollowgate what the caves' roof rules out for a colony that starts inside. */
 function aiBan(p, type) { const L = getE(S.players[p].lander); return worldBan(type, L ? tIdx(L.x, L.y) : undefined); }
-/** Is colony p one that has no crops to grow (nothing grows in the Hollow, or in the caves of Half underground when it starts inside)? */
+/** Is colony p one that has no crops to grow (nothing grows in the Hollow, or in the caves of Hollowgate when it starts inside)? */
 function aiNoCrops(p) { const L = getE(S.players[p].lander); return hollowOn() || !!(L && caveTile(tIdx(L.x, L.y))); }
 const AI_OIL_CRUDE = 5; // Crude in storage that wants a Refinery even with no Oil Pump at work (the Hollow: see oilFirst in aiThink)
 /**
@@ -96,8 +96,8 @@ const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL
 const AI_ORE_FIELD = 3, AI_ORE_REACH = 30, AI_ORE_AT = 900;
 /** A chain too thin for what it makes, from `at` s (see aiThink): `mines` Mines at work a Smelter (`minesMax` at most), another Smelter with `ore` Ore piled up (`smelters` at most), another Chip Fab with `crystal` Crystal piled up and every Fab busy (`fabs` at most), another Harvester with under `fiber` Fiber and fewer than `harvesters` cutting. */
 const AI_THIN = { at: 360, mines: 2, minesMax: 4, ore: 16, smelters: 3, crystal: 16, fabs: 3, fiber: 8, harvesters: 2 };
-const AI_CAVE_OUT_ORE = 16; // Half underground: Ore or Crystal tiles a colony on the surface holds before it stops counting them short (see aiThink)
-const AI_CAVE_REACH = 110; // Half underground: how far off (tiles) a deposit it lacks still pulls a colony's Outposts toward it (see aiSearchSpot)
+const AI_CAVE_OUT_ORE = 16; // Hollowgate: Ore or Crystal tiles a colony on the surface holds before it stops counting them short (see aiThink)
+const AI_CAVE_REACH = 110; // Hollowgate: how far off (tiles) a deposit it lacks still pulls a colony's Outposts toward it (see aiSearchSpot)
 const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300, AI_TRADE_AT = 480;
 /**
  * Fuel with no source: low (P.fuelLow) for AI_FUEL_DRY s with no Bio Farm that has soil and no Refinery with oil
@@ -532,7 +532,7 @@ function aiThink(p) {
     !me.some((b) => b.type === 'mine' && aiGathers(b, AI_ORE_FIELD));
   const noMine = !!(P.noSpot && P.noSpot.mine && P.noSpot.mine.ver === S.territoryVer && S.time < P.noSpot.mine.until);
   // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
-  // (Half underground: a colony starting on the surface counts its Ore and Crystal short unless it holds a good deal of them, a starter field is not enough: the caves hold the rest, and it goes in early.)
+  // (Hollowgate: a colony starting on the surface counts its Ore and Crystal short unless it holds a good deal of them, a starter field is not enough: the caves hold the rest, and it goes in early.)
   const caveOut = !!S.caves && !aiNoCrops(p);
   P.short = [gatherRes('harvester'), R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : caveOut && (r === R_ORE || r === R_CRYSTAL) ? AI_CAVE_OUT_ORE : 4) || (r === R_CRYSTAL && crShort && crNear) || (r === R_ORE && oreLow && noMine));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
@@ -557,7 +557,7 @@ function aiThink(p) {
   // The Hollow: nothing grows (no Bio Farms or Grove Planters), so Oil Pumps for Fuel and more Harvesters on the Bloom
   // veins, and nothing that flies (see worldBan).
   if (hollowOn()) plan = plan.flatMap(([t, n]) => (t === 'farm' ? [['pump', n]] : t === 'grower' ? [['harvester', n + 3]] : worldBan(t) ? [] : [[t, n]]));
-  // A colony that starts inside the caves (Half underground): no crops, nothing that flies, nothing fired from under the roof; Oil Pumps for its Fuel.
+  // A colony that starts inside the caves (Hollowgate): no crops, nothing that flies, nothing fired from under the roof; Oil Pumps for its Fuel.
   else if (aiNoCrops(p)) plan = plan.flatMap(([t, n]) => (t === 'farm' ? [['pump', n]] : aiBan(p, t) ? [] : [[t, n]]));
   // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry and a
   // second Silo straight after the first Ammo Plant.
@@ -5041,7 +5041,7 @@ function aiSearchSpot(p, type, lander, minDeposits = 2) {
   // ...and the Ore no-one holds, out of enemy guns' reach, while its Ore runs dry with none on its land to mine (AI_ORE_REACH).
   const freeOre = type === 'outpost' && P.oreLow && (P.short || []).includes(R_ORE) ? [] : null;
   if (freeOre) for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_ORE && S.amt[t] && S.owner[t] < 0 && !hotFor(p, t)) freeOre.push(t);
-  // Half underground: what a colony has none of lies through the mouths in the wall (Fiber for one that starts inside the caves, Ore and Crystal for one on the surface):
+  // Hollowgate: what a colony has none of lies through the mouths in the wall (Fiber for one that starts inside the caves, Ore and Crystal for one on the surface):
   // the nearest such deposit no one holds, however far, pulls its Outposts on, a chain of them out through a mouth (see below).
   let freeFar = null;
   if (type === 'outpost' && S.caves) {

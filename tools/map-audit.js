@@ -25,13 +25,13 @@ const skip = new Set(opt('--skip', '').split(',').filter(Boolean));
 // The starter fields: every colony's home has at least this many Ore and Crystal tiles (deposit tiles, not their amounts) in
 // walking reach within HOME_R tiles of its Command Base: the starter field and the richer one just beyond the border (Standard's
 // lies 13.5 tiles out). A map can ask for more: Orbital platforms guarantees its fields' size (ORBITAL.field), so a wiped field
-// shows up there at once. Colonies whose map puts none at home are skipped (Half underground's surface colonies: their Ore and
+// shows up there at once. Colonies whose map puts none at home are skipped (Hollowgate's surface colonies: their Ore and
 // Crystal come through the cave mouths).
 const HOME_R = 16, HOME_FLOOR = { ore: 4, crystal: 4 }; // (HOME_FIELD: the starter field alone holds that many)
 // Fuel at home: every colony has an oil seep in walking reach within OIL_R tiles of its Command Base (oilFloor, js/world.js),
 // on every map but those that keep oil away from home on purpose (OIL_EXEMPT: Sky islands' seeps lie on the mesas between;
-// Half underground, the Hollow, The Ring and Orbital platforms lay their own).
-const OIL_R = 14, OIL_EXEMPT = ['Sky islands', 'Half underground', 'The Hollow', 'The Ring', 'Orbital platforms'];
+// Hollowgate, the Hollow, The Ring and Orbital platforms lay their own).
+const OIL_R = 14, OIL_EXEMPT = ['Sky islands', 'Hollowgate', 'The Hollow', 'The Ring', 'Orbital platforms'];
 // Trade Posts and Uplinks on maps meant to be walked (all but SITE_CROSS, built round a crossing) stand on ground every
 // colony walks to (Tidal flats: at low tide); and every map that has them has at least a Trade Post a colony (two in
 // Teams) and three Uplinks (as many as colonies, for three or four).
@@ -170,10 +170,10 @@ const api = new Function('sfx', 'PROGRESS', source + `
     // The starter fields' floor (HOME_FLOOR): too few Ore or Crystal tiles at home.
     out.thin = [];
     out.reach.forEach((r, k) => {
-      if (out.starts[k].inside === false) return; // (Half underground's surface: no Ore or Crystal at home, by design)
+      if (out.starts[k].inside === false) return; // (Hollowgate's surface: no Ore or Crystal at home, by design)
       for (const g in opts.floor) if (r.home[g] < opts.floor[g]) out.thin.push('colony ' + (k + 1) + ' has ' + r.home[g] + ' ' + g + ' tiles within ' + opts.homeR + ' (floor ' + opts.floor[g] + ')');
     });
-    // Fairness: the smallest over the largest of each good within 24 tiles, among colonies of a kind (Half underground: inside and outside apart).
+    // Fairness: the smallest over the largest of each good within 24 tiles, among colonies of a kind (Hollowgate: inside and outside apart).
     out.fair = {};
     const groups = {}; out.starts.forEach((s, k) => { const key = s.inside === undefined ? 'all' : s.inside ? 'in' : 'out'; (groups[key] = groups[key] || []).push(k); });
     for (const g in GOODS_OF) {

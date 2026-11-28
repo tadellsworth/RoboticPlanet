@@ -1,4 +1,4 @@
-// Half underground's cave mouths (js/world.js cavesMap): where the solid wall between the surface and the caves opens.
+// Hollowgate's cave mouths (js/world.js cavesMap): where the solid wall between the surface and the caves opens.
 // A wall section seen in the game's terrain projection: straight down for the ground (one map tile = 2 world units =
 // 64 px after compose, so tiles join the map exactly), heights shifted up the screen by cot 57° (the buildings' camera
 // angle), so a face that looks south shows as it does on a building. Rendered as one strip that the game cuts at the

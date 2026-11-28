@@ -1,4 +1,4 @@
-# Half underground's cave mouths: finish the renders of b/cavemouth.js and install them in the game.
+# Hollowgate's cave mouths: finish the renders of b/cavemouth.js and install them in the game.
 # usage: python3 tools/install_mouths.py <renderDir> <concept> <gameArtDir>
 #   reads <c>-<face>-<part>.beauty/glow.png for face s and n, parts floor, rock, lip, key, glow (the night 'all' pass)
 #   writes <gameArtDir>/biomes/hollow/mouth-<layer>-<face>.webp, each cropped to what it holds, and prints the crop table
