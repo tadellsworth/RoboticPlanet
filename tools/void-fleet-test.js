@@ -231,5 +231,132 @@ const check = (name, ok, x) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (
   check('The game is decided within 70 minutes (no stall)', r.winner >= 0, r);
 }
 
+// ---- 10. The Flagship's main battery: it fires back at an enemy Line Ship in reach (from its hull), not one beyond; alone it
+// beats a lone Line Ship but not an escorted fleet (three)
+{
+  const c = mk();
+  const r = run(c, `
+    newGame({ seed: 31, mode: 'versus', shape: SH_VF, size: 1 }); quiet();
+    const F = flag(0), B = CAPITAL.flagship.battery;
+    const put = (d) => { const u = addCapital(1, 'line', F.x + d, F.y, Math.PI / 2); u.mag = 0; u.rearm = 0; return u; }; // (unarmed: it only takes the fire)
+    const near = put(capR(F) + capR({ type: 'line' }) + B.range - 0.5 + 0.0001), far = put(-(capR(F) + capR({ type: 'line' }) + B.range + 1));
+    near.sf.tx = near.x; near.sf.ty = near.y; far.sf.tx = far.x; far.sf.ty = far.y;
+    const a0 = near.cs + near.hp, b0 = far.cs + far.hp;
+    steps(12);
+    const hitNear = near.cs + near.hp < a0, hitFar = far.cs + far.hp < b0, fx = S.fx.some((f) => f.type === 'battery' && f.u === F.id) || true;
+    // Duels: the Flagship alone (its escorts away) against one Line Ship, and against three
+    const duel = (n, seed) => {
+      newGame({ seed, mode: 'versus', shape: SH_VF, size: 1 }); quiet();
+      const G = flag(0), ls = [];
+      for (let k = 0; k < n; k++) { const u = addCapital(1, 'line', G.x + (k - 1) * 5, G.y + 9, -Math.PI / 2); orderCapital(1, [u.id], 'hunt', G.id); ls.push(u); }
+      for (let t = 0; t < 30 * 600 && !G.dead && ls.some((u) => !u.dead); t++) simStep(SIM_STEP);
+      return { flag: !G.dead, lines: ls.filter((u) => !u.dead).length, min: Math.round(S.time / 6) / 10 };
+    };
+    return { hitNear, hitFar, one: duel(1, 31), three: duel(3, 31) };
+  `);
+  check('The Flagship\'s main battery fires at an enemy Line Ship within its reach (hull to hull), not at one beyond it', r.hitNear && !r.hitFar, r);
+  check('Alone, the Flagship\'s battery beats a lone Line Ship', r.one.flag && r.one.lines === 0, r.one);
+  check('Alone, it can\'t beat an escorted fleet: three Line Ships destroy it', !r.three.flag && r.three.lines >= 1, r.three);
+}
+
+// ---- 11. The siege: Line Ships ordered at a station shell its Point-Defence and Disruptors first, from beyond their reach
+// (both stand between them and its Command Base, on the side they come from)
+{
+  const c = mk();
+  const r = run(c, `
+    newGame({ seed: 17, mode: 'versus', shape: SH_VF, size: 1 }); quiet();
+    const L1 = getE(S.players[1].lander), st = S.vf.st[1];
+    const on = (i, j) => i >= st.x0 && i <= st.x1 && j >= st.y0 && j <= st.y1 && S.owner[tIdx(i, j)] === 1;
+    const s1 = spot(L1.x, L1.y + 4, 0, 8, on), pd = addBuilding(1, 'pdturret', s1[0], s1[1], true); bump(pd.stock, 'ammo', 4);
+    const s2 = spot(L1.x + 3, L1.y + 3, 0, 8, on), ds = addBuilding(1, 'disruptor', s2[0], s2[1], true); bump(ds.stock, 'fuel', 4);
+    // the geometry: a Line Ship's reach at a building against what reaches back at its hull
+    const L = CAPITAL.line, reachPD = BDEFS.pdturret.range, reachDis = BDEFS.disruptor.range;
+    const F1 = flag(1); F1.x = 3; F1.y = 3; F1.sf.tx = 3; F1.sf.ty = 3; // (its Flagship out of the way: its own guns are not the station's)
+    const lines = [0, 1].map((k) => addCapital(0, 'line', L1.x - 4 + k * 8, L1.y + 26, -Math.PI / 2));
+    orderCapital(0, lines.map((u) => u.id), 'attack', L1.id);
+    let hitByPD = 0, hitByDis = 0, minPD = Infinity, minDis = Infinity, firstPD = -1;
+    const cs = () => lines.reduce((n, u) => n + (u.dead ? 0 : u.cs + u.hp), 0);
+    for (let k = 0; k < 30 * 180; k++) {
+      simStep(SIM_STEP);
+      for (const u of lines) if (!u.dead) {
+        if (!pd.dead) minPD = Math.min(minPD, hullDist(u, bCentre(pd).x, bCentre(pd).y));
+        if (!ds.dead) minDis = Math.min(minDis, hullDist(u, bCentre(ds).x, bCentre(ds).y));
+      }
+      if (pd.dead && firstPD < 0) firstPD = S.time;
+      if (pd.dead && ds.dead) break;
+    }
+    return { pdDead: pd.dead, dsDead: ds.dead, minPD, minDis, reachPD, reachDis, alive: lines.filter((u) => !u.dead).length, firstPD, baseLeft: !L1.dead, full: lines.every((u) => u.hp === u.maxHp) };
+  `);
+  check(`A siege: Line Ships sent at a station shell its Point-Defence and Disruptor first, from beyond their reach (never within ${'7'} or ${'4.5'} tiles of their hulls)`, r.pdDead && r.dsDead && r.minPD > r.reachPD && r.minDis > r.reachDis && r.full, r);
+}
+
+// ---- 12. Gunships and the wing: a pad's Gunship joins the wing by itself while there is room; the Join order (and a
+// right-click on the Flagship); leaving it; an Army Group set to Reinforce takes new Gunships (and new warbots first)
+{
+  const c = mk();
+  const r = run(c, `
+    newGame({ seed: 9, mode: 'versus', shape: SH_VF, size: 1 }); quiet();
+    const F = flag(0), L = getE(S.players[0].lander), P = pad(0, L.x, L.y);
+    for (const g of ['alloy', 'chip', 'fuel']) bump(P.stock, g, 200);
+    orderAtYard(P, 'gunship', 1);
+    until(() => S.bots.some((u) => !u.dead && u.owner === 0 && u.type === 'gunship'), 200);
+    const g1 = S.bots.find((u) => !u.dead && u.owner === 0 && u.type === 'gunship');
+    const auto = g1.wing === F.id;
+    steps(20);
+    const by = hullDist(F, g1.x, g1.y) <= CAPITAL.flagship.aura;
+    // leave the wing, then join again through the order (as the panel's button), then by a right-click on the Flagship
+    const left = applyOrder(0, 'wing', [[g1.id], 0]), out = !g1.wing;
+    steps(10);
+    const joined = applyOrder(0, 'wing', [[g1.id], F.id]), back = g1.wing === F.id;
+    applyOrder(0, 'wing', [[g1.id], 0]);
+    const rc = applyOrder(0, 'command', [[g1.id], { flag: F.id, i: Math.floor(F.x), j: Math.floor(F.y) }]);
+    const viaClick = g1.wing === F.id && rc && rc.guns === 1;
+    // a full wing takes no more
+    const extra = []; for (let k = 0; k < CAPITAL.flagship.wing; k++) { const u = addBot(0, 'gunship', Math.floor(F.x), Math.floor(F.y) + 3); u.bat = 100; u.alt = 1; u.sf = { ph: 'hold', tx: u.x, ty: u.y, land: false }; extra.push(u); } // (up in the void, not on the pad: it holds two)
+    const took = applyOrder(0, 'wing', [extra.map((u) => u.id), F.id]), full = wingCraft(F).length;
+    // Reinforce: a group set to it takes the next Gunship from the pad (not the wing)
+    for (const u of wingCraft(F).slice(1)) killBot(u, true); // (room in the wing again: the group still comes first)
+    const gid = agNew(0, []), grp = agById(gid);
+    const reinfOk = applyOrder(0, 'agReinf', [gid, 1]);
+    grp.size = 4;
+    orderAtYard(P, 'gunship', 1);
+    const n0 = S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'gunship').length;
+    until(() => S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'gunship').length > n0, 200);
+    const g2 = S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'gunship').pop();
+    const inGrp = g2.grp === gid && !g2.wing;
+    applyOrder(0, 'agReinf', [gid, 0]);
+    // warbots: with two groups under strength, the Reinforce one is filled first
+    const gid2 = agNew(0, []);
+    agById(gid2).size = 3; applyOrder(0, 'agReinf', [gid2, 1]);
+    const pick = agPickFor(0, L);
+    return { auto, by, left, out, joined, back, viaClick, took, full, wingMax: CAPITAL.flagship.wing, reinfOk, inGrp, pickReinf: pick && pick.id === gid2, defOff: !agById(gid).reinf };
+  `);
+  check('A Gunship built at a Launch Pad joins the Flagship\'s wing by itself while it has room, and flies by it', r.auto && r.by, r);
+  check('Gunships leave the wing and join it again by order (the panel\'s buttons, a right-click on the Flagship); a full wing takes no more', r.left === 1 && r.out && r.joined === 1 && r.back && r.viaClick && r.full === r.wingMax && r.took === r.wingMax - 1, r);
+  check('An Army Group set to Reinforce (off by default) takes new Gunships from the pads instead of the wing, and new warbots before other groups', r.reinfOk && r.inGrp && r.pickReinf && r.defOff, r);
+}
+
+// ---- 13. Formation: escorts on a straight run keep the Flagship's heading (Line Ships and its wing, within 10 degrees)
+{
+  const c = mk();
+  const r = run(c, `
+    newGame({ seed: 9, mode: 'versus', shape: SH_VF, size: 1 }); quiet();
+    const F = flag(0);
+    const ls = [addCapital(0, 'line', F.x - 5, F.y + 3, 0.6), addCapital(0, 'line', F.x + 5, F.y + 3, 2.4)];
+    const gs = [0, 1, 2].map((k) => { const u = addBot(0, 'gunship', Math.floor(F.x), Math.floor(F.y)); u.x = F.x + k - 1; u.y = F.y + 2; u.bat = 100; u.alt = 1; u.face = k; u.wing = F.id; u.sf = { ph: 'go', tx: u.x, ty: u.y, land: false }; return u; });
+    steps(20); // (they form up)
+    orderCapital(0, [F.id], 'move', 0, F.x, 10);
+    steps(12); // (it gets under way)
+    let worst = 0;
+    for (let k = 0; k < 30 * 30; k++) {
+      simStep(SIM_STEP);
+      if (k % 15 || !(F.vel > 0.05)) continue;
+      for (const u of [...ls, ...gs]) worst = Math.max(worst, Math.abs(wrapAngle(u.face - F.face)));
+    }
+    return { worst: Math.round(worst * 57.3 * 10) / 10, moving: F.y };
+  `);
+  check('In formation on a straight run, every escort (Line Ships and the wing) stays within 10 degrees of the Flagship\'s heading', r.worst <= 10, r);
+}
+
 console.log(fails ? `\n${fails} failed` : '\nAll passed');
 process.exit(fails ? 1 : 0);

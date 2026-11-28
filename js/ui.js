@@ -3552,7 +3552,9 @@ function onMapCommand(i, j, wx, wy, done) {
   const foe = !b ? enemyBotAtTap(i, j) : null;
   // (an earthwork tile: a foe's is attacked; your own or an ally's with Ctrl, Alt or Cmd held: js/terraform4.js)
   const ew = !foe && !b && typeof ewOrderAt === 'function' ? ewOrderAt(i, j, !!INPUT.force) : 0;
-  const spec = foe ? { foe: foe.id } : b ? { b: b.id } : ew ? { i, j, ew: 1 } : { i, j };
+  // (The Void Fleet: your own Flagship's hull: Gunships join its wing, Line Ships escort it: spaceCommand)
+  const myF = !foe && !b && S.vf && flagshipOf(ME), onF = myF && capAtTap(myF, wx, wy) >= 0 ? myF : null;
+  const spec = foe ? { foe: foe.id } : b ? { b: b.id } : onF ? { flag: onF.id, i, j } : ew ? { i, j, ew: 1 } : { i, j };
   const theirs = !!b && foes(b.owner, ME), mine = !!b && b.owner === ME, bName = b ? BDEFS[b.type].name : '', foeName = foe ? BOTS[foe.type].name : '';
   const rx = (b ? b.x : i) + 0.5, ry = (b ? b.y : j) + 0.5;
   act('command', [UI.sel.slice(), spec], (r) => {
@@ -3560,7 +3562,7 @@ function onMapCommand(i, j, wx, wy, done) {
     if (!r || r.why) { sfx('error'); toast((r && r.why) || where, 'warn'); return; }
     if (r.kind === 'craft') { // (spacecraft: spaceCommand)
       sfx('order'); addFx('ring', rx, ry, { color: theirs || foe ? '#ff5a6e' : '#d9c8ff' });
-      toast([r.guns ? `${r.guns} Gunship${r.guns === 1 ? '' : 's'} ${theirs ? `attacking the ${bName}` : foe ? `after the ${foeName}` : mine && BDEFS[b.type].pad ? 'coming home' : 'holding that spot'}` : '', r.squad ? `${r.squad} robot${r.squad === 1 ? '' : 's'} boarding the Dropship to land there` : ''].filter(Boolean).join('; ') + '.', 'info');
+      toast([r.guns ? `${r.guns} Gunship${r.guns === 1 ? '' : 's'} ${onF ? 'joining your Flagship\'s wing' : theirs ? `attacking the ${bName}` : foe ? `after the ${foeName}` : mine && BDEFS[b.type].pad ? 'coming home' : 'holding that spot'}` : '', onF && r.caps ? `${r.caps} Line Ship${r.caps === 1 ? '' : 's'} escorting it` : '', r.squad ? `${r.squad} robot${r.squad === 1 ? '' : 's'} boarding the Dropship to land there` : ''].filter(Boolean).join('; ') + '.', 'info');
       if (done) done();
       refreshSelection();
       return;
@@ -11234,6 +11236,8 @@ function openAgSheet(g) {
     <div class="section-label">Target size and priority <span class="label-note">new units fill the groups in priority order</span></div>
     <div class="ag-row"><button class="btn" id="ag-size-down" aria-label="Smaller">−</button><b class="ag-n" id="ag-size"></b><button class="btn" id="ag-size-up" aria-label="Bigger">+</button></div>
     <div class="ag-row"><span id="ag-prio" class="ag-prio"></span><span class="ag-sep"></span><button class="btn" id="ag-up" aria-label="Higher priority">▲ Up</button><button class="btn" id="ag-down" aria-label="Lower priority">▼ Down</button></div>
+    <div class="ag-row" id="ag-reinfs"><span class="label-note">Reinforce:</span><button class="btn small" id="ag-reinf-1" data-v="1">On</button><button class="btn small" id="ag-reinf-0" data-v="0">Off</button></div>
+    <p class="hint" id="ag-reinf-how"></p>
     <div class="section-label">Standing order</div>
     <div class="ag-orders" id="ag-orders">${orders}</div>
     <div class="ag-row" id="ag-rads"><span class="label-note">Area (Defend area, Raid):</span>${AGROUP.radii.map((r) => `<button class="btn small" id="ag-rad-${r}" data-r="${r}">${r} tiles</button>`).join('')}</div>
@@ -11254,6 +11258,7 @@ function openAgSheet(g) {
   $('ag-size-up').onclick = () => { const q = G(); if (q) { sfx('click'); act('agSize', [q.id, q.size + 1], () => refreshAgSheet()); } };
   $('ag-up').onclick = () => { const q = G(); if (q) { sfx('click'); act('agPrio', [q.id, -1], () => { refreshAgSheet(); refreshAgCards(); }); } };
   $('ag-down').onclick = () => { const q = G(); if (q) { sfx('click'); act('agPrio', [q.id, 1], () => { refreshAgSheet(); refreshAgCards(); }); } };
+  for (const b of $('ag-reinfs').querySelectorAll('[data-v]')) b.onclick = () => { const q = G(); if (!q) return; sfx('click'); act('agReinf', [q.id, +b.dataset.v], () => { toast(+b.dataset.v ? `The ${q.name} takes new Gunships${S.space ? '' : ' (on a space map)'} and new warbots before your other groups.` : `The ${q.name} no longer asks for reinforcements first.`, 'info'); refreshAgSheet(); }); };
   for (const b of $('ag-orders').children) b.onclick = () => agOrderButton(G(), b.dataset.k);
   for (const b of $('ag-rads').querySelectorAll('[data-r]')) b.onclick = () => {
     const q = G(); if (!q) return;
@@ -11311,6 +11316,8 @@ function refreshAgSheet() {
   for (const b of $('ag-reps').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === rep);
   $('ag-reps').hidden = g.ord.k !== 'raid';
   for (const b of $('ag-rets').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === B.ret);
+  for (const b of $('ag-reinfs').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === (g.reinf ? 1 : 0));
+  set('ag-reinf-how', g.reinf ? `On: new Gunships from your Launch Pads join this group while it is under its size (not your Flagship's wing), and new warbots fill it before your other groups.` : 'Off: new warbots fill your groups in priority order; new Gunships stay on their pad (or join your Flagship\'s wing).');
   for (const b of $('ag-rels').querySelectorAll('[data-v]')) b.classList.toggle('on', +b.dataset.v === B.rel);
   for (const b of $('ag-sts').querySelectorAll('[data-v]')) b.classList.toggle('on', b.dataset.v === B.st);
   const noRep = !S.buildings.some((b) => !b.dead && b.owner === ME && b.built && BDEFS[b.type].repair);

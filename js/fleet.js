@@ -11,7 +11,8 @@
  *     point-defence sponsons, four great engines) and the Line Ship (the canvas's "Line": an armoured hull with belt plates,
  *     two twin turrets, a spinal gun). Extra frames: the Flagship's launch rails lit (flagship-launch) while a Gunship goes
  *     up off its deck, the Line Ship's turrets trained to port or starboard and firing (line-fireL, line-fireR).
- *   - In code: the engines' glow (brighter under way), the shadow far below, the shield (the Shield Dome's pale blue
+ *   - In code: the Flagship's main battery (two heavy turrets fore and aft, trained on what they fire at, a flash and smoke
+ *     at the muzzles, the barrels kicking back: drawCapBattery), the engines' glow (brighter under way), the shadow far below, the shield (the Shield Dome's pale blue
  *     drawn round the hull: a faint fill, a crisp rim, a hexagon lattice with a shimmer over it; panels flash and a ring
  *     spreads where a shot lands; it flickers and breaks up as it fails; it draws back round from the stern as it
  *     recharges; a soft blue spill under it at night), the broadsides' muzzle flashes and shells, the launch rail's
@@ -30,6 +31,9 @@ const FLEET_LOOK = {
   eng: { flagship: [[-0.455, -0.075], [-0.455, -0.025], [-0.455, 0.025], [-0.455, 0.075]], line: [[-0.455, -0.045], [-0.455, 0], [-0.455, 0.045]] },
   // its turrets' muzzles (a broadside's flashes): fractions of the frame along it, and out to the side
   guns: { line: [[0.12, 0.06], [-0.05, 0.06], [0.3, 0.02]] },
+  // the Flagship's main battery: its two turrets along its centreline (fractions of the frame: CAPITAL.flagship.battery.at
+  // times its reach over the frame), their housing's radius and barrels' length (tiles)
+  battery: { r: 0.32, len: 0.62 },
   // the Flagship's launch rails along its deck: [from, to] along it, their side offsets
   rails: { from: -0.22, to: 0.24, off: [-0.045, 0.045] },
   shell: { core: '#fff6e0', glow: '#ffae4a' },
@@ -104,6 +108,9 @@ function drawCapital(ctx, u, sx, sy, z) {
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, z * 0.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
+  // The Flagship's main battery: two heavy turrets, fore and aft, trained on what they fire at (forward when quiet), a flash
+  // and smoke at the muzzles as they fire, the barrels kicking back.
+  if (u.type === 'flagship') drawCapBattery(ctx, u, sx, y, z, F);
   // A broadside: flashes and smoke at the turrets on that side.
   const B = u.type === 'line' && capFxOf(u, 'broadside');
   if (B) {
@@ -136,6 +143,38 @@ function drawCapital(ctx, u, sx, sy, z) {
   if (sel) {
     ctx.strokeStyle = PLAYER_COLORS[u.owner] || '#fff'; ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.setLineDash([z * 0.3, z * 0.18]);
     ctx.beginPath(); ctx.ellipse(sx, y, (H[0] + 0.6) * z, (H[1] + 0.6) * z, f, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+/** The Flagship's two battery turrets at (sx, sy) (its hull's middle on screen), its frame F px: housings, twin barrels, the flash as they fire. */
+function drawCapBattery(ctx, u, sx, sy, z, F) {
+  const B = FLEET_LOOK.battery, fire = capFxOf(u, 'battery'), k = fire ? fire.t / fire.life : 1, col = PLAYER_COLORS[u.owner] || '#fff';
+  const aim = fire ? fire.a : u.face || 0, kick = fire ? Math.max(0, 1 - k * 3) * 0.18 : 0;
+  for (const at of CAPITAL.flagship.battery.at) {
+    const [tx, ty] = capPt(u, sx, sy, F, (at * CAPITAL.r.flagship) / FLEET_LOOK.frame.flagship, 0), r = B.r * z;
+    ctx.save(); ctx.translate(tx, ty);
+    // the barrels (under the housing's front), recoiling as they fire
+    ctx.rotate(aim);
+    ctx.fillStyle = '#2a2f35'; ctx.strokeStyle = '#121518'; ctx.lineWidth = Math.max(0.8, z * 0.025);
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.rect(r * 0.2 - kick * z, s * r * 0.32 - z * 0.05, B.len * z, z * 0.1); ctx.fill(); ctx.stroke(); }
+    // the housing: a squat armoured dome, a team-coloured band
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    g.addColorStop(0, '#8d949c'); g.addColorStop(1, '#3b4148');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, z * 0.045); ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    if (!fire || k > 0.6) continue;
+    // the muzzle flash and smoke, as the broadsides'
+    const q = k / 0.6, mx = tx + Math.cos(aim) * (r * 0.2 + B.len * z) , my = ty + Math.sin(aim) * (r * 0.2 + B.len * z);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const rr = z * (0.4 + 0.6 * q), px = mx + Math.cos(aim) * z * 0.3 * (0.5 + q), py = my + Math.sin(aim) * z * 0.3 * (0.5 + q);
+    const fg = ctx.createRadialGradient(px, py, 0, px, py, rr);
+    fg.addColorStop(0, `rgba(255,250,230,${0.95 * (1 - q)})`); fg.addColorStop(0.4, `rgba(255,174,74,${0.75 * (1 - q)})`); fg.addColorStop(1, 'rgba(255,110,40,0)');
+    ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(px, py, rr, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha *= 0.35 * (1 - q); ctx.fillStyle = 'rgba(170,170,175,1)';
+    ctx.beginPath(); ctx.arc(mx + Math.cos(aim) * z * (0.6 + 0.9 * q), my + Math.sin(aim) * z * (0.6 + 0.9 * q), z * (0.22 + 0.4 * q), 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -245,17 +284,18 @@ function drawCapShield(ctx, u, sx, sy, z) {
 
 /* -- the shells and the breaking up */
 
-/** A Line Ship's shell (fx 'capshell'): a bright slug with a short trail flying to its mark, then a flash where it lands. */
+/** A Line Ship's shell, or the Flagship's battery's (fx 'capshell', `big`): a bright slug with a short trail flying to its mark, then a flash where it lands. */
 function drawCapShell(ctx, f, ox, oy, z) {
   const k = f.t / f.life, fly = 0.8, x0 = ox + f.x * z, y0 = oy + f.y * z - z * 0.35, x1 = ox + f.x2 * z, y1 = oy + f.y2 * z - z * 0.2, L = FLEET_LOOK.shell;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
   if (k < fly) {
     const q = k / fly, hx = x0 + (x1 - x0) * q, hy = y0 + (y1 - y0) * q - Math.sin(q * Math.PI) * z * 0.3, len = Math.hypot(x1 - x0, y1 - y0) || 1, tl = Math.min(len * q, z * 0.9);
     const tx = hx - ((x1 - x0) / len) * tl, ty = hy - ((y1 - y0) / len) * tl;
-    ctx.strokeStyle = L.glow; ctx.globalAlpha = 0.5; ctx.lineWidth = Math.max(2, z * 0.14); ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
-    ctx.strokeStyle = L.core; ctx.globalAlpha = 1; ctx.lineWidth = Math.max(1, z * 0.05); ctx.stroke();
+    const big = f.big ? 1.5 : 1; // (the Flagship's battery: a heavier shell)
+    ctx.strokeStyle = L.glow; ctx.globalAlpha = 0.5; ctx.lineWidth = Math.max(2, z * 0.14 * big); ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.strokeStyle = L.core; ctx.globalAlpha = 1; ctx.lineWidth = Math.max(1, z * 0.05 * big); ctx.stroke();
   } else {
-    const q = (k - fly) / (1 - fly), r = z * (0.3 + 0.6 * q), g = ctx.createRadialGradient(x1, y1, 0, x1, y1, r);
+    const q = (k - fly) / (1 - fly), r = z * (0.3 + 0.6 * q) * (f.big ? 1.4 : 1), g = ctx.createRadialGradient(x1, y1, 0, x1, y1, r);
     g.addColorStop(0, `rgba(255,246,224,${1 - q})`); g.addColorStop(0.4, `rgba(255,174,74,${0.8 * (1 - q)})`); g.addColorStop(1, 'rgba(255,110,40,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x1, y1, r, 0, Math.PI * 2); ctx.fill();
   }
@@ -342,9 +382,10 @@ function capRows(u) {
   let h = bar('Shield', cs, max, '#78c8ff') + bar('Hull', Math.round(u.hp), u.maxHp, u.hp / u.maxHp > 0.6 ? '#7bea6b' : u.hp / u.maxHp > 0.3 ? '#ffd166' : '#ff5a5a');
   h += `<p class="hint">${cs <= 0 ? 'Shield down: the hull takes every hit.' : cs < max ? (wait > 0 ? `Shield recharging in ${Math.ceil(wait)} s, if nothing hits it.` : 'Shield recharging.') : 'Shield up.'} It takes every hit first and recharges ${C.regen} a second once nothing has hit it for ${CAPITAL.wait} s. A Disruptor Tower's pulse drains it ${CAPITAL.disrupt} times as fast.</p>`;
   if (u.type === 'line') {
-    h += `<div class="kv"><span>Broadsides</span><span>${C.salvo} shells every ${C.reload} s out to ${C.range} tiles: ${C.cap} off a capital ship, ${C.bld} off a building, ${C.bot} off a robot, ${C.craft} off a small craft</span></div>`;
+    h += `<div class="kv"><span>Broadsides</span><span>${C.salvo} shells every ${C.reload} s out to ${C.range} tiles of its hull (${C.bldRange} at a building: a siege outranges Point-Defence and Disruptors): ${C.cap} off a capital ship, ${C.bld} off a building, ${C.bot} off a robot, ${C.craft} off a small craft</span></div>`;
     h += `<div class="kv"><span>Magazine</span><span>${Math.floor(u.mag ?? C.mag)} of ${C.mag} shells${u.rearm ? ' (rearming)' : ''}</span></div>`;
   } else {
+    h += `<div class="kv"><span>Main battery</span><span>two heavy turrets: a shell each every ${C.battery.reload} s at enemy capital ships within ${C.battery.range} tiles of its hull, ${C.battery.cap} a shell</span></div>`;
     h += `<div class="kv"><span>Point-defence</span><span>bursts at enemy craft within ${C.pd.range} tiles of its hull, Gunships first</span></div>`;
     h += `<div class="kv"><span>Aura</span><span>mends, refuels and rearms your craft within ${C.aura} tiles of its hull</span></div>`;
     h += `<div class="kv"><span>Wing</span><span>${wingCraft(u).length} of ${C.wing} Gunships</span></div>`;
@@ -360,7 +401,7 @@ function capButtons(u) {
     return `<div class="section-label">Deck <span class="label-note">parts come up from your stores</span></div><div id="fy-rows">${rows}</div><div class="kv"><span id="fy-status"></span></div><div class="bar" id="fy-bar" hidden><div></div></div>
       <p class="hint">A Gunship costs ${rd('gunship')} and flies as the Flagship's wing (${CAPITAL.flagship.wing} at most), guarding it; a Line Ship costs ${rd('line')} (${CAPITAL.line.most} to a colony). ${L ? '' : ''}</p>
       <div class="actions"><button class="btn primary" id="cap-move">Move: tap where</button><button class="btn" id="cap-stop">Hold here</button></div>
-      <p class="hint">With a mouse, select it and right-click where it goes. It is slow: keep it out of the enemy's Line Ships' reach, with your own Line Ships and Gunships round it. Lose it and you lose the game.</p>`;
+      <p class="hint">With a mouse, select it and right-click where it goes. It is slow: its main battery fires back at enemy capital ships close by, but alone it can't outfight an escorted fleet, so keep your own Line Ships and Gunships round it. Lose it and you lose the game.</p>`;
   }
   return `<div class="actions"><button class="btn primary" id="cap-atk">Attack: tap a target</button><button class="btn" id="cap-home">${flagshipOf(u.owner) ? 'Escort the Flagship' : 'Stop'}</button></div>
     <p class="hint">Tap an enemy building, robot or ship to attack it, or open space to hold there. With a mouse, select it and right-click, as for warbots. Out of shells, it rearms beside your Flagship or over a Launch Pad.</p>`;

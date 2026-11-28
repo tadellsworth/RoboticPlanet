@@ -1372,15 +1372,21 @@ const VFLEET = { home: { hh: [0.2, 15, 22], hw: [0.6, 22, 34], berth: 5 }, rock:
  *             points a second), refuels (`fuel` of the tank a second) and rearms (`rearm` shells a second) its colony's craft;
  *             its deck builds `yard` (a round of parts every YARD.work s, from its colony's stores: flagStores), its Gunships
  *             (`wing` at most) staying with it as its wing; `guard` it sends its wing up at enemies this near; `self` hit
- *             points a second its own crews mend its hull while nothing has hit it for `wait` s
- *   line      a Line Ship: broadsides (`salvo` shells every `reload` s, out to `range` of the hull: `cap` off a capital ship,
- *             `craft` off a small craft, `bot` off a robot, `bld` off a building, Command Bases and Keeps held at a third as
- *             a Gunship's lasers do), `mag` shells in its magazine (rearmed by the Flagship, or `padRearm` a second over a
- *             Launch Pad); `keep` the range it stands off at; its light `pd`; `most` a colony
+ *             points a second its own crews mend its hull while nothing has hit it for `wait` s; `battery` its main
+ *             battery, two heavy turrets fore and aft (`at`: how far along the hull, of its reach `r`) that fire at enemy
+ *             capital ships only, from its hull to theirs out to `range` (a little short of a Line Ship's): a shell each
+ *             every `reload` s, `cap` a shell. Enough to fight back, never to win alone against an escorted fleet.
+ *   line      a Line Ship: broadsides (`salvo` shells every `reload` s, out to `range` from its hull to the target's hull,
+ *             `bldRange` to a building's footprint: it holds still, so a siege outranges Point-Defence and Disruptors;
+ *             `cap` off a capital ship, `craft` off a small craft, `bot` off a robot, `bld` off a building, Command Bases and
+ *             Keeps held at a third as a Gunship's lasers do), `mag` shells in its magazine (rearmed by the Flagship, or
+ *             `padRearm` a second over a Launch Pad); `keep` the range it stands off at from a ship or robot; its light
+ *             `pd`; `most` a colony; `siege` how far past a defence's reach it starts to stand off from it and shell it first
  */
 const CAPITAL = { wait: 6, disrupt: 3, r: { flagship: 3.0, line: 2.2 }, turn: { flagship: 0.3, line: 0.45 },
-  flagship: { sh: 400, regen: 15, self: 1, pd: { range: 4.5, ground: 3, reload: 0.35, craft: 1.2, bot: 0.8 }, aura: 5.5, mend: 2, fuel: 6, rearm: 2, yard: ['line', 'gunship'], wing: 6, guard: 9 },
-  line: { sh: 140, regen: 9, range: 7, keep: 5.5, reload: 3, salvo: 2, cap: 9, craft: 3, bot: 4, bld: 6, mag: 30, padRearm: 1, pd: { range: 3, reload: 0.6, craft: 1, bot: 0.6 }, most: 4 } };
+  flagship: { sh: 400, regen: 15, self: 1, pd: { range: 4.5, ground: 3, reload: 0.35, craft: 1.2, bot: 0.8 }, aura: 5.5, mend: 2, fuel: 6, rearm: 2, yard: ['line', 'gunship'], wing: 6, guard: 9,
+    battery: { range: 5.5, reload: 4, cap: 8, at: [0.68, -0.68] } },
+  line: { sh: 140, regen: 9, range: 7, bldRange: 8, siege: 3, keep: 5.5, reload: 3, salvo: 2, cap: 9, craft: 3, bot: 4, bld: 6, mag: 30, padRearm: 1, pd: { range: 3, reload: 0.6, craft: 1, bot: 0.6 }, most: 4 } };
 const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 }, ringfall: 4 };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }

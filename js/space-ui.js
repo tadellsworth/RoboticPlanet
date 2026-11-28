@@ -54,7 +54,12 @@ function craftButtons(u) {
   if (BOTS[u.type].capital) return capButtons(u);
   if (u.type === 'shuttle') return `<div class="actions"><button class="btn primary" id="sh-sp-tow">${S.grave ? 'Tow salvage' : 'Tow an asteroid'}</button><button class="btn" id="sh-sp-post">Land a Drop Outpost</button></div><button class="btn" id="sh-sp-home">Call off</button><p class="hint">${S.grave ? '<b>Tow salvage</b>: tap a wreck drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken down for ' + costText(DRIFT.salvage) + '.' : '<b>Tow an asteroid</b>: tap an Ore or Crystal rock drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken up into a field beside the pad to mine.'} <b>Land a Drop Outpost</b> (${costText(BDEFS.dropost.cost)}): tap open ground on a deck or hulk nobody holds; it lands the kit there and it unfolds, claiming the land round it. Supplies: switch on <b>Supply by air</b> in a Depot\'s or Outpost\'s panel, and it keeps that place stocked by itself.</p>`;
   if (u.type === 'dropship') return `<div class="actions"><button class="btn primary" id="sh-sp-sq-w">Land ${BOTS.dropship.seats} Warbots</button><button class="btn" id="sh-sp-sq-k">Land ${BOTS.dropship.seats} Workers</button></div><button class="btn" id="sh-sp-home">Call off</button><p class="hint">Then tap where: any flat, free ground, a deck behind a raised drawbridge or a rock no bridge reaches. They board at its pad (Warbots from your garrisons, idle Workers), it flies straight over the void, lands and they walk out down its ramp. With a mouse, select robots and the Dropship together and right-click where to land them.</p>`;
-  if (BOTS[u.type].gunship) return '<div class="actions"><button class="btn primary" id="sh-sp-gun">Attack: tap a target</button><button class="btn" id="sh-sp-home">Come home</button></div><p class="hint">Tap an enemy building, robot or craft to attack it, open space or ground to hold there, or its Launch Pad to come home. With a mouse, select it and right-click, as for warbots. It flies home by itself to refuel and mend.</p>';
+  if (BOTS[u.type].gunship) {
+    const F = flagshipOf(u.owner), inWing = !!(u.wing && wingOf(u)), room = F ? CAPITAL.flagship.wing - wingCraft(F).length : 0;
+    const wing = !F ? '' : inWing ? '<button class="btn" id="sh-sp-unwing">Leave the wing</button>'
+      : `<button class="btn" id="sh-sp-wing"${room > 0 ? '' : ' disabled'}>Join the Flagship's wing${room > 0 ? '' : ' (full)'}</button>`;
+    return `<div class="actions"><button class="btn primary" id="sh-sp-gun">Attack: tap a target</button><button class="btn" id="sh-sp-home">Come home</button></div>${wing}<p class="hint">Tap an enemy building, robot or craft to attack it, open space or ground to hold there, or ${inWing ? 'your Flagship' : 'its Launch Pad'} to come home. With a mouse, select it and right-click, as for warbots. It flies home by itself to refuel and mend.${F ? ` <b>Join the Flagship's wing</b> (or right-click your Flagship with Gunships selected): it flies with it, guarding it, mended and refuelled beside it (${CAPITAL.flagship.wing} at most). New Gunships from your Launch Pads join the wing by themselves while it has room, unless an Army Group is set to Reinforce.` : ''}</p>`;
+  }
   return '';
 }
 
@@ -66,6 +71,8 @@ function bindCraftButtons(u) {
   if ($('sh-sp-sq-w')) $('sh-sp-sq-w').onclick = () => { sfx('click'); startSpaceMode('squad', u.id, { sub: 'warbot' }); };
   if ($('sh-sp-sq-k')) $('sh-sp-sq-k').onclick = () => { sfx('click'); startSpaceMode('squad', u.id, { sub: 'worker' }); };
   if ($('sh-sp-gun')) $('sh-sp-gun').onclick = () => { sfx('click'); startSpaceMode('gun', u.id); };
+  if ($('sh-sp-wing')) $('sh-sp-wing').onclick = () => { const F = flagshipOf(ME); if (F) act('wing', [[u.id], F.id], (n) => { sfx(n ? 'order' : 'error'); toast(n ? 'The Gunship flies to join your Flagship\'s wing.' : `The wing is full: ${CAPITAL.flagship.wing} Gunships at most.`, n ? 'info' : 'warn'); refreshSheet(); }); };
+  if ($('sh-sp-unwing')) $('sh-sp-unwing').onclick = () => act('wing', [[u.id], 0], (n) => { sfx(n ? 'order' : 'error'); toast(n ? 'The Gunship leaves the wing for a Launch Pad.' : 'It is not in the wing.', n ? 'info' : 'warn'); refreshSheet(); });
   if ($('sh-sp-home')) $('sh-sp-home').onclick = () => act('craftHome', [u.id], (ok) => { sfx(ok ? 'order' : 'error'); toast(ok ? `The ${BOTS[u.type].name} is called back.` : 'Nothing to call off: it is already on its way.', ok ? 'info' : 'warn'); refreshSheet(); });
 }
 
