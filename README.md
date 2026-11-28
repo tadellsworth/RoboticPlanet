@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), The Graveyard (two players; `graveMap` in js/world.js), The Void Fleet (two players; `voidMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), The Graveyard (two players; `graveMap` in js/world.js), The Void Fleet (two players; `voidMap` in js/world.js), Hollowgate (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -327,7 +327,7 @@ on their own, to the same count). Before that, it lays again just outside the to
 `HOME_CUT_R` (16) tiles of a base, as many tiles and as rich: Passenger Town's streets ran over the second fields out in front of
 each base (on Small for two, seed 7, the Ore within 16 tiles went from 10 to 2). A
 field that already holds 4 is left alone; the richer fields beyond are untouched. The Ring (`RING.field`, 4) and Orbital
-platforms (`ORBITAL.field.home`, 5) lay their own; the Hollow's (3, `hollowMap`) and Half underground's inside colonies' are
+platforms (`ORBITAL.field.home`, 5) lay their own; the Hollow's (3, `hollowMap`) and Hollowgate's inside colonies' are
 their own too, and its surface colonies have no Ore or Crystal by design. `tools/map-audit.js` fails any home with fewer than 4
 Ore or 4 Crystal tiles in walking reach within 16 tiles (more on The Ring and Orbital platforms).
 **Fuel at home** (Nov 27 2026): each colony has an oil seep it can walk to within `HOME_OIL.r` (14) tiles of its Command
@@ -335,7 +335,7 @@ Base. On Small most map types had none: the "beyond" oil field and the middle on
 massif, the town, the factory's yard, the maze walls). `homeFieldFloor` checks the ground the colony walks to (`walkFrom`:
 from the base, before any road) and, short of a seep, lays one of `HOME_OIL.tiles` (3) on open ground `near` to `far` (6 to
 11.5) tiles out, on ground this colony walks to and each twin on ground its own colony walks to, with the map's symmetry. Not
-on the Hollow, Half underground, The Ring or Orbital platforms (they lay their own) nor on Sky islands, whose oil lies on the
+on the Hollow, Hollowgate, The Ring or Orbital platforms (they lay their own) nor on Sky islands, whose oil lies on the
 mesas between (it never needed one). `placePosts` keeps a post's ground off each colony's nearest seep (it would move it off).
 `tools/map-audit.js` fails a colony with no oil seep in walking reach within 14 tiles.
 **Trade Posts and Uplinks on walked ground** (Nov 27 2026): where every colony stands on one walkable area (`S.zone`) at the
@@ -352,7 +352,7 @@ With Planetary events enabled, Immense Ringfall targets up to nine sites per col
 eleven (six at smaller sizes). On Immense and Planetary, rivals allow extra time for long marches. With a fixed map
 type and surface biome, the optional **Second biome** blends ground textures and plants along a winding transition.
 The primary biome covers about 65% of the land and sets weather and world rules. Argos and the Hollow use their own
-scenery (The Ring is always on Argos's, whatever the Biome setting; Half underground has the Biome on its surface and the Hollow's look in its caves, and no second biome). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
+scenery (The Ring is always on Argos's, whatever the Biome setting; Hollowgate has the Biome on its surface and the Hollow's look in its caves, and no second biome). The second biome also travels with saved planets and multiplayer setups. Oases has five oases per side at
 Immense and seven at Planetary. Immense Four Isles has larger home and central islands. The Hollow has richer Ore
 and Oil deposits at the two largest sizes, and up to ten nest sites per side at Planetary. **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
@@ -659,7 +659,8 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   hold the spot under a flag (on the spot ordered, so a rival's band finds it: see `aiAir`), Workers go to work; then it flies home.
   Out in space a deck or rock where your Workers stand is one you can build on (`buildZones` takes in their areas on a space map:
   `workersLanded`), so Workers landed past a raised bridge or on a rock no Viaduct reaches can put up an Outpost (switch its site to
-  Supply by air: a Shuttle flies it the goods), as a Drop Outpost gives a foothold on a planet; `BUILD_REACH` still holds. The order
+  Supply by air: a Shuttle flies it the goods), as a Drop Outpost gives a foothold on a planet; `BUILD_REACH` still holds. It counts
+  for any building, not Outposts only (the owner's call, Nov 27 2026); with the land rules, in practice an Outpost goes up first. The order
   for the AI is the Cargo Plane's (`u.mission.kind` 'warbot'). With a mouse, robots selected with a Dropship and a right-click on ground do it
   (`spaceCommand`).
 - **Gunship** (`BOTS.gunship`: `war`, 6 rounds of 2 Alloy and 2 Chips, 14 hit points). Army orders, not `army` (it is no warbot: no garrison,
@@ -872,7 +873,7 @@ stations' boxes and the rocks. No Uplinks here (`noUplinkShape`; `newGame` drops
   Ship's Attack and Escort), the Army panel's Space tab (`capArmyRows`), tapping anywhere on a hull (`capAtTap`), a bar on the minimap
   (`fleetMinimap`). Art: ART_GUIDE.md, Batch 45, in the lazy space-art bundle (`SPACE_ART`, `spaceArtKey`).
 
-**Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
+**Hollowgate** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times
 the size's (49 × 84 at Medium; an odd width, so there is a middle column to mirror about, and 1.45 times wider for four colonies), mirrored west to east
 (every tile made to its twin, the noise read at each tile's canonical column; `tools/map-symmetry-test.js` checks it for every size and player
@@ -2516,7 +2517,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   gun's reach (`hotStep`: `dangerMap` bit 1, past the first `SAFE_POCKET` (4) tiles out of a reach it starts in) is
   searched again with that ground closed (`safeRoute`, `findPath` `opts.safe`; only then, so it costs nothing on a
   peaceful map). With no way round, it waits (`noSafeRoute`): the route isn't tried for `NOSAFE_WAIT` (10 s), nor
-  is a job at the building there handed out (`unreachUntil`), the building's panel says *No safe route: enemy
+  is a job at the building there handed out (`unreachUntil`; not for storage, which stays open to the carriers that
+  can reach it: two cut-off Haulers closed a rival's Command Base to six inside it for 40 minutes), the building's panel says *No safe route: enemy
   defences in the way* (`b.noSafe`, in `hashState`) and its owner is told (every 45 s at most, `P.safeMsgAt`). Once a
   second (`dangerSweep`) a carrier on its way whose route ahead now runs into a gun is flagged (`u.rv = -1`) so
   `routeCheck` plans again, round it, or stops it where it is and drops the job (`haltUnsafe`: a load aboard stays,
@@ -2534,7 +2536,24 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   status says *Haulers turning back: Murmur near the road* with the wait, and the "Why idle?" and the Economy panel's
   bottlenecks name it (`haulWhy`, `outWhy`). A rival (`aiMurmur`, by day, with its army at its attack threshold and
   `AI_NEST_SPARE` more) sends `AI_ROAD_GUARD.n` (3) warbots to a rally flag where they last turned back, one flag at
-  a time for `AI_ROAD_GUARD.hold` (90) s (`P.roadRally`).
+  a time for `AI_ROAD_GUARD.hold` (90) s (`P.roadRally`); with a smaller army, `AI_ROAD_GUARD.few` (2) against a lone
+  Murmur or two out in the open (none of them a nest's guards, within 5 tiles of the spot) while it keeps two more
+  armed warbots.
+- **Gatherers turning back** (the rival-persistence follow-up, Nov 27 2026; `GATHER_SHY`, `gatherShy`, `shyNode`). A
+  gatherer's worker (Mine, Tap, Harvester, Farm...) that turns back on its way out to a node used to go straight out
+  to the same node again: on Standard seed 11 a Settler rival's Harvester workers turned back 101 times in four
+  minutes and its Fiber stopped. Now the node is passed over for three times the wait (`b.shyNodes`, by `findNode` and
+  `findPlantSpot`) and the worker waits inside (`b.gatherWait`, its status says so): `SHY_WAIT`, or from the Murmur
+  `shyRoadWait(b.gshyN)` (5, 10, 20, 40 s), `b.gshyN` counting turn-backs in a row and cleared by a trip that brings
+  something back. Two in a row count for `murmurShy` (the panel says *Workers turning back*; `haulShy` is the
+  carriers' half, for the "Why idle?" texts) and so for `aiRoadGuard`. In `hashState`.
+- **Where the Murmur bite** (`GUARD_BITE`, bit 4 of the danger map). A nest's guards in Versus bite only what comes
+  within `GUARD_VERSUS` (3) tiles of the nest's corner, so within `GUARD_BITE` (3.75) of its middle; the danger map
+  keeps the padded circle (`GUARD_VERSUS + 1`) in bit 2 (jobs, gatherers' nodes and routes keep off it, `hotFor`) and
+  the bite in bit 4. `foeSweep` turns a robot back, or sends it for cover, only for bit 4 (for every other enemy the
+  two are the same circle), and paving skips only guns, bit 4, radiation and a rival's `dangerAt` (`paveHot`): on
+  seed 11 the only way up to that rival's groves crossed the padded ring by one tile. A danger spot in `S.dng.f` has a
+  fifth number for the bite radius when it differs (saves without it load as before).
 - **Cargo pickups:** after the usual capacity and network checks, dispatch compares estimated travel times when multiple carriers are eligible. The estimate uses their routes and travel speeds, including road surface and direction. It is reused for that carrier and pickup for the current dispatch pass. It does not predict traffic queues or boarding waits.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
@@ -3296,8 +3315,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the links the next robot waits for
   (the Foundry while it has a part of each kind, or always with more than three workers; the Chip Fab while Chips are
   short; the Smelter while Alloy is short; a Mine while Alloy and Ore both are; and a gatherer short of its good), so
-  the few workers go down the chain to the link that can work, and the Foundry makes workers alone, a Hauler first
-  when it has none and three workers (`P.triage`). With no Hauler left, one worker stays free to carry, and a link
+  the few workers go down the chain to the link that can work, and the Foundry makes workers alone, with Haulers first
+  once it has three workers (`aiTriageHaulers`): with none; with fewer than one for every four buildings that make
+  goods and work (2 to 4, `AI_TRIAGE_HAUL`); or, up to the Haulers it wants outside triage, while two or more stand
+  full of what they make with no Hauler free (`P.triage`). It used to make one only with none left, and a Warlord with
+  one Hauler kept full Mines waiting for minutes. With no Hauler left, one worker stays free to carry, and a link
   that holds a round of its inputs, with room for what it makes (`hasRound`), takes even that one until the round
   is used (`dispatch`). Without it a colony left with one to three workers carried, or ran a Smelter piling up Alloy
   with no Chips, and never made another. At the bot limit (90 in Versus) it
@@ -3538,7 +3560,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **The rival's roads and Ramps** (`aiRoads`, `aiRampCut` in `js/ai.js`): where its road to a site would run the long
   way round a one-level cliff (8 tiles or more), or no slope leads there at all, it cuts up to two Ramps instead, as
   Route to does in Paths, when that way (each Ramp counted as 6 tiles) is at most 60% of the long road and 6 tiles
-  shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
+  shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way.
+  A road planned over ground its Workers won't pave (`paveHot`, or no way there: `P.paveSkip`) for
+  `AI_ROAD_DETOUR.wait` (45) s on end (`P.roadHot`, by id) is planned again round it (`aiRoadDetour`: `roadRouteTo`
+  with `safe`, where each such tile costs `ROAD_HOT_AVOID` (40) more; at most twice as long and 10 tiles more), the
+  blocked tiles it leaves called off (refunded); with no way round, a site waiting like that for two minutes, three
+  minutes old at least, is given up and its spot avoided for four (`AI_HOT_SITE`). Paving skipped such tiles, so on
+  Standard seed 25 (Warlord, rival holding at 12) replacement Mines waited *No road to storage yet* with Workers idle. It
   cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
   tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to. A site waiting four minutes
   with no construction or incoming deliveries can be abandoned even when the missing road is already on the books.
@@ -4782,7 +4810,7 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Half underground's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 41): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
+Refinery and Smelter, the Hollow's own set and the Murmur's tunnel exits (ART_GUIDE Batch 16). Hollowgate's cave mouths are the Rock Arch (`js/mouths.js`, `renderer/b/cavemouth.js`, ART_GUIDE Batch 41): one wall section in the terrain's projection for each way the map faces, cut and closed up to each mouth's width, its cheeks under the robots and its span over them, with the throat's shadow, the light through it and the minimap's mouth bars drawn in code. Fiber's Stalks have no art: each is a clump
 of **Lantern Cane** drawn in code (`js/reedcane.js`; ART_GUIDE Batch 34): tall jointed mint-teal canes, 1.5 tiles tall,
 a look for each growth stage (`reedState`: a quarter grown mostly pale stumps, then canes regrowing a joint at a time,
 then ripe with mint rings; a ripe clump being cut shows a third, then two thirds of its canes as stumps, from `S.amt`),

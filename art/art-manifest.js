@@ -407,7 +407,7 @@ const ART_MANIFEST = {
   // graded with it, their light in -glow images.
   ...biomeSet('hollow'),
   'wall-hollow': 'biomes/hollow/wall.webp', // the cave wall's face over a floor tile under rock (128 x 64, four tiles across)
-  // Half underground's cave mouths (js/mouths.js, renderer/b/cavemouth.js; ART_GUIDE Batch 41): a wall section's layers in the
+  // Hollowgate's cave mouths (js/mouths.js, renderer/b/cavemouth.js; ART_GUIDE Batch 41): a wall section's layers in the
   // terrain's projection, 64 px a tile, cropped (MOUTH_ART has where), for the surface south of the wall (-s) and north (-n).
   'mouth-floor-s-hollow': 'biomes/hollow/mouth-floor-s.webp',
   'mouth-rock-s-hollow': 'biomes/hollow/mouth-rock-s.webp',

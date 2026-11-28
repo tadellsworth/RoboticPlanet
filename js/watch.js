@@ -96,7 +96,7 @@ function watchCount(w, shape) {
 const watchSize = (w, n = watchCount(w)) => mapSizeForPlayers(w.size ?? DEFAULT_SIZE.versus, n);
 const watchTeams = (w, n = watchCount(w)) => !!w.teams && n === 4;
 /** The map type is the Hollow (no Uplinks there; it has its own look and Murmur). */
-const watchHollow = (w) => !w.shapeRnd && noSkyShape(w.shape); // (the Hollow, or Half underground's caves)
+const watchHollow = (w) => !w.shapeRnd && noSkyShape(w.shape); // (the Hollow, or Hollowgate's caves)
 /** Can the setup have the Murmur? Not on Argos, nor a map type without room for nests (as menuMurmur). */
 const watchMurmurOk = (w) => (w.shapeRnd || murmurShape(w.shape)) && (w.biomeRnd || murmurGround(BIOME_ORDER[w.biome]));
 /** The Murmur as the setup has them ('off' where they can't be). */

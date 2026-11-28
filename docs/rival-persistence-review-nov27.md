@@ -144,3 +144,67 @@ ai-foundry-recovery, space, the new ai-persistence test, and `node tools/build-s
 - Planned roads through danger are never paved, so replacement sites wait "No road to storage yet" (Standard 25,
   Warlord).
 - Triage makes a Hauler only when there is none; a Warlord with one Hauler left kept full Mines for minutes.
+
+## Follow-up: the three stalls left open (same day)
+
+The owner: "fix all 3". Measured with the same harness; before = main at 7e79bc6, after = this follow-up.
+
+1. **The Scuttler by the Harvesters** (Standard 11, Settler, hold at 12). It was one of a nest's guards, and the
+   only way up to the groves crossed the padded ring kept round the guards (`GUARD_VERSUS + 1`) by one tile; the
+   guards only bite within `GUARD_VERSUS` of the nest's corner. Fixed in the shared civilian rules (deterministic, the
+   player's robots too): the danger map has a bite bit (4, `GUARD_BITE` = 3.75 from the nest's middle) and `foeSweep`
+   turns robots back or sends them for cover only for that; routes, jobs and nodes still keep off the wider ring, and
+   Workers now pave it (`paveHot`). A gatherer's worker that does turn back on its way out passes over that node for a
+   while and waits inside, 5 s doubling to 40 s while it keeps happening (`GATHER_SHY`); two in a row count as
+   `murmurShy` (panel: *Workers turning back*), and a rival with a small army sends 2 warbots against a lone Murmur or
+   two (not a nest's guards) keeping its gatherers in (`aiRoadGuard`). How to play (The Murmur) says so.
+2. **Roads on paper through danger** (Standard 25, Warlord). `aiRoadDetour`: once planned tiles of a site's road have
+   been unpavable for 45 s, the road is planned again round that ground (`roadRouteTo(..., safe)`, at most twice as
+   long + 10 tiles) and the blocked tiles called off (refunded); with no way round, the site is given up after two
+   minutes and its spot avoided, as `aiHotSites` does. The seed-25 hold no longer reaches that phase on main (C2 wins
+   at 18.5 before, C1 at 11.5 after), so the fix is covered by its test.
+3. **Triage Haulers.** `aiTriageHaulers`: one for every four working buildings that make goods (2 to 4), and one more,
+   up to what the colony wants outside triage, while two or more stand full with no Hauler free.
+
+Found while measuring: on Standard 21, Commander, two Haulers stranded across a rival's guns called `noSafeRoute` on
+their Command Base every 10 s, which closed it (`unreachUntil`) to the six Haulers inside it; its 38 Crystal never
+reached the Chip Fabs next door and the game froze from minute 30 to 75. Storage is no longer closed for one carrier
+cut off from it (that carrier waits on its own, `u.failGoal`).
+
+Tests: `tools/ai-persistence-test.js` checks 5 to 7 (bite vs ring, the gatherer's back-off, the small-army squad, the
+detour and the give-up, triage Haulers, storage left open).
+
+### Settler holds (colony 2): Fiber made, army robots produced, m30 / m75; Smelter working / all paused
+
+| Seed | Before: Fiber | produced | Smelter | After: Fiber | produced | Smelter |
+|---:|---|---|---|---|---|---|
+| 7 | 98 / 98 | 22 / 49 | 41% / 37% | 96 / 98 | 14 / 51 | 37% / 44% |
+| 11 | **28 / 28** | **3 / 3** | 7% / 34% | **76 / 76** | **16 / 29** | 28% / 25% |
+| 21 | 81 / 105 | 4 / 80 | 45% / 27% | 83 / 121 | 13 / 32 | 42% / 13% |
+
+Seed 11 is the finding's case: Fiber no longer stops at 28, and it builds an army. Seeds 7 and 21 move both ways
+(single games swing after any AI change).
+
+### Warlord holds
+
+| Seed | Before | After |
+|---:|---|---|
+| 11 | C2 wins at 15.5 | C2 wins at 18.0 |
+| 25 | C2 wins at 18.5 | C1 wins at 11.5 |
+
+Both are decided before the hold matters, before and after.
+
+### Regular games (Standard 3, 7, 11, 21, 25 at five difficulties; Long haul 11 at Colonist and Warlord)
+
+| Difficulty | Games | C1 / C2 / undecided, before | after | Median before | after | Mean before | after |
+|---|---:|---|---|---:|---:|---:|---:|
+| Settler | 5 | 4 / 1 / 0 | 4 / 0 / 1 | 33.4 | 32.6 | 36.3 | 39.9 |
+| Pioneer | 5 | 4 / 1 / 0 | 4 / 1 / 0 | 21.4 | 27.6 | 21.0 | 24.1 |
+| Colonist | 6 | 3 / 3 / 0 | 3 / 3 / 0 | 24.5 | 22.5 | 22.8 | 21.6 |
+| Commander | 5 | 4 / 1 / 0 | 3 / 2 / 0 | 14.2 | 10.1 | 14.5 | 13.7 |
+| Warlord | 6 | 3 / 3 / 0 | 5 / 1 / 0 | 14.9 | 13.9 | 15.4 | 14.5 |
+| All | 27 | 18 / 9 / 0 | 19 / 7 / 1 | 21.4 | 21.7 | 21.8 | 22.4 |
+
+No difficulty swings; the overall median moves by 0.3 minutes. One game went undecided: Standard 11, Settler (C1 won at
+22.3 before), where both colonies' armies wore down to nothing late and colony 2 stopped producing at minute 30 with
+Ore in store. That one is in IDEAS, not fixed here.

@@ -30,7 +30,7 @@ function generateMap(seed, W, H, cfg) {
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).orbital) return orbitalMap(seed, W, H, cfg); // (Orbital platforms: station decks and drawbridges, see orbitalMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).graveyard) return graveMap(seed, W, H, cfg); // (The Graveyard: hulks of dead ships in space, see graveMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).vfleet) return voidMap(seed, W, H, cfg); // (The Void Fleet: two home stations and open void, see voidMap)
-  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Hollowgate: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
@@ -2897,10 +2897,10 @@ function ringMap(seed, W, H, cfg) {
   };
 }
 
-/* ------------------------------------------------------------------ Half underground */
+/* ------------------------------------------------------------------ Hollowgate */
 
 /**
- * Half underground (SHAPE_PRESETS caves, CAVES in defs.js): a surface half and a cave half, a solid wall between them
+ * Hollowgate (SHAPE_PRESETS caves, CAVES in defs.js): a surface half and a cave half, a solid wall between them
  * broken by two or three entrances. Its own generator, called by generateMap first thing. The whole map is laid out with the
  * caves to the north and then, on half the seeds, turned over end to end (so player 0 is inside on those). It is
  * mirror-symmetric (every tile made to its twin, west to east: the noise read at each tile's canonical place), so the two
@@ -3788,7 +3788,7 @@ function maxPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return 
 function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.minPlayers || 2; }
 
 /**
- * Map types with `evenOnly` (Half underground) take two or four colonies, never three (the owner's call, Nov 2026; its three-colony layout
+ * Map types with `evenOnly` (Hollowgate) take two or four colonies, never three (the owner's call, Nov 2026; its three-colony layout
  * is parked in cavesMap). A three that arrives (a saved setting, a lobby, a link) becomes two, or four with `up` (a lobby of three people:
  * all of them need a place).
  */
@@ -3821,7 +3821,7 @@ function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; r
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
   const d = mapDims0(st), sh = SHAPE_PRESETS[st.shape || 0];
-  // Half underground: an odd width (a middle column to mirror about), and wider for four colonies (two side by side in each half).
+  // Hollowgate: an odd width (a middle column to mirror about), and wider for four colonies (two side by side in each half).
   if (sh.caves) return { W: (st.players === 4 ? Math.round(d.W * 1.45) : d.W) | 1, H: d.H };
   return d;
 }
@@ -3988,7 +3988,7 @@ function newGame(opts) {
   settings.biome = biomeAllowed(opts.biome, settings.shape) && !(horde && !murmurGround(opts.biome)) ? opts.biome : 'desert'; // (Horde: never the silent moon)
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
-  if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
+  if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Hollowgate: the surface's biome is one, the caves' look is the Hollow's)
   if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital || SHAPE_PRESETS[settings.shape].graveyard || SHAPE_PRESETS[settings.shape].vfleet) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring, Orbital platforms and The Graveyard have Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
@@ -4045,7 +4045,7 @@ function newGame(opts) {
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
-  // Half underground: the cave mask (S.cave) and where its seats, entrances and the Murmur's nest sites are (see cavesMap).
+  // Hollowgate: the cave mask (S.cave) and where its seats, entrances and the Murmur's nest sites are (see cavesMap).
   if (m.caves) { S.cave = m.cave; S.caves = { south: m.caves.south, seats: m.caves.seats, entrances: m.caves.entrances, nests: m.caves.nests, nestsOut: m.caves.nestsOut, variant: m.caves.variant }; }
   if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
@@ -4100,7 +4100,7 @@ function newGame(opts) {
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
-    // (Half underground: a colony that starts inside has no way to make Fiber, one outside little Ore or Crystal: its opening stock is bigger by what it lacks, CAVES.stock.)
+    // (Hollowgate: a colony that starts inside has no way to make Fiber, one outside little Ore or Crystal: its opening stock is bigger by what it lacks, CAVES.stock.)
     const inCave = !!(m.caves && m.caves.seats[p] && m.caves.seats[p].inside);
     if (m.caves) for (const g in CAVES.stock[inCave ? 'inside' : 'outside']) L.stock[g] = (L.stock[g] || 0) + CAVES.stock[inCave ? 'inside' : 'outside'][g];
     // (The Hollow, and a colony inside the caves: nothing grows, so a Worker comes down in the Agribot's place.)
@@ -4349,7 +4349,7 @@ function worldBan(type, t) {
   if (BDEFS[type] && BDEFS[type].rsv && biome() === 'lunar') return 'No Reservoir on Argos: there is no air here to condense water from.';
   if (BDEFS[type] && BDEFS[type].lvl && biome() === 'lunar') return 'No Leveller on Argos: the moon was never on the settlement plan.';
   if (BDEFS[type] && (BDEFS[type].rsv || BDEFS[type].lvl) && hollowOn()) return `No ${BDEFS[type].name} in the Hollow: the settlement plan never reached the caverns.`;
-  if (S && S.caves) { // (Half underground: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
+  if (S && S.caves) { // (Hollowgate: the Pathfinder never mapped the caves, so no Trade Posts anywhere; and what the roof rules out, tile by tile)
     if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts on this map: the Pathfinder never mapped the caves, so there is nowhere to dock a Trade Terminal.';
     return t === undefined ? '' : caveBan(type, t);
   }
@@ -4368,7 +4368,7 @@ function worldBan(type, t) {
 }
 
 /**
- * Why a `type` can't be built on tile t inside the caves of Half underground ('' if it can): nothing grows without light (no Bio Farms or
+ * Why a `type` can't be built on tile t inside the caves of Hollowgate ('' if it can): nothing grows without light (no Bio Farms or
  * Grove Planters), no aircraft or missile can fly in or out through the roof (no Airfields, Mooring Masts, Mass Drivers, Silos, Lance, Sundering Ray,
  * Orbital Lift, Atmosphere Engine or Great Uplink). The same buildings go up on the surface.
  */
@@ -4406,7 +4406,7 @@ function canyonMeadow(t) {
  */
 function makeDecor() {
   const W = S.W, H = S.H, d = new Uint8Array(W * H), sd = S.seed % 100000;
-  const primary = BIOMES[biome()], second = S.cave ? BIOMES.hollow : BIOMES[S.settings?.biome2]; // (Half underground: the caves wear the Hollow's plants)
+  const primary = BIOMES[biome()], second = S.cave ? BIOMES.hollow : BIOMES[S.settings?.biome2]; // (Hollowgate: the caves wear the Hollow's plants)
   const canyon = SHAPE_PRESETS[S.settings?.shape || 0].grandCanyon;
   // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
@@ -5627,7 +5627,7 @@ function canRoad(owner, i, j) {
   if (S.space && spaceModAt(t)) return false; // (a derelict module: space)
   if (S.grave && graveCoreAt(t)) return false; // (the Arbiter's relay: The Graveyard)
   if (orbTile(t)) return false; // (a drawbridge's strip carries its own road while it is down: orbFlip)
-  if (S.cave && S.cave[t] === 2) return false; // (Half underground: the wall between the caves and the surface is solid, no road tunnels through it)
+  if (S.cave && S.cave[t] === 2) return false; // (Hollowgate: the wall between the caves and the surface is solid, no road tunnels through it)
   if (S.landmarks && typeof lmNoBuild === 'function' && lmNoBuild(t)) return false; // (a landmark's ground: js/landmarks.js)
   if (S.town && townRuinAt(t)) return false; // (Passenger Town's buildings: no road or tunnel through one, strip it)
   if (S.dam && typeof damAt === 'function' && damAt(t)) return false; // (The Dam: no road or tunnel through a dam)
@@ -6358,9 +6358,14 @@ function roadNestAvoid(owner) {
   }
   return m;
 }
-function roadSearch(owner, seeds, done) {
+/**
+ * With `safe` (a rival re-planning a road its Workers couldn't lay: aiRoadDetour), each tile its Workers won't pave now
+ * (paveHot: an enemy gun reaches it, enemy warbots or the Murmur bite there) costs ROAD_HOT_AVOID tiles more.
+ */
+const ROAD_HOT_AVOID = 40;
+function roadSearch(owner, seeds, done, safe) {
   const W = S.W, N = S.W * S.H;
-  const nestAv = roadNestAvoid(owner);
+  const nestAv = roadNestAvoid(owner), hot = safe ? (t) => paveHot(owner, t) : null;
   const cost = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2); // (doubles, like the heap's keys: see the stale test below)
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
@@ -6383,7 +6388,7 @@ function roadSearch(owner, seeds, done) {
     const i = t % W;
     for (const n of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
       if (n < 0 || n >= N || !open(n) || !step(t, n)) continue;
-      let u = n, nc0 = c + roadWeight(n) + (nestAv && nestAv[n] ? ROAD_NEST_AVOID : 0);
+      let u = n, nc0 = c + roadWeight(n) + (nestAv && nestAv[n] ? ROAD_NEST_AVOID : 0) + (hot && !S.road[n] && hot(n) ? ROAD_HOT_AVOID : 0);
       if (ov && S.over[n]) {
         // An overpass: the road runs straight on over (or under) it, never round the corner there.
         u = overHop(t, n);
@@ -6418,20 +6423,22 @@ function roadSides(owner, x, y) {
 /**
  * The cheapest run of new road tiles that would link building b to one of its owner's storage
  * buildings by road: a list of tiles to pave (empty if it is already linked), or null if there is
- * no way through the owner's land. `.cost` is its price in road tiles (resources cost more).
+ * no way through the owner's land. `.cost` is its price in road tiles (resources cost more); `.planned` the tiles on
+ * the way already planned (waiting for Workers to pave them). `safe`: round ground its Workers won't pave now (see
+ * roadSearch).
  */
-function roadRouteTo(owner, b, join) {
+function roadRouteTo(owner, b, join, safe) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
   // (With join, b is a Command Base of ours on roads of its own, a captured one: the way to the others' roads.)
-  if (join ? g.stores.some((s) => roadLinked(s, b)) : onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
+  if (join ? g.stores.some((s) => roadLinked(s, b)) : onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; r.planned = []; return r; }
   const net = roadNet(owner);
-  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]);
+  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t], safe);
   if (res.end < 0) return null;
   const out = [];
-  out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0;
+  out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0; out.planned = [];
   for (let k = res.end; k >= 0; k = res.prev[k]) {
-    if (S.plan[k]) out.pending++; // already planned: waiting for workers to pave it
+    if (S.plan[k]) { out.pending++; out.planned.push(k); } // already planned: waiting for workers to pave it
     else if (!roadLike(k)) {
       out.push(k); out.cost += roadTileMul(k);
       const c = roadTileCost(k);
@@ -7085,7 +7092,7 @@ const TYPED_FIELDS = {
   pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
   heat: Float32Array, // (the traffic map's flow: see HEAT)
   tun: Uint8Array, // (the Murmur's tunnels: see murmurTick)
-  cave: Uint8Array, // (Half underground: 0 surface, 1 inside the caves, 2 the wall; see cavesMap)
+  cave: Uint8Array, // (Hollowgate: 0 surface, 1 inside the caves, 2 the wall; see cavesMap)
 };
 
 function serializeGame() {
@@ -7175,7 +7182,7 @@ function checkSave(o) {
     if (M.huntFrom != null && !(Number.isInteger(M.huntFrom) && M.huntFrom >= 0)) bad(); // (a mission's: the hunt sooner)
     if (M.seal != null && !(Array.isArray(M.seal) && M.seal.length <= 64 && M.seal.every((d) => obj(d) && ['x', 'y', 'r', 'n'].every((k) => Number.isFinite(d[k]))))) bad(); // (a Sundering Ray's sealed ground)
   }
-  // Half underground (S.caves, with the S.cave layer): where the colonies, the entrances and the Murmur's nest sites are, plain numbers on the map.
+  // Hollowgate (S.caves, with the S.cave layer): where the colonies, the entrances and the Murmur's nest sites are, plain numbers on the map.
   if (o.caves != null) {
     const C = o.caves, pt = (q, ks) => obj(q) && ks.every((k) => Number.isFinite(q[k])) && q.x >= 0 && q.y >= 0 && q.x < o.W && q.y < o.H;
     if (!obj(C) || !Array.isArray(C.seats) || C.seats.length > 4 || !C.seats.every((q) => pt(q, ['x', 'y']) && typeof q.inside === 'boolean')) bad();
@@ -7245,7 +7252,7 @@ function checkSave(o) {
   // What the danger maps and the Murmur's gun cover were last worked out from (updateDanger, murmurGunMap): numbers.
   if (o.dng != null && !(obj(o.dng) && Number.isInteger(o.dng.ep) && (o.dng.n == null || Number.isInteger(o.dng.n)) &&
     Array.isArray(o.dng.g) && o.dng.g.length <= 1e5 && o.dng.g.every((g) => Array.isArray(g) && g.length === 6 && Number.isSafeInteger(g[0]) && owner(g[1]) && ownKey(BDEFS, g[2]) && [3, 4, 5].every((k) => Number.isFinite(g[k]))) &&
-    Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && f.length === 4 && owner(f[0]) && [1, 2, 3].every((k) => Number.isFinite(f[k]))))) bad();
+    Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && (f.length === 4 || f.length === 5) && owner(f[0]) && [1, 2, 3, 4].slice(0, f.length - 1).every((k) => Number.isFinite(f[k]))))) bad();
   if (o.mgn != null && !(obj(o.mgn) && Number.isInteger(o.mgn.ep) && Array.isArray(o.mgn.l) && o.mgn.l.length <= 1e5 && o.mgn.l.every((g) => Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)))) bad();
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
   // The Workforce settings (wfOrder): an order of row names, and rows' minimum and cap (whole numbers) and pin. A row this

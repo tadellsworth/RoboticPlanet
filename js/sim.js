@@ -3260,8 +3260,7 @@ function nextPaveTile(u, p, maxD) {
   let best = -1, bs = Infinity;
   for (let k = 0; k < n; k++) {
     const t = M.tiles[k];
-    if (skip[t] > S.time || hotFor(p, t) || radTile(t)) continue; // (not where an enemy gun reaches, or enemy warbots are about)
-    if (P.danger && dangerAt(p, t % W, (t / W) | 0)) continue; // (nor, a rival AI's, where its robots were just shot down)
+    if (skip[t] > S.time || paveHot(p, t)) continue; // (not where an enemy gun reaches, enemy warbots are about or, a rival AI's, its robots were just shot down)
     if (M.stand[k] < 0) continue; // (off this ground; a bridge or tunnel with nowhere on it to build from)
     const i = t % W, j = (t / W) | 0;
     const d = Math.abs(i + 0.5 - ux) + Math.abs(j + 0.5 - uy);
@@ -3277,6 +3276,19 @@ function nextPaveTile(u, p, maxD) {
     if (s < bs) { bs = s; best = t; }
   }
   return best;
+}
+
+/**
+ * Is planned road tile t out of bounds for player p's Workers just now: an enemy gun reaches it, enemy warbots or the
+ * Murmur are about where they bite (bit 4 of the danger map: the padded ring round a nest's guards is not out of bounds,
+ * see GUARD_BITE), radiation, or (a rival AI's) its robots were shot down near it (dangerAt)?
+ */
+function paveHot(p, t) {
+  if (radTile(t)) return true;
+  if (p < 0 || p >= S.players.length) return false;
+  if (dangerMap(p)[t] & 5) return true;
+  const P = S.players[p];
+  return !!(P.danger && dangerAt(p, t % S.W, (t / S.W) | 0));
 }
 
 /** Where a worker stands to build bridge or tunnel tile t: a walkable neighbour in `zone` (road first), or -1. */
@@ -5818,7 +5830,7 @@ function findNode(b, type, radius) {
       const t = j * S.W + i;
       if (S.res[t] !== type || !S.amt[t] || S.resRes[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
-      if (hotFor(b.owner, t) || radTile(t)) continue; // nor where an enemy gun reaches (or enemy warbots are about)
+      if (hotFor(b.owner, t) || radTile(t) || shyNode(b, t)) continue; // nor where an enemy gun reaches (or enemy warbots are about), nor one it just turned back from
       if ((type === R_STALK || type === R_CROP || type === R_VEIN) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || (near.length === 4 && d >= near[3][0])) continue;
@@ -5850,7 +5862,7 @@ function findPlantSpot(b, radius) {
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone || (S.sbed && S.sbed[t])) continue;
       if (calmAt(i + 0.5, j + 0.5)) continue; // (nothing grows for mining on a Trade Post's ground: see clearCalmGround)
-      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t) || radTile(t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
+      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || hotFor(b.owner, t) || radTile(t) || shyNode(b, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches or enemy warbots are about)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         if (!inMap(i + di, j + dj)) continue;
@@ -6068,6 +6080,10 @@ function doStaff(u, t, dt) {
       }
       if (!def.gather && !def.plant && !def.farm && !def.roadworks && !def.nursery) return; // production happens in updateBuilding
       if (foesAt(b)) { b.status = `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : 'Enemies are'} about: its worker waits inside until they've gone`; t.wait = 1; return; }
+      if (b.gatherWait > S.time) { // (it turned back on its way out a moment ago: see GATHER_SHY)
+        b.status = `Its worker turned back from ${b.gshyWild ? 'the Murmur' : 'enemy warbots'} on the way out: it tries again in ${Math.ceil(b.gatherWait - S.time)}s`;
+        t.wait = Math.min(1, b.gatherWait - S.time); return;
+      }
       let node;
       if (def.gather) {
         // Ore Mines dig any uranium in reach first in a Nuclear race.
@@ -6279,7 +6295,7 @@ function doStaff(u, t, dt) {
       if (u.carry) b.working = true;
       if (moveAlong(u, dt)) {
         enterBuilding(u, b);
-        if (u.carry) { bump(b.stock, u.carry, u.carryN || 1); u.carry = null; u.carryN = 0; }
+        if (u.carry) { bump(b.stock, u.carry, u.carryN || 1); u.carry = null; u.carryN = 0; if (b.gshyN) b.gshyN = 0; } // (a trip that got there: see GATHER_SHY)
         t.phase = 'in';
         t.trip = false;
         t.wait = 0.3;
@@ -8958,6 +8974,12 @@ const DANGER_COST = 24;  // what crossing a tile in a gun's reach (or near enemy
 const FOE_SHY = 4.5;     // robots that don't fight keep this far from an armed enemy warbot (it picks targets within 2.8 tiles, 3.5 at a rally flag)
 const FOE_SHY_WILD = 6;  // ...and from a creature (it hunts within 4.5)
 const GUARD_VERSUS = 3;  // a nest's guards in Versus go for what comes within this many tiles of the nest (Colony: 7)
+// ...measured from the nest's corner (see the guards in updateCritter), so from its middle they bite within this; robots
+// that don't fight keep a tile further off than GUARD_VERSUS where they can (jobs, routes), but one whose only way to a
+// grove or a site grazes that padded ring goes on rather than turning back (foeSweep: the owner, Nov 27 2026: on
+// Standard seed 11 a rival's Harvester workers turned back 101 times in four minutes from a nest's guards whose padded
+// ring the only way up to their groves crossed by a tile, and its Fiber stopped).
+const GUARD_BITE = GUARD_VERSUS + 0.75;
 const SHY_LOOK = 6;      // how far ahead along its way a robot looks out for them (tiles)
 const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's given work again
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
@@ -8973,8 +8995,31 @@ const NOSAFE_WAIT = 10;  // seconds before a job with no safe way to it is tried
  * rival sends a few warbots to clear the road (aiRoadGuard).
  */
 const SHY_ROAD = { wait: 5, max: 40, show: 2, keep: 60 }; // (not for storage, which carriers reach by every road)
-/** Do carriers keep turning back from the Murmur on their way to building b (see SHY_ROAD)? */
-function murmurShy(b) { return !!b && b.shyN >= SHY_ROAD.show && S.time - (b.shyAt ?? -999) < SHY_ROAD.keep; }
+/** Do carriers (or its gatherers: GATHER_SHY) keep turning back from the Murmur on their way to building b (see SHY_ROAD)? */
+function murmurShy(b) { return !!b && Math.max(b.shyN || 0, b.gshyN || 0) >= SHY_ROAD.show && S.time - (b.shyAt ?? -999) < SHY_ROAD.keep; }
+/** ...its carriers, that is (not its gatherers)? */
+function haulShy(b) { return !!b && b.shyN >= SHY_ROAD.show && S.time - (b.shyAt ?? -999) < SHY_ROAD.keep; }
+/*
+ * A gatherer's worker (a Mine's, a Harvester's, a Farm's...) that turns back on its way out to a node (enemy warbots or
+ * the Murmur where its way runs) went straight out again to the same node and turned back again, for good (Standard
+ * seed 11: a rival's Harvester workers turned back 101 times in four minutes). Now (gatherShy) the node is passed over
+ * for a while (b.shyNodes: three times the wait), and the building waits before its worker sets out again (b.gatherWait):
+ * SHY_WAIT, or from the Murmur as long as SHY_ROAD's wait, doubling with each turn-back in a row (b.gshyN, b.shyAt) up
+ * to SHY_ROAD.max; a trip that brings something back starts it again. From SHY_ROAD.show in a row it counts as
+ * murmurShy (its panel says so, and a rival sends warbots: aiRoadGuard).
+ */
+const GATHER_SHY = { most: 6 };
+function gatherShy(b, node, foe) {
+  const wild = !!(foe && BOTS[foe.type].wild);
+  if (wild && !(b.gatherWait > S.time)) { b.gshyN = (b.gshyN || 0) + 1; b.shyAt = S.time; }
+  const wait = wild ? shyRoadWait(b.gshyN || 1) : SHY_WAIT;
+  b.gatherWait = Math.max(b.gatherWait || 0, S.time + wait);
+  b.gshyWild = wild;
+  if (wild && foe) { b.shyX = Math.floor(foe.x); b.shyY = Math.floor(foe.y); }
+  b.shyNodes = (b.shyNodes || []).filter((e) => e[1] > S.time && e[0] !== node).concat([[node, S.time + wait * 3]]).slice(-GATHER_SHY.most);
+}
+/** Is node tile t one b's worker turned back on its way to a moment ago (see GATHER_SHY)? */
+function shyNode(b, t) { if (b.shyNodes) for (const e of b.shyNodes) if (e[0] === t && e[1] > S.time) return true; return false; }
 /** How long building b waits before another carrier is sent after its last turn-back from the Murmur (s). */
 function shyRoadWait(n) { return Math.min(SHY_ROAD.max, SHY_ROAD.wait * 2 ** Math.max(0, n - 1)); }
 const SAFE_FREE = new Set(['flee', 'cover', 'drive', 'park', 'board', 'dock', 'recycle']); // (running for cover, or sent by hand)
@@ -9028,8 +9073,11 @@ function noSafeRoute(u, goal) {
   const b = S.bAt[goal] ? getE(S.bAt[goal]) : null, P = S.players[u.owner];
   if (b && b.owner === u.owner) {
     b.noSafe = S.time;
-    // Covered track can stop the train without closing the same station to road freight.
-    if (!BOTS[u.type].rail) b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT);
+    // Covered track can stop the train without closing the same station to road freight. Nor is storage closed to
+    // every carrier for one cut off from it: on Standard seed 21 (Commander) two Haulers stranded across a rival's guns
+    // closed the Command Base, again every 10 s, to the six Haulers inside it, and its 38 Crystal never reached the
+    // Chip Fabs next door for 40 minutes (the one cut off waits on its own: u.failGoal).
+    if (!BOTS[u.type].rail && !BDEFS[b.type].store) b.unreachUntil = Math.max(b.unreachUntil || 0, S.time + NOSAFE_WAIT);
   }
   if (isMe(u.owner) && P && S.time - (P.safeMsgAt ?? -999) > 45) {
     P.safeMsgAt = S.time;
@@ -9096,7 +9144,14 @@ function updateDanger(again) {
   // Enemy robots out in the open that would shoot (armed warbots) or bite (creatures): bit 2.
   // One on the move counts where it's heading too (FOE_LEAD seconds on, at the pace it's going): a warbot on a road
   // outpaces a worker on foot, so robots have to give way before it's on them. (A spot: [owner, x, y, R].)
-  const spot = (f) => { for (let p = 0; p < n; p++) if (foes(p, f[0]) && !isWild(p)) disc(DANGER.maps[p], f[1], f[2], f[3], 2); };
+  // (bit 4: where it bites, the ground a robot turns back from or runs from (foeSweep); bit 2 also takes in a nest's
+  // guards' padded circle, which routes pay to go round and jobs keep off. A spot: [owner, x, y, R, bite R if less].)
+  const spot = (f) => {
+    for (let p = 0; p < n; p++) if (foes(p, f[0]) && !isWild(p)) {
+      const m = DANGER.maps[p];
+      if (f.length > 4) { disc(m, f[1], f[2], f[3], 2); disc(m, f[1], f[2], f[4], 4); } else disc(m, f[1], f[2], f[3], 6);
+    }
+  };
   DANGER.foes = 0;
   if (again) { DANGER.foes = D.n || 0; for (const f of D.f) spot(f); return; }
   // (A nest's guards in Versus bite only what comes within GUARD_VERSUS tiles of the nest: the ground to keep off is
@@ -9112,7 +9167,7 @@ function updateDanger(again) {
     const gn = S.mode !== 'colony' && BOTS[v.type].wild && v.task && v.task.type === 'guard' ? getE(v.nest) : null;
     if (gn && !gn.dead) {
       v.dgT = undefined;
-      if (!guarded.has(gn.id)) { guarded.add(gn.id); const f = [v.owner, gn.x + 0.5, gn.y + 0.5, GUARD_VERSUS + 1]; D.f.push(f); spot(f); }
+      if (!guarded.has(gn.id)) { guarded.add(gn.id); const f = [v.owner, gn.x + 0.5, gn.y + 0.5, GUARD_VERSUS + 1, GUARD_BITE]; D.f.push(f); spot(f); }
       continue;
     }
     const dtv = v.dgT === undefined ? 0 : S.time - v.dgT;
@@ -9271,9 +9326,10 @@ function foeSweep() {
     if (u.owner < 0 || isWild(u.owner)) continue;
     const t = u.task;
     if (t && t.type === 'flee') continue; // (running from a blast: nothing else matters)
-    const m = dangerMap(u.owner), here = tIdx(Math.floor(u.x), Math.floor(u.y)), caught = (m[here] & 2) !== 0;
+    // (where they bite, bit 4: a way that only grazes the padded ring round a nest's guards goes on: see GUARD_BITE)
+    const m = dangerMap(u.owner), here = tIdx(Math.floor(u.x), Math.floor(u.y)), caught = (m[here] & 4) !== 0;
     let ahead = false;
-    if (!caught && u.path) for (let k = u.pi, e = Math.min(u.path.length, u.pi + SHY_LOOK); k < e; k++) if (m[u.path[k]] & 2) { ahead = true; break; }
+    if (!caught && u.path) for (let k = u.pi, e = Math.min(u.path.length, u.pi + SHY_LOOK); k < e; k++) if (m[u.path[k]] & 4) { ahead = true; break; }
     if (!caught && !ahead) continue;
     // Already on its way to cover, planned a moment ago, or on a way that takes it no nearer them: let it go.
     if (u.shyUntil > S.time && S.time - (u.coverT || 0) < 1) continue;
@@ -9302,6 +9358,7 @@ function takeCover(u, caught) {
   if (t && t.type === 'staff' && t.phase !== 'go') {
     const b = getE(t.bld);
     if (b && !b.dead) {
+      if (!caught && t.phase === 'toNode' && t.node >= 0 && !(t.lay >= 0)) gatherShy(b, t.node, foe); // (on its way out to gather: see GATHER_SHY)
       if (t.node >= 0) { S.resRes[t.node] = 0; t.node = -1; }
       t.trip = false;
       if (t.phase === 'back' && u.path) return; // (already heading in)
@@ -12566,7 +12623,7 @@ function fireMissileAt(silo, i, j) {
 function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
-    // (Half underground: a Missile, bomb, napalm canister or nuclear missile that comes down on the caves bursts on the roof: nothing reaches in.)
+    // (Hollowgate: a Missile, bomb, napalm canister or nuclear missile that comes down on the caves bursts on the roof: nothing reaches in.)
     if (S.cave && !m.shell && !m.rocket && m.t >= m.dur && caveAt(m.x1, m.y1)) { addFx('puff', m.x1, m.y1, { r: 0.7, life: 1 }); continue; }
     if (m.shell) {
       if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
@@ -14836,7 +14893,7 @@ function hollowRingfall(rng, t0, dur) {
 }
 
 /**
- * Ringfall on Half underground falls on the surface only (the roof keeps it out of the caves), each strike with its mirror on the other
+ * Ringfall on Hollowgate falls on the surface only (the roof keeps it out of the caves), each strike with its mirror on the other
  * side (west to east), half of them near player 0's own ground: the same number of strikes as on any map.
  */
 function cavesRingfall(rng, t0, dur) {
@@ -14934,7 +14991,7 @@ function meteorImpact(E, h) {
   const spots = [];
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
-  let placed = S.caves ? 99 : 0; // (Half underground: a strike on the surface leaves its crater but no Ore or Crystal there)
+  let placed = S.caves ? 99 : 0; // (Hollowgate: a strike on the surface leaves its crater but no Ore or Crystal there)
   for (const [, i0, j0] of spots) {
     if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : S.orb ? ORBITAL.ringfall : 3) || !inMap(i0, j0)) continue;
     // (None on a Trade Post's ground, where nothing could mine it: that piece lies just off it instead. See calmSpill.)
@@ -14963,7 +15020,7 @@ function meteorImpact(E, h) {
  * Does the Ring drizzle fall in this game (see DRIZZLE_GAP)? Every game but a mission that doesn't ask for it, and never
  * in the Hollow: it's underground, where only Ringfall reaches, through the breaches (as no Mass Driver works there).
  */
-function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow && !S.caves; } // (nor on Half underground: the surface has no Ore or Crystal, the roof keeps the sky out of the caves)
+function drizzleOn() { return (!S.mission || !!S.mission.drizzle) && !S.hollow && !S.caves; } // (nor on Hollowgate: the surface has no Ore or Crystal, the roof keeps the sky out of the caves)
 
 /** Can a drizzle deposit lie on tile t? Open, bare ground no one holds, with nothing on it or planned for it. */
 function drizzleOk(t) {
@@ -15423,7 +15480,7 @@ function placeHollowNests(rng) {
 }
 
 /**
- * Half underground: the Murmur live in the caves and on the surface (only with the Murmur setting on). Inside, an ordinary nest on each of the
+ * Hollowgate: the Murmur live in the caves and on the surface (only with the Murmur setting on). Inside, an ordinary nest on each of the
  * sites cavesMap laid out in twin pairs, west and east (CAVES.nests of them by Size); outside, the same on the surface sites (S.caves.nestsOut: as
  * many as a map of the surface's size gets, MURMUR.active's rule). Half the pairs (rounded up) with the Murmur Quiet, on each side. No mound and no
  * tremors (those are the Hollow's). They dig tunnels and open exits like any nest, so what grows below the caves comes up through them, and out of
@@ -20678,7 +20735,7 @@ function airNeeds(c) {
 function airSuppliable(b) {
   const def = b && BDEFS[b.type];
   if (!def || b.dead || def.airfield || def.pad || def.wild || b.type === 'lander') return false;
-  if (caveTile(tIdx(b.x, b.y))) return false; // (Half underground: no plane flies into the caves)
+  if (caveTile(tIdx(b.x, b.y))) return false; // (Hollowgate: no plane flies into the caves)
   if (!b.built) return !storeFunded(b);
   return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
 }
@@ -23330,6 +23387,7 @@ function hashState() {
     if (b.focus) { int(b.focus); num(b.focusOut); } // (a defence aimed at an enemy: ORDERS.focus)
     if (b.noSafe !== undefined) num(b.noSafe); // (no safe way to it for goods carriers: noSafeRoute)
     if (b.shyN) { int(b.shyN); num(b.shyAt); num(b.unreachUntil || 0); } // (carriers turning back from the Murmur: SHY_ROAD)
+    if (b.gatherWait) { int(b.gshyN || 0); num(b.shyAt); num(b.gatherWait); } // (its gatherers too: GATHER_SHY)
     if (b.alT) { num(b.alT); int(b.alId || 0); } // (a Murmur nest's alarm: nestAlarm)
     if (b.was !== undefined || b.hRet) { int(b.was ?? -1); num(b.hRet || 0); int(b.hBy ?? -1); } // (a fallen colony's: FALLEN)
     if (b.tf) { str(b.tf.k); int(b.tf.to); } // (an Earthworks site's job: TERRA)

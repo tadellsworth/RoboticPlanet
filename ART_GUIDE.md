@@ -2308,9 +2308,9 @@ outlined dashed tan (each one's level when the Leveller is selected), and at the
 growing toward the next batch, clods falling into it, the dust and the pulsing tan square of the cut. The raised ground
 itself is the game's own levels and cliffs.
 
-### Batch 41: Half underground's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
+### Batch 41: Hollowgate's cave mouths, the Rock Arch (installed; throat, light and minimap drawn in code)
 
-On Half underground (README, Half underground) the gaps in the wall between the surface and the caves were plain square
+On Hollowgate (README, Hollowgate) the gaps in the wall between the surface and the caves were plain square
 notches: the sand met the cave floor at a hard line and nothing said "a way through". They went through Claude Design (Nov
 27 2026): the canvas https://claude.ai/artifact/2xisTdvTUURmUHkeXE1jWs showed three concepts, each at a narrow gate and
 a wide mouth, both ways the map faces, day to night, its kit and in-game screenshots with robots passing: **A, Rock

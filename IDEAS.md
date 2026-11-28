@@ -9,20 +9,20 @@ The four findings of `docs/standard-rival-persistence-audit.md` and `docs/warlor
 branch) were checked against main and fixed in `js/ai.js` (`docs/rival-persistence-review-nov27.md`,
 `tools/ai-persistence-test.js`): a loaded Smelter finishes its batch while the colony is out of Alloy (`b.drain`), a
 depleted-economy march goes with the band `finish` allows, the Storm Front has its own clock (`P.wxT`), and unsafe
-stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Open, seen while measuring and not fixed:
+stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Seen while measuring, and fixed the same day in a
+follow-up (the owner: "fix all 3"; the review's "Follow-up" section has the numbers):
 
-- **A Murmur Scuttler parked by the Harvesters.** On Standard seed 11 (Settler, rival on hold) one Scuttler about
-  nine tiles off made both Harvesters' workers turn back (`takeCover`) a hundred times in four minutes: Fiber stopped
-  at 28 for the rest of the game, and with it the Smelter and the army. Should a rival send a couple of warbots at a
-  creature that keeps its gatherers in, or should a gatherer's worker give way to the Murmur only when it is closer?
-- **Down to one Hauler.** The Warlord on the same seed kept full Mines ("Storage full, waiting for pickup") for
-  minutes with one Hauler left after a raid; triage (`few`) makes a Hauler only when there is none at all.
-- **Roads on paper through danger.** Standard seed 25, Warlord, rival on hold at 12: from minute 12 the colony mined
-  nothing (Ore 0, 88 mined all game). Its replacement Mines, Harvesters and Terminal sat "No road to storage yet" with
-  their whole road planned and 11 Workers idle: paving skips tiles where enemy warbots are about or its robots were
-  shot (`hotFor`, `dangerAt`), so a road that has to leave the network there is never laid; after four minutes the site
-  is given up and the next one goes up the same way. Should a rival escort its road crew, clear the warbots parked on
-  its land first, or plan the road round the danger?
+- **A Murmur Scuttler parked by the Harvesters** (Standard seed 11, Settler, rival on hold: Fiber stopped at 28). It was
+  one of a nest's guards; the only way up to the groves crossed the padded ring kept round them by one tile. Done: robots
+  turn back only from where the guards bite (`GUARD_BITE`, bit 4 of the danger map), Workers pave the ring, a gatherer
+  that turns back waits longer each time in a row and passes over that node (`GATHER_SHY`), and a rival with a small
+  army sends two warbots at a lone Murmur or two keeping its gatherers in (`aiRoadGuard`).
+- **Down to one Hauler.** Done: triage keeps one Hauler for every four working buildings that make goods (2 to 4), and
+  one more while goods wait with none free (`aiTriageHaulers`).
+- **Roads on paper through danger** (Standard seed 25, Warlord). Done: after 45 s the road is planned again round what
+  its Workers won't pave, or with no way round the site is given up and its spot avoided (`aiRoadDetour`).
+- **Standard 11, Settler, regular game: undecided at 75** after the follow-up (C1 won at 22 before). Both armies wore
+  down to nothing late; colony 2 made no robot after minute 30 with Ore in store. Not looked into yet.
 - **One-sided measurements.** `tools/late-attack-audit.js` holds colony 1 only; the seed that showed the Warlord
   collapse now plays out differently (the attacker wins at 15½ minutes), so each fix is checked with its own test,
   and the holds were compared over several seeds instead.
@@ -179,6 +179,8 @@ Calls made, to confirm:
   tiles of your land), its site supplied by air. Before, nothing could be built on such a rock at all (there is no Drop
   Outpost in space), so a Dropship's Workers had nothing to do there. Space maps only; How to play and Into the Void's
   intro say so.
+  **Decided (the owner, Nov 27 2026): any building, not Outposts only.** The land rules still hold (within 10 tiles of
+  your land, and the building's own placing rules), so in practice an Outpost goes up first.
 
 Measured (followups, AI-vs-AI, Medium map, Normal, seeds 1 to 12 of each map):
 - **Fairness** (the follow-ups' code, games to 50 minutes): The Ring, P0 7 wins, P1 5, none undecided, decided in 16 to 42
@@ -196,8 +198,8 @@ Measured (followups, AI-vs-AI, Medium map, Normal, seeds 1 to 12 of each map):
 Open questions:
 - **Thin loops on The Ring.** Its gaps between rocks are narrow, so many of its loops are long thin ellipses; rounder ones
   only fit out by the map's edges. A smaller `DRIFT.clear` (one tile's step) would allow rounder loops nearer the rocks.
-- **Workers as a foothold** (above): should it be any building, as now, or an Outpost only? And should warbots landed
-  count too?
+- **Warbots landed as a foothold?** Workers landed count for any building (decided, above); should warbots landed count
+  too?
 - The Graveyard's deck plating (`ground-grave-*`, baked into the map) still loads on every map; its salvage, shards and
   relay load with the space art.
 - Phase 2: the Graveyard map (the Arbiter) is built (above); capital ships and Gunships in Army Groups came with phase 3 (The
@@ -623,8 +625,8 @@ with its own job. Control groups (Ctrl/Cmd + 1-9) exist but are only saved selec
   home asteroid each round a rich middle one: only two now); the rival flies Cargo Planes but builds **no Airships or Mooring Masts**
   and drops **no Outposts or supplies** (an Architect's Airship line to a foothold on the rival's asteroid is the natural next step:
   a Drop Outpost and two Workers to build the far Mast, then the line feeds a band six at a time); whether the Ring needs a **mission** (none yet).
-- **Half underground** (caves and surface): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
-  js/defs.js; README, Half underground). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
+- **Hollowgate** (caves and surface; called Half underground until the owner renamed it, Nov 28 2026): **built** (Nov 26 2026; `SHAPE_PRESETS` `caves`, `cavesMap` in js/world.js, `CAVES` in
+  js/defs.js; README, Hollowgate). Two or four players (not three: the owner's call), half the colonies starting inside the caves and half out on the surface:
   inside, the Hollow's dark look, plenty of Ore and Crystal, nothing grows, and no Missile, bomb, aircraft or Mass Driver canister reaches
   in; outside, the Biome's surface with the stalk groves and crop soil and **no Ore or Crystal at all** (nor from Ringfall: tuned Nov 27 for forced mutual encroachment with the Murmur off). A solid wall (no road tunnels through it) runs between
   them with two or three mouths, narrow gates or wide mouths by seed; each side starts with an extra stock of what it lacks
@@ -3414,7 +3416,7 @@ Done (Nov 27 2026), the rest of the list. Measured with `tools/map-audit.js` on 
   Base; short of one, a 3-tile seep is laid 6 to 11.5 tiles out on ground it walks to, with the map's symmetry. Small
   colonies with one: 1,292 of the 1,924 on map types that lay their home from the generic fields → all 1,924; maps with a
   colony short, all sizes: 829 → 0 (Crossroads 158, Dam 108, Passenger Town 106, Long Haul 2v2 86, the Walking Factory 71,
-  Canyon maze 68, Ring valley 56...). Not on the Hollow, Half underground, The Ring and Orbital platforms (their own) nor
+  Canyon maze 68, Ring valley 56...). Not on the Hollow, Hollowgate, The Ring and Orbital platforms (their own) nor
   Sky islands (it always had one). A Trade Post's ground keeps off each colony's nearest seep. In 15-minute computer games on
   Small (seed 21) the rivals pumped it from minute 3 to 7 on Ring valley, Canyon maze and Passenger Town (none before).
 - **Sites on walked ground** (`placePosts`, `placeUplinks`, `walkFrom`): where every colony walks to every other (fords and

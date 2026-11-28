@@ -547,12 +547,12 @@ function saveSettings() {
 
 /** Can the Great Uplink win be on with the menu as it is (Megastructures on, not the Hollow)? */
 function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && noSkyShape(m.shape)); }
-/** Does map type `shape` have no Uplinks and no Great Uplink win (the Hollow, which the Pathfinder never mapped, and Half underground's caves)? */
+/** Does map type `shape` have no Uplinks and no Great Uplink win (the Hollow, which the Pathfinder never mapped, and Hollowgate's caves)? */
 function noSkyShape(shape) { const P = SHAPE_PRESETS[shape || 0] || {}; return !!(P.hollow || P.caves); }
-/** Has map type `shape` no Uplinks: the Hollow, Half underground, and The Void Fleet (won by Capture or by the Flagship)? */
+/** Has map type `shape` no Uplinks: the Hollow, Hollowgate, and The Void Fleet (won by Capture or by the Flagship)? */
 function noUplinkShape(shape) { return noSkyShape(shape) || voidShape(shape || 0); }
 /** Why map type `shape` has no Uplinks: the sentence for the menus. */
-function noUplinksWhy(shape) { if (voidShape(shape || 0)) return 'No Uplinks on The Void Fleet: it is won by Capture, or by destroying the rival Flagship.'; return (SHAPE_PRESETS[shape || 0] || {}).caves ? 'No Uplinks on Half underground: the Pathfinder never mapped the caves.' : 'No Uplinks in the Hollow: the Pathfinder never mapped it.'; }
+function noUplinksWhy(shape) { if (voidShape(shape || 0)) return 'No Uplinks on The Void Fleet: it is won by Capture, or by destroying the rival Flagship.'; return (SHAPE_PRESETS[shape || 0] || {}).caves ? 'No Uplinks on Hollowgate: the Pathfinder never mapped the caves.' : 'No Uplinks in the Hollow: the Pathfinder never mapped it.'; }
 /** Is the Great Uplink win on for the game the menu would start (Versus)? */
 function menuUpWin() { return UI.menu.mode === 'versus' && !!UI.menu.upwin && menuUpWinOk(); }
 const menuSizePlayers = () => UI.menu.mode !== 'versus' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
@@ -1125,7 +1125,7 @@ function syncMenu() {
   $('m-upwin-row').classList.toggle('na', !upOk);
   $('m-upwin').setAttribute('aria-disabled', upOk ? 'false' : 'true');
   $('m-upwin-row').dataset.info = upOk ? $('m-upwin-row').dataset.base
-    : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow or Half underground, which have no open sky to transmit to.';
+    : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow or Hollowgate, which have no open sky to transmit to.';
   $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? noUplinksWhy(m.shape).replace(/\.$/, '') + ': this game is won by Capture.' : vic === 'uplinks' && !m.shapeRnd && graveShape(m.shape || 0) ? GRAVE_VICTORY.note : (VICTORY[vic] || VICTORY.capture).note;
   if (!m.shapeRnd && voidShape(m.shape || 0)) $('m-victory-note').textContent += ' On The Void Fleet, destroying the rival Flagship wins too, and losing your own loses.'; // (the Flagship victory, alongside Capture)
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
@@ -1762,7 +1762,7 @@ function drawShapeThumb(cv, P) {
     for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.86, 2], [0.5, 0.58, 3], [0.14, 0.62, 0], [0.45, 0.46, 2]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.024), 0, 7); ctx.fill(); } }
     crags = 0;
   } else if (P.caves) {
-    // Half underground: the caves dark in the top half (Ore and Crystal dots, rock pillars), the surface below (green fields), the wall
+    // Hollowgate: the caves dark in the top half (Ore and Crystal dots, rock pillars), the surface below (green fields), the wall
     // between with its middle gate and its two side mouths.
     ctx.fillStyle = '#1b1822'; ctx.fillRect(x0, y0, mw, mh * 0.5);
     ctx.fillStyle = THUMB.ground; ctx.fillRect(x0, y0 + mh * 0.5, mw, mh * 0.5);
@@ -2177,7 +2177,7 @@ function renderPreview(cv, m, p) {
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: ringShape(p.st.shape || 0) ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space: The Ring, Orbital platforms, The Graveyard, The Void Fleet) // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
-  const caveMask = m.cave || null; // (Half underground: the caves are the Hollow's look over their tiles)
+  const caveMask = m.cave || null; // (Hollowgate: the caves are the Hollow's look over their tiles)
   const other = caveMask ? biomeLook('hollow')?.mm : p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
   const boundary = other && !caveMask ? biomeBoundary(m.terrain, W, H, p.seed) : 0;
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
@@ -9029,6 +9029,7 @@ function refreshBuildingSheet(b) {
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : S.wildlife ? 'Enemies (warbots or the Murmur) are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife && S.mode === 'colony' ? '' : ' (send warbots to drive them off)'}.`
     : mine && S.time - (b.noSafe ?? -99) < NOSAFE_WAIT * 2 ? 'No safe route: enemy defences in the way. Your carriers wait until the way is clear (destroy the guns, or build a road round them).'
+    : mine && murmurShy(b) && (b.gshyN || 0) > (b.shyN || 0) ? `Workers turning back: the Murmur are where they go out to gather. Each turn-back in a row doubles the wait before the next trip (now ${Math.round(shyRoadWait(b.gshyN))}s, up to ${SHY_ROAD.max}s); send warbots to clear them.`
     : mine && murmurShy(b) ? `Haulers turning back: Murmur near the road. Each turn-back in a row doubles the wait before the next is sent (now ${Math.round(shyRoadWait(b.shyN))}s, up to ${SHY_ROAD.max}s); send warbots to clear the road.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)
