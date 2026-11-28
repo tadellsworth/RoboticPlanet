@@ -74,7 +74,7 @@ assert.equal(chapters.length, new Set(chapters).size, 'each chapter must appear 
 assert.deepEqual(chapters, [
   'First Steps', 'Growing the Colony', 'Roads and Traffic', 'Industry and Trade', 'Sea and Sky', 'Into the Void', 'First Contact', 'War',
 ]);
-const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks greening deepground madeready spacefall graveyard bughunt groundwar hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
+const ids = 'touchdown groundwork recharge hotmetal assembly greenfuel frontier rain rushhour crossings blacktop arterial pipeline research longhaul railway maglev driver trade dryground harbour skyline airlift mooring earthworks greening deepground madeready spacefall graveyard voidfleet bughunt groundwar hollow forms seedvault underbloom livefire ruins walker dam border holdline keepstime harrowhunt supply standing convoy siege chain lance landingzone overcast hill descent';
 assert.equal(missions.map((mission) => mission.id).join(' '), ids, 'preserve the saved IDs and the curriculum order');
 assert.equal(missions.at(-1).name, 'Final Descent');
 
@@ -114,8 +114,11 @@ const controls = [
   ['graveyard', 1, ['Yard', 'Shuttles +1', 'Tow salvage'], ["#sh-yard .order-row[data-k='shuttle'] [data-d='1']", '#sh-sp-tow']],
   ['graveyard', 2, ['Land a Drop Outpost', 'Land'], ['#sh-sp-post', '#banner-ok']],
   ['graveyard', 3, ['Defend 4', 'Outpost'], [".bcard[data-t='outpost']"]],
+  ['voidfleet', 1, ['Flagship', 'Deck', 'Line Ships', '+1'], ["[data-fy='line'][data-d='1']"]],
+  ['voidfleet', 2, ['Deck', 'Gunships', '+1'], ["[data-fy='gunship'][data-d='1']"]],
+  ['voidfleet', 3, ['Attack: tap a target'], ['#cap-atk']],
 ];
-const uiSource = read('js/ui.js') + read('index.html') + read('js/terraform5.js') + read('js/space-ui.js'); // (stage 5's panel buttons are made there; a spacecraft's, in js/space-ui.js)
+const uiSource = read('js/ui.js') + read('index.html') + read('js/terraform5.js') + read('js/space-ui.js') + read('js/fleet.js'); // (stage 5's panel buttons are made there; a spacecraft's, in js/space-ui.js)
 // (Standing Orders' Raid and behaviour goals: the panel makes those buttons from lists, so their ids are checked here.)
 for (const id of ['ag-order-raid', 'ag-ret-50', 'ag-st-agg', 'ag-st-hold']) assert.ok(/ag-order-\$\{k\}|ag-ret-\$\{v\}|ag-st-\$\{v\}/.test(uiSource), `the group panel makes ${id}`);
 {

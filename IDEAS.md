@@ -27,6 +27,67 @@ stalled gatherer, Depot and Outpost sites give way (`aiHotSites`). Open, seen wh
   collapse now plays out differently (the attacker wins at 15½ minutes), so each fix is checked with its own test,
   and the holds were compared over several seeds instead.
 
+## Space expansion, phase 3: The Void Fleet (built Nov 28 2026: calls made, open questions for the owner)
+
+Built from the approved plan and the space canvas's capital-ship, shield and Void Fleet boards
+(https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): a new map for two, each colony's Flagship (a vanguard Carrier's
+tender), Line Ships, shields on capital ships, Gunships in Army Groups, a rival that fleets up and strikes. README ("The
+Void Fleet"), How to play ("The Void Fleet"), the guide, ART_GUIDE.md (Batch 45), a mission (*The Void Fleet*, last in Into
+the Void), `tools/void-fleet-test.js`.
+
+Decided (the owner, Nov 2026): the Flagship is a vanguard Carrier's **tender** (option a); capital ships have **shields on
+top of health** in the Shield Dome's blue, soaking hits first and recharging after 6 s without a hit, drained three times as
+fast by the Disruptor; Gunships stay the Lancet and join **Army Groups** on every map; air units stay banned out in space
+(capital ships are space craft, not aircraft). Losing your Flagship on The Void Fleet loses the game, alongside Capture.
+
+Calls made, to confirm:
+- **The art**: the canvas held one concept of each (the Tender, the Line), so both are built as drawn; the capital hulls a
+  paler Accord grey than the small craft's gunmetal, as the canvas drew them. Extra frames for the animations the art carries
+  (the Flagship's rails lit as a Gunship goes up; the Line Ship's turrets trained to port or starboard, firing); the engines'
+  glow, the shield, the shells and the launch streak in code. The shield has no team tint (the canvas's recommendation).
+- **The name**: the unit is the **Flagship** everywhere; its description and panel call it "your vanguard Carrier's tender"
+  (LORE: a vanguard is a Carrier in orbit; the tender is the smaller ship it sends down). No new canon.
+- **The map**: tall like every other map (1.15 × 1.6 the size's tiles: Medium 46 × 90), colony 0 at the bottom, rather than
+  the canvas sketch's wide layout; a home station each (an Accord deck painted as Orbital's, two berths on its far edge), a
+  small rock each side, the middle rock (its own twin), Ore, Crystal and plain asteroid orbits and the three derelict pairs,
+  phase 1's rules. Mirror-fair by the half turn (map-symmetry, map-audit and the void-fleet test). No Uplinks here: Victory:
+  Uplinks becomes Capture (the Flagship victory is always on as well).
+- **The Flagship**: hull 800, shield 400 (recharging 15 a second), its crews mending the hull 1 a second when quiet; about a
+  third of a Worker's speed. It starts 4 tiles off its station over the void. Its deck builds Line Ships and Gunships from the
+  colony's stores (the Command Base first, then Depots and Launch Pads: a ship can't take a Hauler's delivery), one round of
+  parts every 8 s like a yard. Its Gunships fly as its **wing** (6 at most) rather than being based on a pad. Its aura (5½
+  tiles of its hull) mends, refuels and rearms. Light point-defence only (1.2 a burst, about three a second, 4½ tiles).
+- **The Line Ship**: hull 240, shield 140; broadsides of 2 shells every 3 s out to 7 tiles (9 off a capital ship, 6 off a
+  building, 4 off a robot, 3 off a small craft); a 30-shell magazine rearmed by the Flagship (or slowly over a Launch Pad);
+  5 rounds of 2 Alloy, 1 Chip and 1 Fuel; **four to a colony**. Gunships are its bane, Point-Defence and Disruptors its
+  answer at a station. A Command Base or Keep is held at a third of its armor under shellfire, as under lasers, so Line Ships
+  alone never win by Capture.
+- **Line Ships on the other space maps: yes** (a Launch Pad builds them on The Ring, Orbital platforms and The Graveyard too).
+  Why: they are dear (and burn Fuel), can't take a Command Base, and are slow and Gunship-bait, so they don't decide those
+  maps; but they give a long, stuck game (The Graveyard's one-in-eight 70-minute game) a way to break a fortified hold. The
+  rival builds them only on The Void Fleet; on the other maps it has no use for them yet.
+- **Reach to a hull**: every weapon measures its reach to a capital ship's hull, not its middle (a Flagship is 6 tiles long).
+- **Recycling**: a capital ship can't be recycled (a Flagship lost loses the game).
+- **The rival** (`aiVoid`): a pad once its Smelter stands; Line Ships by the clock; Point-Defence and Disruptors round the spot
+  over its station where its Flagship holds; its Line Ships escort the Flagship and hunt intruders; it strikes with three Line
+  Ships and the edge (or after 30 minutes with what it has), its Flagship following 12 tiles behind; hurt Line Ships pull back
+  to be mended; short of Fuel it builds more pumps first. Every order is renewed every 8 s, a strike that has not dented the
+  enemy Flagship in 7 minutes is called off: no waiting on a state that never comes (the persistence audit's lesson).
+- **The mission** *The Void Fleet* sits last in Into the Void, a Versus game against a rival that only defends itself, so the
+  chapter's first fight is a fleet action; the War chapter is unchanged.
+- **The canvas**: a board of the installed art (the sprite sheet and the in-game shots) was prepared but not published to the
+  design canvas from this session (the publish was not allowed here); the art is in the repository and ART_GUIDE.
+
+Measured: see "The Void Fleet: AI-vs-AI" below.
+
+Open questions:
+- Should the Flagship have any real guns against capital ships (now only light point-defence: it relies on its escorts)?
+- Gunships built at a Launch Pad don't join a Flagship's wing, and new Gunships don't reinforce an Army Group by themselves
+  (warbots do, from the Foundry). Wanted?
+- A Flagship over its own station is covered by Point-Defence and Disruptors, which makes the defender strong. Is that the
+  balance wanted, or should the station guns reach less far up?
+- The Void Fleet's mission is Versus in a peaceful chapter: keep it there, or move it to War?
+
 ## Space expansion, phase 2: The Graveyard (built Nov 27 2026: calls made, open questions for the owner)
 
 Built from the approved design (the space canvas's Graveyard board, https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz): a
@@ -66,7 +127,7 @@ Open questions:
 - AI games on Medium now run about 19 to 34 minutes (Capture mostly 22 to 25, Hold the Arbiter 19 to 34), short of the 25 to
   40 aimed for: what ends them is the warbot rush once the spans are up. More would need the rush itself slowed. One game in
   eight runs on past 70 minutes: one colony holds the Arbiter for most of it but never takes the other's base.
-- Capital ships (the canvas's Tender and Line) and The Void Fleet are still to come (phase 3).
+- Capital ships (the canvas's Tender and Line) and The Void Fleet: built in phase 3 (above).
 
 ## Space expansion, phase 1 (built Nov 27 2026: calls made, open questions for the owner)
 
@@ -84,7 +145,7 @@ Decided (the owner):
 - **Gunship lasers hold a Command Base or Keep at a third of its armor**, like bombs, so Gunships can't win a game alone.
   Kept as built.
 - **Only Point-Defence and Gunships hit craft in the air.** Pulse Turrets, warbots and Missiles don't. Kept as built.
-- **Gunships stay out of Army Groups for now**: they join them later, with the Void Fleet.
+- **Gunships stay out of Army Groups for now**: they join them later, with the Void Fleet. (Done in phase 3: they join Army Groups on every map.)
 - **Curved orbits, not straight lanes** (followups, Nov 27 2026). Each asteroid goes round an ellipse: a whole loop where
   one fits, else the longest clear arc of it, swung along and back. Worked out from the time alone, every point a clear tile
   or more off any ground (two tiles' steps, as the lanes were), mirrored by the half turn; mining, towing and bumps as
@@ -139,8 +200,8 @@ Open questions:
   count too?
 - The Graveyard's deck plating (`ground-grave-*`, baked into the map) still loads on every map; its salvage, shards and
   relay load with the space art.
-- Phase 2: the Graveyard map (the Arbiter) is built (above); capital ships (the canvas's Tender and Line), more derelict
-  kinds and Gunships in Army Groups (with the Void Fleet) wait.
+- Phase 2: the Graveyard map (the Arbiter) is built (above); capital ships and Gunships in Army Groups came with phase 3 (The
+  Void Fleet, above); more derelict kinds wait.
 
 ## Clear ground (built Nov 27 2026: calls made, open questions for the owner)
 

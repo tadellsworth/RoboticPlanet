@@ -217,6 +217,12 @@ const BOTS = {
     desc: 'A clamshell troop lander, based at a Launch Pad. Pick up to 6 robots, then where to land: they board at its pad, it flies straight over the void, lands on any flat, free ground (a deck behind a raised drawbridge, a rock no bridge reaches, the enemy\'s land) and they walk out down its stern ramp. Then it flies home. Unarmed: Point-Defence brings it down.' },
   gunship: { name: 'Gunship', plural: 'Gunships', speed: WORKER_SPEED * 3.6, hp: 14, craft: true, war: true, gunship: true, parts: 6, round: { alloy: 2, chip: 2 }, accel: 2.2, brake: 2.8,
     desc: 'A Lancet dart with twin nose cannons, based at a Launch Pad. It hovers and shoots purple lasers at enemy robots, buildings and other spacecraft. Select it and give it orders like a warbot: tap an enemy to attack it, open space or ground to hold there, its pad to come home. Fragile and dear: a Point-Defence Turret shreds it. It flies home to refuel and mend when its tank or its hull runs low.' },
+  // Capital ships (space expansion, phase 3: The Void Fleet; see CAPITAL): space craft, not aircraft, always at flying height,
+  // with a shield on top of their hull. The Flagship is no one's to build: each colony on The Void Fleet starts with one.
+  flagship: { name: 'Flagship', plural: 'Flagships', speed: WORKER_SPEED * 0.3, hp: 800, craft: true, capital: true, flagship: true, war: true, accel: 0.12, brake: 0.2,
+    desc: 'Your vanguard Carrier\'s tender, sent down from orbit to fight: a long, slow ship and a mobile base (The Void Fleet only: each colony starts with one, and none can be built). Its deck builds Gunships and Line Ships from your stores, it mends, refuels and rearms your craft near it, and its point-defence guns fire at enemy craft close by. A heavy hull under a big blue shield: the shield takes every hit first and comes back once nothing has hit it for a few seconds. Lose it and you lose the game.' },
+  line: { name: 'Line Ship', plural: 'Line Ships', speed: WORKER_SPEED * 0.5, hp: 240, craft: true, capital: true, war: true, parts: 5, round: { alloy: 2, chip: 1, fuel: 1 }, accel: 0.18, brake: 0.3,
+    desc: 'A slow, heavy gun ship (space maps only), built at a Launch Pad or your Flagship: two twin turrets and a spinal gun fire broadsides out to 7 tiles, at enemy capital ships first, then buildings and robots. Its light point-defence barely scratches Gunships, which are its bane. A hull under a blue shield that soaks every hit first and recharges once nothing has hit it for a few seconds. Its magazine holds 30 shells: it rearms beside your Flagship or over a Launch Pad. Four to a colony.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Fuel Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -256,7 +262,7 @@ const BOTS = {
   harrow:   { name: 'Harrow', plural: 'Harrows', speed: WORKER_SPEED * 0.45, hp: 240, wild: true, bite: 10, behemoth: true,
     desc: 'The biggest of the Murmur: a badger-mole the size of a hill, its back a mantle of crystal plate. It walks straight at a colony and the ground breaks under it: the roads, track and pipes it walks over are torn up, and every few seconds it rears and slams the ground, stunning every robot within 3 tiles and breaking the Walls, guns and buildings there. Small arms (warbots, Bulwarks, Skirmishers, turrets, Minigun Nests, Bunkers) do a quarter of their damage to it; Railgunners, Howitzers, Mortars, Rockets, Torches, bombs and Missiles do it all. Scuttlers ride on its back and drop off when it slams, and a pack comes with it. Only a real army brings it down: meet it in the open, spread out, before it reaches your walls.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'shuttle', 'dropship', 'gunship', 'magpod', 'crawler', 'agribot', 'paver', 'grader', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'shuttle', 'dropship', 'gunship', 'line', 'flagship', 'magpod', 'crawler', 'agribot', 'paver', 'grader', 'warbot', 'bulwark', 'torch', 'skirmisher', 'arccaster', 'railgunner', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -855,7 +861,7 @@ const PDT = { ground: 3, reload: 0.2, craft: 1.5, bot: 0.8, rounds: 30, spin: 0.
  */
 const DRIFT = { speed: 0.22, clear: 2, edge: 1.5, thin: 0.75, len: [8, 26], loop: [12, 64], reach: 5, mine: 0.5, respawn: 240, tiles: 6, amt: { ore: 36, crystal: 28 },
   r: { plain: 0.7, ore: 0.85, crystal: 0.8, salvage: 0.9, junk: 1.15 }, kinds: { asteroids: ['ore', 'crystal', 'plain', 'plain'], orbital: ['ore', 'crystal', 'plain'],
-    graveyard: ['salvage', 'salvage', 'salvage', 'salvage', 'junk', 'junk', 'junk'] },
+    graveyard: ['salvage', 'salvage', 'salvage', 'salvage', 'junk', 'junk', 'junk'], vfleet: ['ore', 'crystal', 'ore', 'plain', 'plain'] },
   // The Graveyard (GRAVE): `salvage`, wreckage a Shuttle tows to its Launch Pad, where it is broken down for these goods (into
   // the pad), drifting back in `salvageBack` s after; `junk`, debris lanes: `junkN` loose shards on each lane, spread along
   // it, never towed or mined: a craft that flies through one is clipped (SPACE.bump), the light hazard of the wreck field.
@@ -1037,11 +1043,18 @@ const SHAPE_PRESETS = [
   // colonies, each on a home hulk; salvage towed in by Shuttle is the economy, and the Arbiter in the middle is the prize.
   { name: 'The Graveyard', group: 'heights', noMurmur: true, blurb: 'A wreck field of dead Accord ships adrift in space: a home hulk each, more hulks to land on, and the Arbiter, an old arbitration relay ship, in the middle. Shuttles tow salvage in for Alloy and Chips.', w: 1.45, h: 1.45, graveyard: true, flat: true,
     tip: 'The Graveyard: your colony stands on the hulk of a dead Accord ship. Past your starter fields there is little Ore or Crystal: build a Launch Pad and a Shuttle, and tow the drifting salvage in (tap a wreck, Tow it home), where the pad breaks it down for Alloy and Chips. The Arbiter, the relay ship in the middle, is the prize: hold it (your land over its relay) and it sends you salvage. Land a Drop Outpost by Shuttle, or span the gaps with Viaducts. Debris lanes clip craft that fly through them.' },
+  // The Void Fleet (space expansion, phase 3: the owner's design, Nov 2026): open void between two home stations, a few small
+  // rocks and derelicts (voidMap in world.js, VFLEET in defs.js; the capital ships: CAPITAL, the rules in sim.js, the look in
+  // js/fleet.js). Two colonies, each with a Flagship (a Carrier's tender): lose it and you lose the game.
+  { name: 'The Void Fleet', group: 'heights', noMurmur: true, blurb: 'Open void between two home stations, a few small rocks and derelicts out between. Each colony has a Flagship, its Carrier\'s tender: a mobile base that builds Gunships and Line Ships. Lose your Flagship and you lose.', w: 1.15, h: 1.6, vfleet: true, flat: true,
+    tip: 'The Void Fleet: your colony stands on a home station, and your Flagship, the Carrier\'s tender, waits just off it. There is almost no ground out here: a small rock or two, the middle rock and a few derelicts. Build a Launch Pad, then Gunships and Line Ships (at the pad or on the Flagship\'s panel). Shields soak hits first and come back after a few quiet seconds; Disruptor Towers drain them fast. Destroy the enemy Flagship, or capture their Command Base, to win; lose your own Flagship and you lose.' },
 ];
 /** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
-function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && (P.asteroids || P.orbital || P.graveyard)); } // (Orbital platforms and The Graveyard lie in open space too: the void between the decks and hulks)
+function ringShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && (P.asteroids || P.orbital || P.graveyard || P.vfleet)); } // (Orbital platforms, The Graveyard and The Void Fleet lie in open space too: the void between the decks and hulks)
 /** Is this game (or map type `shape`) The Graveyard (graveMap: hulks, salvage and the Arbiter)? */
 function graveShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.graveyard); }
+/** Is this game (or map type `shape`) The Void Fleet (voidMap: home stations, Flagships, capital ships)? */
+function voidShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.vfleet); }
 /** Is this game (or map type `shape`) out in space, The Ring or Orbital platforms? There spacecraft fly and nothing flies on wings (see SPACE). */
 function spaceMap(shape) { return ringShape(shape); }
 /** Is tile t space on The Ring: empty void that nothing can cross or build on (T_CHASM there, never a Sky bridge)? */
@@ -1334,6 +1347,40 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  */
 const GRAVE = { home: { hh: [0.22, 15, 26], hw: [0.5, 27, 50] }, arb: { ah: [0.14, 8, 13], aw: [0.4, 16, 34], core: { w: 4, h: 4 }, jam: 4, haul: { alloy: 3, chip: 2 }, every: 30 },
   gap: 5, farGap: 8, via: { cement: 4, alloy: 1.5 }, mul: 1.25, oil: { home: 3, far: 1 }, stone: HOME_STONE, field: 5, stalk: 10, spill: { n: 1, r: 1.3, stone: 1 } };
+/*
+ * The Void Fleet (SHAPE_PRESETS vfleet: voidMap in world.js; space expansion, phase 3). Two colonies, each on a home station at
+ * its end of the map (player 0 at the bottom), open void between with a small rock each side and a rock in the middle (its own
+ * twin), point-symmetric to the tile. Phase 1's rules out there: drifting asteroids (DRIFT.kinds.vfleet) and derelict modules.
+ *   home    the home station's deck: height `hh` and width `hw` ([share of the map, least, most] tiles), its corners cut;
+ *           `berth` its two berths, squares this many tiles on a side on its far edge (room for Launch Pads)
+ *   rock    each side's small rock: its middle at `at` (shares of the map's width and height, colony 0's side), `r` tiles
+ *           across from its middle; `mid` the middle rock's radius
+ *   spill   the Ore and Crystal fields on the small rocks (`n` tiles each at least) and the middle rock (`mid`)
+ *   mul, oil, stone, field, stalk   as GRAVE's
+ *   park    how far out past its station's far edge each Flagship starts, over the void (tiles)
+ */
+const VFLEET = { home: { hh: [0.2, 15, 22], hw: [0.6, 22, 34], berth: 5 }, rock: { at: [0.22, 0.6], r: 3.2 }, mid: 4.6, spill: { n: 3, mid: 4 },
+  mul: 1.25, oil: 3, stone: HOME_STONE, field: 5, stalk: 10, park: 4 };
+/**
+ * Capital ships (BOTS capital: the Flagship and the Line Ship; space expansion, phase 3). Space craft, not aircraft: they are
+ * always at flying height (u.alt 1), never land, burn no Fuel, and turn slowly (`turn` radians a second) on the way. Each has a
+ * shield (u.cs, `sh` at most) on top of its hull (u.hp): every hit takes the shield first, and once nothing has hit it for
+ * `wait` s it recharges, `regen` a second. A Disruptor Tower's pulse drains a shield `disrupt` times its drain of a Bulwark's
+ * (BULWARK.drain) and leaves the hull be. Their reach is measured from the hull (`r`: tiles from the middle to its ends).
+ *   flagship  each colony's on The Void Fleet (vfSetup), none built. `pd` its point-defence (enemy craft within `range` of the
+ *             hull, Gunships first, else robots on the ground within `ground`); `aura` the reach in which it mends (`mend` hit
+ *             points a second), refuels (`fuel` of the tank a second) and rearms (`rearm` shells a second) its colony's craft;
+ *             its deck builds `yard` (a round of parts every YARD.work s, from its colony's stores: flagStores), its Gunships
+ *             (`wing` at most) staying with it as its wing; `guard` it sends its wing up at enemies this near; `self` hit
+ *             points a second its own crews mend its hull while nothing has hit it for `wait` s
+ *   line      a Line Ship: broadsides (`salvo` shells every `reload` s, out to `range` of the hull: `cap` off a capital ship,
+ *             `craft` off a small craft, `bot` off a robot, `bld` off a building, Command Bases and Keeps held at a third as
+ *             a Gunship's lasers do), `mag` shells in its magazine (rearmed by the Flagship, or `padRearm` a second over a
+ *             Launch Pad); `keep` the range it stands off at; its light `pd`; `most` a colony
+ */
+const CAPITAL = { wait: 6, disrupt: 3, r: { flagship: 3.0, line: 2.2 }, turn: { flagship: 0.3, line: 0.45 },
+  flagship: { sh: 400, regen: 15, self: 1, pd: { range: 4.5, ground: 3, reload: 0.35, craft: 1.2, bot: 0.8 }, aura: 5.5, mend: 2, fuel: 6, rearm: 2, yard: ['line', 'gunship'], wing: 6, guard: 9 },
+  line: { sh: 140, regen: 9, range: 7, keep: 5.5, reload: 3, salvo: 2, cap: 9, craft: 3, bot: 4, bld: 6, mag: 30, padRearm: 1, pd: { range: 3, reload: 0.6, craft: 1, bot: 0.6 }, most: 4 } };
 const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 }, ringfall: 4 };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }
@@ -2214,8 +2261,8 @@ const BDEFS = {
   // Space maps only (spaceMap): the Launch Pad (2 by 2, a Cradle Ring) builds and services spacecraft, and the Point-Defence
   // Turret (a Twin Rotary) takes the Flak Gun's place. See SPACE, PDT.
   launchpad: {
-    name: 'Launch Pad', short: 'Pad', desc: 'A 2 by 2 cradle ring for spacecraft (space maps only). Its yard builds Shuttles, Dropships and Gunships from Alloy and Chips (order them on its panel), and it is their home: two to a pad. They lift straight off it, fly straight over the void and land on any flat, free ground. Parked here they refuel (it keeps 8 Fuel: Tankers bring it) and mend. It is storage too, like a Depot: the goods a Shuttle flies out are loaded here.',
-    cost: { cement: 8, alloy: 4, chip: 2 }, store: true, pad: true, foot: 2, armor: 16, buildTime: 14, yard: ['shuttle', 'dropship', 'gunship'], space: true,
+    name: 'Launch Pad', short: 'Pad', desc: 'A 2 by 2 cradle ring for spacecraft (space maps only). Its yard builds Shuttles, Dropships and Gunships from Alloy and Chips, and Line Ships from Alloy, Chips and Fuel (order them on its panel); it is home to the small craft, two to a pad (a Line Ship needs no room on it). They lift straight off it, fly straight over the void and land on any flat, free ground. Parked here they refuel (it keeps 8 Fuel: Tankers bring it) and mend. It is storage too, like a Depot: the goods a Shuttle flies out are loaded here.',
+    cost: { cement: 8, alloy: 4, chip: 2 }, store: true, pad: true, foot: 2, armor: 16, buildTime: 14, yard: ['shuttle', 'dropship', 'gunship', 'line'], space: true,
   },
   pdturret: {
     name: 'Point-Defence Turret', short: 'Point-Defence', desc: 'A twin rotary gun for space maps, in the Flak Gun\'s place. It hoses enemy spacecraft out to 7 tiles with tracer fire, Gunships first, and anything on the ground within 3 tiles. The main answer to Gunships: one shreds a Gunship in a few seconds. Fires Ammo (30 bursts each).',

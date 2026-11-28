@@ -29,6 +29,7 @@ function generateMap(seed, W, H, cfg) {
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).asteroids) return ringMap(seed, W, H, cfg); // (The Ring: asteroids in space, see ringMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).orbital) return orbitalMap(seed, W, H, cfg); // (Orbital platforms: station decks and drawbridges, see orbitalMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).graveyard) return graveMap(seed, W, H, cfg); // (The Graveyard: hulks of dead ships in space, see graveMap)
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).vfleet) return voidMap(seed, W, H, cfg); // (The Void Fleet: two home stations and open void, see voidMap)
   if ((SHAPE_PRESETS[cfg.shape || 0] || {}).caves) return cavesMap(seed, W, H, cfg); // (Half underground: caves and surface, see cavesMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
@@ -3634,6 +3635,151 @@ function graveMap(seed, W, H, cfg) {
   };
 }
 
+/* ------------------------------------------------------------------ The Void Fleet */
+
+/**
+ * The Void Fleet (SHAPE_PRESETS vfleet, VFLEET in defs.js; space expansion, phase 3): two colonies on home stations at the
+ * map's two ends, open void between. Its own generator (called by generateMap first thing, as graveMap is), point-symmetric to
+ * the tile. Laid out for player 0 (the bottom) and turned onto player 1:
+ *   - its home station (VFLEET.home): an Accord station deck across the bottom, its corners cut, two berths standing out on
+ *     its far edge (drawn as Orbital platforms' decks are: js/fleet.js);
+ *   - a small rock out on its side of the void (VFLEET.rock), and the middle rock (its own twin) in the middle.
+ * Resources: the standard colony's starter fields on the home station (as The Graveyard's home hulk), a small Ore and Crystal
+ * field on each small rock and a richer pair on the middle rock (VFLEET.spill); the drifting asteroids (spaceSetup) carry
+ * the rest. The space between is T_CHASM (voidTile). Returns what generateMap does, with `vfleet`: { st: [{ x0, y0, x1, y1 }]
+ * (the two stations' boxes, berths in), rocks: [{ x, y, r }] }.
+ */
+function voidMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH], V = VFLEET, M = 2, CH = 2;
+  const N = W * H, terrain = new Uint8Array(N).fill(T_CHASM), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1);
+  const id = (i, j) => j * W + i, mir = (t) => N - 1 - t, inMap = (i, j) => i >= 0 && j >= 0 && i < W && j < H;
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const rng = makeRng((seed ^ 0x5f1ee7) >>> 0), sH = seed * 5 + 3;
+  const stampDens = clamp(RPR.density, 0.7, 1.15);
+  const pick = ([f, lo, hi], n) => clamp(Math.round(f * n), lo, hi);
+  const set = (t, v) => { terrain[t] = v; terrain[mir(t)] = v; };
+  // 1) The home station: a deck across the bottom, its corners cut, two berths on its far edge.
+  const hh = pick(V.home.hh, H), hw = pick(V.home.hw, W), x0 = Math.floor((W - hw) / 2), x1 = W - 1 - x0, y1 = H - 1 - M, y0 = y1 - hh + 1;
+  for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) if (Math.min(i - x0, x1 - i) + Math.min(j - y0, y1 - j) >= CH) set(id(i, j), T_GROUND);
+  const B = V.home.berth, berths = [[x0 + 2, y0 - B], [x1 - 1 - B, y0 - B]];
+  for (const [bx0, by0] of berths) for (let j = by0; j < y0; j++) for (let i = bx0; i < bx0 + B; i++) if (inMap(i, j) && !((i === bx0 || i === bx0 + B - 1) && j === by0)) set(id(i, j), T_GROUND);
+  const st = { x0, y0: y0 - B, x1, y1 };
+  // 2) The small rock on its side of the void, and the middle rock: round, a little ragged (from the canonical twin's noise).
+  const blob = (cx, cy, r) => {
+    for (let j = Math.floor(cy - r - 1); j <= Math.ceil(cy + r + 1); j++) for (let i = Math.floor(cx - r - 1); i <= Math.ceil(cx + r + 1); i++) {
+      if (!inMap(i, j)) continue;
+      const t = id(i, j), m = Math.min(t, mir(t)), n = fbm((m % W) / 2.5, ((m / W) | 0) / 2.5, sH, 2);
+      if (dist(i + 0.5, j + 0.5, cx, cy) <= r + (n - 0.5) * 1.2) set(t, T_GROUND);
+    }
+  };
+  const rx = Math.round(W * V.rock.at[0]) + 0.5, ry = Math.round(H * V.rock.at[1]) + 0.5;
+  blob(rx, ry, V.rock.r);
+  blob(W / 2, H / 2, V.mid);
+  // Specks cut off go back to space.
+  {
+    const lab = new Int32Array(N).fill(-1);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_GROUND || lab[t] >= 0) continue;
+      const q = [t];
+      lab[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] === T_GROUND) { lab[u] = t; q.push(u); } });
+      if (q.length < 9) for (const u of q) terrain[u] = T_CHASM;
+    }
+  }
+  // 3) Resources, every tile made to its twin as well. The rim (ground beside the void) stays clear.
+  const rim = new Uint8Array(N);
+  for (let t = 0; t < N; t++) if (terrain[t] !== T_CHASM) { const i = t % W, j = (t / W) | 0; if (i === 0 || j === 0 || i === W - 1 || j === H - 1) { rim[t] = 1; continue; } orth(t, (u) => { if (terrain[u] === T_CHASM) rim[t] = 1; }); }
+  const free = (t) => terrain[t] === T_GROUND && !rim[t] && !res[t] && !fert[t];
+  const put = (t, type) => { for (const u of [t, mir(t)]) { if (type === 'fert') { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; } } };
+  const stamp = (x, y, rad, type, fill) => {
+    for (let j = Math.max(0, Math.floor(y - rad)); j <= Math.min(H - 2, Math.ceil(y + rad)); j++) {
+      for (let i = Math.max(1, Math.floor(x - rad)); i <= Math.min(W - 2, Math.ceil(x + rad)); i++) {
+        const d2 = dist2(i, j, x, y), t = id(i, j);
+        if (d2 > rad * rad || !free(t) || !free(mir(t))) continue;
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        put(t, type);
+      }
+    }
+  };
+  const field = (x, y, rad, type, fill, min, keepRim) => { // (sure of its size: the stamp, then the free tiles nearest its middle)
+    stamp(x, y, rad, type, fill);
+    for (const R of [4, 6]) {
+      let have = 0;
+      const c = [];
+      for (let j = Math.max(0, Math.floor(y - R)); j <= Math.min(H - 2, Math.ceil(y + R)); j++) for (let i = Math.max(1, Math.floor(x - R)); i <= Math.min(W - 2, Math.ceil(x + R)); i++) {
+        const t = id(i, j), d2 = dist2(i, j, x, y);
+        if (d2 > R * R) continue;
+        if (type === 'fert' ? fert[t] : res[t] === type) have++;
+        else if ((free(t) && free(mir(t))) || (keepRim && terrain[t] === T_GROUND && terrain[mir(t)] === T_GROUND && !res[t] && !res[mir(t)] && !fert[t])) c.push([d2, t]);
+      }
+      c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      for (let k = 0; k < c.length && have < min; k++) { if (res[c[k][1]]) continue; put(c[k][1], type); have++; }
+      if (have >= min) return;
+    }
+  };
+  const oil = (x, y, k) => {
+    const c = [];
+    for (let j = Math.max(0, Math.floor(y - 3)); j <= Math.min(H - 2, Math.ceil(y + 3)); j++) for (let i = Math.max(1, Math.floor(x - 3)); i <= Math.min(W - 2, Math.ceil(x + 3)); i++) { const t = id(i, j); if (free(t) && free(mir(t))) c.push([dist2(i, j, x, y), t]); }
+    c.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [, t] of c.slice(0, k)) put(t, R_OIL);
+  };
+  const bx = Math.floor((x0 + x1) / 2) + (W % 2 ? 0 : 1), by = Math.min(y0 + Math.round(hh * 0.5), y1 - 6);
+  // The home station: the standard colony's starter fields (Ore and Crystal first, each at least VFLEET.field), then the rest, and oil.
+  field(bx - 4, by - 5, 1.5, R_ORE, 0.9 * stampDens, V.field);
+  field(bx + 4, by - 5, 1.5, R_CRYSTAL, 0.9 * stampDens, V.field);
+  field(bx + 9, by - 3.5, 1.7, R_ORE, 0.85 * stampDens, V.field);
+  field(bx - 10, by + 2.5, 1.6, R_CRYSTAL, 0.85 * stampDens, V.field);
+  field(bx - 6, by - 2, 2.5, R_STALK, 0.85 * stampDens, V.stalk);
+  stamp(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens);
+  stamp(bx + 6, by, 1.8, R_BOULDER, 0.8 * stampDens);
+  stamp(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens);
+  field(bx - 1, by - 6.5, 2.0, 'fert', 0.85, 8);
+  for (const [dx, dy] of [[7.5, 4.5], [-9, -4], [8, -8]].slice(0, V.oil)) oil(bx + dx, by + dy, 4);
+  stamp(bx - 8, by + 6, 1.4, R_BOULDER, 0.75 * stampDens);
+  // The rocks: a small Ore and Crystal field on the small one, a richer pair on the middle one (its fields to both colonies alike).
+  field(rx - 1, ry - 0.5, 1.2, R_ORE, 0.85, V.spill.n, true);
+  field(rx + 1, ry + 0.5, 1.2, R_CRYSTAL, 0.85, V.spill.n, true);
+  field(W / 2 - 2.9, H / 2 + 0.5, 1.2, R_ORE, 0.85, V.spill.mid, true); // (each its own twin across the middle: Ore east and west, Crystal north and south)
+  field(W / 2 + 0.5, H / 2 + 2.9, 1.2, R_CRYSTAL, 0.85, V.spill.mid, true);
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 600 && placed < Math.ceil(URANIUM_DEPOSITS / 2); tries++) {
+      const i = x0 + 2 + Math.floor(rng() * (x1 - x0 - 4)), j = y0 + 2 + Math.floor(rng() * (y1 - y0 - 4)), t = id(i, j);
+      if (!free(t) || !free(mir(t)) || dist(i, j, bx, by) < 7) continue;
+      put(t, R_URANIUM);
+      placed++;
+    }
+  }
+  // Stone: each home station is topped up to VFLEET.stone (Cement comes from Stone alone).
+  {
+    const per = clamp(Math.round(RES[R_BOULDER].amount * RPR.amount * V.mul), 1, 255), target = Math.round(V.stone * RPR.amount);
+    let have = 0;
+    for (let j = st.y0; j <= st.y1; j++) for (let i = st.x0; i <= st.x1; i++) if (res[id(i, j)] === R_BOULDER) have += per;
+    const spots = [];
+    for (let j = st.y0; j <= st.y1; j++) for (let i = st.x0; i <= st.x1; i++) { const t = id(i, j); if (free(t) && free(mir(t)) && dist(i, j, bx, by) >= 4.5) spots.push(t); }
+    spots.sort((a, c) => (dist2(a % W, (a / W) | 0, bx + 3, by + 5) - dist2(c % W, (c / W) | 0, bx + 3, by + 5)) || a - c);
+    for (let k = 0; k < spots.length && have < target; k++) { put(spots[k], R_BOULDER); have += per; }
+  }
+  // Nothing lies off the ground; the station's rim stays clear (a rock's may hold its spill).
+  for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) { res[t] = R_NONE; fert[t] = 0; }
+  for (let j = st.y0; j <= st.y1; j++) for (let i = st.x0; i <= st.x1; i++) { const t = id(i, j); if (rim[t]) for (const u of [t, mir(t)]) { res[u] = R_NONE; fert[u] = 0; } }
+  // How much each holds (richer out toward the middle, as on every map).
+  const reach = Math.max(1, dist(bx, by, W - 1 - bx, H - 1 - by) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (SKY_RICH.includes(res[t]) ? V.mul : 1)), 1, 255);
+  }
+  const twin = (r) => ({ x0: W - 1 - r.x1, x1: W - 1 - r.x0, y0: H - 1 - r.y1, y1: H - 1 - r.y0 });
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }],
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    vfleet: { st: [st, twin(st)], rocks: [{ x: rx, y: ry, r: V.rock.r }, { x: W - rx, y: H - ry, r: V.rock.r }, { x: W / 2, y: H / 2, r: V.mid }] },
+  };
+}
+
 /* ------------------------------------------------------------------ new game */
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
@@ -3843,7 +3989,7 @@ function newGame(opts) {
   if (secondBiomeAllowed(opts.biome2, settings.biome, settings.size, settings.shape)) settings.biome2 = opts.biome2;
   if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (SHAPE_PRESETS[settings.shape].caves) delete settings.biome2; // (Half underground: the surface's biome is one, the caves' look is the Hollow's)
-  if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital || SHAPE_PRESETS[settings.shape].graveyard) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring, Orbital platforms and The Graveyard have Argos's look and rules, whatever the Biome setting)
+  if (SHAPE_PRESETS[settings.shape].asteroids || SHAPE_PRESETS[settings.shape].orbital || SHAPE_PRESETS[settings.shape].graveyard || SHAPE_PRESETS[settings.shape].vfleet) { settings.biome = 'lunar'; delete settings.biome2; } // (The Ring, Orbital platforms and The Graveyard have Argos's look and rules, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   settings.scars = scarsOk(opts.scars) ? opts.scars : 'full'; // War scars (SCARS: the Settings menu's, fixed for the game)
   const { W, H } = mapDims(settings);
@@ -3906,17 +4052,18 @@ function newGame(opts) {
   if (m.dam) S.dam = m.dam; // (The Dam: its dams, their lakes and floods: damShape)
   if (m.orbital) S.orb = orbInit(m.orbital, m.bases); // (Orbital platforms: its decks, drawbridges and control boxes: orbitalMap)
   if (m.grave) S.grave = { hulks: m.grave.hulks, core: m.grave.core, owner: -1, jam: 0, held: 0, paid: 0 }; // (The Graveyard: its hulks and the Arbiter: graveMap, graveTick)
+  if (m.vfleet) S.vf = { st: m.vfleet.st, rocks: m.vfleet.rocks }; // (The Void Fleet: its home stations and rocks: voidMap; the Flagships, vfSetup)
   const preRes = S.res.slice(), preAmt = S.amt.slice(); // (what the town or the yard cuts at home is laid again beside it: homeFieldFloor)
   if (SHAPE_PRESETS[settings.shape].city) townSetup(seed, m.bases); // (Passenger Town: the empty town between the bases)
   if (SHAPE_PRESETS[settings.shape].walker) walkerSetup(m.bases); // (the Walking Factory: its yard and loop round the middle)
-  if (!opts.layout && !['hollow', 'caves', 'orbital', 'asteroids', 'graveyard'].some((k) => SHAPE_PRESETS[settings.shape][k])) homeFieldFloor(m.bases, settings, preRes, preAmt); // (what a later layer cut from the starter fields: see homeFieldFloor)
+  if (!opts.layout && !['hollow', 'caves', 'orbital', 'asteroids', 'graveyard', 'vfleet'].some((k) => SHAPE_PRESETS[settings.shape][k])) homeFieldFloor(m.bases, settings, preRes, preAmt); // (what a later layer cut from the starter fields: see homeFieldFloor)
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
-  if (S.victory === 'uplinks' && (m.hollow || m.caves)) delete S.victory; // (no Uplinks in the Hollow, which the Pathfinder never mapped: Capture)
+  if (S.victory === 'uplinks' && (m.hollow || m.caves || m.vfleet)) delete S.victory; // (no Uplinks in the Hollow, which the Pathfinder never mapped, nor on The Void Fleet, won by Capture or by the Flagship: Capture)
   // The Murmur (see MURMUR and WILD): opts.murmur ('off', 'quiet' or 'active'); unset, the map type's own (SHAPE_PRESETS
   // murmur: the Hollow, their lair, has them Active) except on a hand-made map (a mission's: it switches them on in its
   // setup, see missionOptions), else off. An older Colony game's switch (opts.wildlife) is Active. Never on a silent
@@ -3979,8 +4126,9 @@ function newGame(opts) {
   if (opts.setup) opts.setup(S);
   clearCalmGround(mode === 'versus' && !hand && nColonies() > 1); // (no deposits on a Trade Post's ground: moved just off it, the map's symmetry kept)
   if (spaceMap() && mode === 'versus' && !hand) spaceSetup(seed); // (space: the drifting asteroids' lanes and the derelict modules)
+  if (S.vf && mode === 'versus' && !hand) vfSetup(); // (The Void Fleet: each colony's Flagship, parked off its station)
   S.decor = makeDecor();
-  if (S.orb || S.grave) S.decor.fill(0); // (no plants on a station's decks, nor on a wreck's)
+  if (S.orb || S.grave || S.vf) S.decor.fill(0); // (no plants on a station's decks, nor on a wreck's)
   if (S.orb) orbRoads(); // (and the lowered bridges carry roads)
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   if (S.landmarks && typeof lmDecor === 'function') lmDecor(); // (nor on a landmark's ground: js/landmarks.js)
@@ -7039,6 +7187,7 @@ function checkSave(o) {
   // Space (S.space: spaceSetup): the drifting asteroids' lanes and rocks, the derelict modules, plain numbers on the map.
   if (o.space != null) spaceCheckSave(o, bad);
   if (o.grave != null) graveCheckSave(o, bad); // (The Graveyard: its hulks and the Arbiter)
+  if (o.vf != null) vfCheckSave(o, bad); // (The Void Fleet: its stations and rocks)
   // A Contingency battle's landmark (js/landmarks.js): its tiles and its state.
   if (o.landmarks != null) { if (typeof lmCheckSave === 'function') lmCheckSave(o, bad); else bad(); }
   // Passenger Town (townSetup): its rectangle, its blocks' spans, signs and plazas, and its buildings.

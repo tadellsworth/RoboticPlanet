@@ -25,7 +25,7 @@
  * landmarks' and the Murmur's do. In a single-file copy it's a bundle beside the page (space-art.js: the day art and
  * each time's set). Until it's in, everything here is drawn plainly in code.
  */
-const SPACE_ART = /^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d(-tow)?|junk|arb)(@\d)?$/;
+const SPACE_ART = /^(flagship|flagship-launch|line|line-fire[LR])@\d$|^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d(-tow)?|junk|arb)(@\d)?$/;
 const _spaceArt = { state: '' };
 function spaceArtKey(key) { return SPACE_ART.test(key); }
 function ensureSpaceArt() {
@@ -227,8 +227,9 @@ function spaceDrawAir(ctx, ox, oy, z, inView) {
   if (!S.space) return;
   for (const m of S.space.mods) if (inView(m.x + 1, m.y + 1, 3)) drawSpaceMod(ctx, m, ox, oy, z);
   for (const r of S.space.rocks) { if (r.gone) continue; const p = rockPos(r); if (inView(p.x, p.y, 3)) drawRock(ctx, r, ox, oy, z); }
+  if (typeof fleetDrawAir === 'function') fleetDrawAir(ctx, ox, oy, z, inView); // (capital ships, under the small craft: js/fleet.js)
   for (const u of S.bots) {
-    if (u.dead || !BOTS[u.type].craft || u.inside || !inView(u.x, u.y, 3)) continue;
+    if (u.dead || !BOTS[u.type].craft || BOTS[u.type].capital || u.inside || !inView(u.x, u.y, 3)) continue;
     const want = u.face || 0, turn = 6 * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
     u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
     drawCraft(ctx, u, ox + u.x * z, oy + u.y * z, z);
@@ -236,6 +237,7 @@ function spaceDrawAir(ctx, ox, oy, z, inView) {
   for (const f of S.fx) {
     if (f.t < 0 || !inView(f.x, f.y, 6)) continue;
     if (f.type === 'laser') drawLaserFx(ctx, f, ox, oy, z);
+    else if (f.type === 'capshell') drawCapShell(ctx, f, ox, oy, z); // (a Line Ship's broadside: js/fleet.js)
     else if (f.type === 'pdtracer') drawPdTracerFx(ctx, f, ox, oy, z);
   }
 }

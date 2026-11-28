@@ -507,6 +507,10 @@ const ORDERS = {
   /** Dropship uid lands a squad at (i, j): robots `ids` (picked), or with none up to n of `kind` ('warbot' from the garrisons, 'worker' idle ones). */
   squad(p, uid, i, j, ids, kind, n) { const u = ownU(p, uid, 'craft'); if (!u) return 'That Dropship is gone.'; return orderSquad(p, u, i | 0, j | 0, Array.isArray(ids) ? ownIds(p, ids).slice(0, 12) : null, kind === 'worker' ? 'worker' : kind === 'warbot' ? 'warbot' : null, n | 0); },
   /** Gunships `ids`: 'attack' building tid, 'hunt' robot tid, 'hold' at (i, j), 'home' to their pads. */
+  /** Capital ships `ids` (The Void Fleet): a Flagship 'move's to (i, j) or holds ('home'); Line Ships 'attack' building tid, 'hunt' robot or craft tid, 'hold' at (i, j), or escort their Flagship ('home'). How many took it. */
+  capital(p, ids, kind, tid, i, j) { if (!['attack', 'hunt', 'hold', 'move', 'home'].includes(kind)) return 0; const t = tid ? getE(tid) : null; if ((kind === 'attack' || kind === 'hunt') && (!t || t.dead || !foes(t.owner, p))) return 0; if ((kind === 'move' || kind === 'hold') && !inMap(i | 0, j | 0)) return 0; return orderCapital(p, ownIds(p, ids), kind, tid | 0, (+i || 0) + 0.5, (+j || 0) + 0.5); },
+  /** Flagship uid's deck: d more (or fewer) of `kind` (a Gunship or a Line Ship) on order. Its order now. */
+  fyard(p, uid, kind, d) { const u = ownU(p, uid, 'flagship'); if (!u || !CAPITAL.flagship.yard.includes(kind) || botBanned(p, kind)) return -1; const n = clamp(((u.yard && u.yard[kind]) || 0) + (d | 0), 0, 99); u.yard = u.yard || {}; u.yard[kind] = n; if (!n) delete u.yard[kind]; if (!Object.keys(u.yard).length) delete u.yard; return n; },
   gunships(p, ids, kind, tid, i, j) { if (!['attack', 'hunt', 'hold', 'home'].includes(kind)) return 0; const t = tid ? getE(tid) : null; if ((kind === 'attack' || kind === 'hunt') && (!t || t.dead || !foes(t.owner, p))) return 0; return orderGunships(p, ownIds(p, ids), kind, tid | 0, (+i || 0) + 0.5, (+j || 0) + 0.5); },
   /** Shuttle uid flies a Drop Outpost kit out and lands it at (i, j) (space maps). */
   outpost(p, uid, i, j) { const u = ownU(p, uid, 'craft'); return u ? orderShuttleOutpost(p, u, i | 0, j | 0) : 'That Shuttle is gone.'; },
@@ -674,7 +678,7 @@ const ORDERS = {
   /** Units `ids` into group gid (out of any other); its target size grows to fit them. How many. */
   agAdd(p, gid, ids) {
     const g = agById(gid); if (!g || g.owner !== p) return 0;
-    const us = orderable(p, ownIds(p, Array.isArray(ids) ? ids : []));
+    const us = agOrderable(p, ownIds(p, Array.isArray(ids) ? ids : [])); // (army units and Gunships)
     const was = agMembers(g).length + us.filter((u) => u.grp !== g.id).length;
     if (was > g.size) g.size = Math.min(AGROUP.maxSize, was);
     agTake(g, us.filter((u) => u.grp !== g.id));
@@ -683,10 +687,11 @@ const ORDERS = {
   /** Units `ids` out of their groups, back to the Reserve. How many. */
   agLeave(p, ids) {
     let n = 0;
-    for (const u of orderable(p, ownIds(p, Array.isArray(ids) ? ids : []))) {
+    for (const u of agOrderable(p, ownIds(p, Array.isArray(ids) ? ids : []))) {
       if (!u.grp) continue;
       const g = agById(u.grp);
       delete u.grp; delete u.grpNew; delete u.grpGo; n++;
+      if (g && agGunOff(u, g.flag)) continue;
       if (g && u.task && u.task.type === 'hold' && u.task.rally === g.flag) callBack(u);
     }
     return n;

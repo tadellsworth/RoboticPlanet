@@ -2097,6 +2097,53 @@ Drawn like the Warbot (its size on the map, the warbots' headlights at night, th
 | `arccaster@...` | A short boxy tracked hull filled by a Tesla coil seen from above: a plinth, stacked ceramic insulator rings, a fat steel discharge torus with an electric-blue seam round a white-blue core, three lightning rods with lit tips; two banks of capacitor drums with blue charge lights on the rear deck, copper leads | `drawArmyLights`: the coil glows with the bolts left (brighter at night) and flares as it fires, lighting the ground blue; `'chain'`: a jagged blue-white bolt from the caster to each robot it jumps to, re-forming every few frames and forking side branches, a white core, light where it lands |
 | `railgunner@...` | A long low tracked wedge with a folded stabiliser spade (hazard stripes) at the tail, a turret set back with a breech block between two big capacitor drums ringed in team light, and a long open rail (two heavy rails, six glowing coil clamps, a muzzle brace with a lit muzzle) reaching to the frame's edge; a rangefinder with a red lens | `drawArmyLights`: the coil clamps light up one after another as it charges; `'railglint'`: a white star swelling and spinning at the muzzle; `'railshot'`: a bright straight streak, white core in a glow of the team colour, fading from the back, a ring of air at the muzzle, the line lit on the ground at night; `'railhit'`: a flash and sparks thrown on along the line |
 
+### Batch 45: Space expansion, phase 3: The Void Fleet's capital ships (installed; shields, engines, broadsides, launches drawn in code)
+
+The Void Fleet (Nov 2026; README, "The Void Fleet") follows the space canvas's capital-ship and shield boards
+(https://claude.ai/artifact/FrQDjBZCg84NA1mcfXRxSz: "Capital ships (exploratory)" and "Capital-ship shields"). The canvas
+drew one concept of each, the owner's call for the Flagship already made (a vanguard Carrier's **tender**, option a), so
+both are built as drawn: the **Tender** for the Flagship and the **Line** for the Line Ship. In phase 1's kit
+(`renderer/b/spacekit.js`), but the capital hulls are a paler Accord grey (`#8b9198`, `#787e85`, `#5c6269`) than the small
+craft's gunmetal, as the canvas drew them, with the team colour in long glow strips down both flanks.
+
+- **The Flagship, a Carrier's tender** (`renderer/b/capital.js c=tender`, 68 units across, straight down, nose east: drawn
+  6.8 tiles long): a long faceted hull, broad through the middle and blunt at the stern; the **docking collar** near the stern
+  it rides clamped under its Carrier by (a raised steel ring, dark inside, eight amber lamps round it); a **flight deck** along
+  the spine (brown deck plating with grime, yellow hazard bands at both ends, a seam down the middle, white edge lamps) with
+  **two launch rails** lit in the team colour and two Gunships (small Lancets) parked on it; a forward **command block** with
+  the team visor; hangar doors along both flanks; **four point-defence sponsons** on short arms (a drum and a twin rotary gun);
+  **four great engines** in a row at the stern (cold: the game draws their glow); navigation lights at the bow, white lamps
+  at the stern; panel seams and vents over its back. `launch=1`: the rails lit bright and a white catapult glow at the head of
+  one, one Gunship gone from the deck (`flagship-launch`).
+- **The Line Ship** (`c=line`, 50 units across: 5 tiles): a narrow armoured hull, **belt plates** along both flanks with a team
+  strip above them; **two big twin turrets** on the spine (a round house, a cheek box, two long barrels, a team light on the roof;
+  `rot=` their training); the **spinal mass-driver gun** the length of the bow, four coils lit in the team colour; the bridge
+  aft with its visor; **four small PD turrets**; **three engines**. `fire=1` with `rot=-90` or `90`: the turrets trained to port
+  or starboard, their muzzles flaring white and orange (a broadside: `line-fireL`, `line-fireR`).
+
+`renderer/tools/render_capital.sh` (four at a time; `post/space_post.py` blooms the glow pass, no plumes), then
+`install_capital.py`: 40 files, about 870 KB, both teams, re-lit in `tod/<morning, evening, night>/` (night is the eclipse:
+the deck lamps, the rails and the strips glow), all in the lazy space-art bundle:
+
+| Art | What | Sizes |
+|---|---|---|
+| `bots/flagship@T`, `flagship-launch@T` | the Flagship straight down, nose east, 68 units; its rails lit, a Gunship going up | 768 |
+| `bots/line@T`, `line-fireL@T`, `line-fireR@T` | the Line Ship, 50 units; its turrets trained to port or starboard, firing | 576 |
+
+Drawn by js/fleet.js. **In code**: the **engines' glow** (a hot disc and a short flame at each nozzle, pulsing, longer and
+brighter under way); a **shadow** far below; the **shield**, the Shield Dome's look (Batch 24, `drawDomes`) drawn round the
+hull as an ellipse fitted to it (`FLEET_LOOK.hull`, 0.75 tiles out): a faint pale-blue fill (rgb 120, 200, 255) brighter at
+the rim, a crisp rim line, a **hexagon lattice** with a shimmer drifting along it, **a panel flashing and a ring spreading**
+where a shot lands (from the side it came from), a blue crackle all round for a Disruptor's drain, **flickering** under a
+quarter, **breaking up** as it fails (shards flying off the rim), nothing but a few motes while it is down, **closing back round
+from the stern** as it recharges (the leading edges glowing), a flash all over when it is back, and a soft blue spill under it
+at night; no team tint (the hull's strips carry the team, as the canvas recommended). The **broadside**: the fire frame, with
+muzzle flashes and smoke puffs at the three guns on that side and the **shells** (`capshell`: a bright slug and trail
+arcing to the mark, a flash where it lands). The **launch**: the launch frame, with a streak of team light racing up the rail
+and a glow at its head while the Gunship climbs off the deck. The ship **breaking up** (`capdie`: the hull in two halves
+drifting apart, dark, fires flickering, fading). Two **bars** over the ship (shield pale blue over hull), the dashed
+selection ellipse, a bar along its heading on the minimap (the Flagship's ringed). With no art the hulls are drawn in code.
+
 ### Batch 44: Space expansion, phase 2: The Graveyard (installed; edges, ribs, the flank, the beacon, cables drawn in code)
 
 The Graveyard (Nov 2026; README, "The Graveyard") follows the space canvas's Graveyard board

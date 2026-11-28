@@ -248,6 +248,10 @@ const ART_MANIFEST = {
   'ground-grave-0': 'space/grave-plate-0.webp', 'ground-grave-1': 'space/grave-plate-1.webp', 'ground-grave-2': 'space/grave-plate-2.webp',
   'grave-salvage-0': 'space/grave-salvage-0.webp', 'grave-salvage-1': 'space/grave-salvage-1.webp', 'grave-salvage-0-tow': 'space/grave-salvage-0-tow.webp', 'grave-salvage-1-tow': 'space/grave-salvage-1-tow.webp', 'grave-junk': 'space/grave-junk.webp',
   'grave-arb': 'space/grave-arb.webp', 'grave-arb@0': 'space/grave-arb@0.webp', 'grave-arb@1': 'space/grave-arb@1.webp',
+  // The Void Fleet's capital ships (renderer/b/capital.js; tools/render_capital.sh, tools/install_capital.py), straight down,
+  // nose east: the Flagship (the canvas's "Tender"; -launch its rails lit, a Gunship going up) and the Line Ship (the canvas's
+  // "Line"; -fireL, -fireR its turrets trained to port or starboard, firing). js/fleet.js draws them, with the space art.
+  ...Object.fromEntries(['flagship', 'flagship-launch', 'line', 'line-fireL', 'line-fireR'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
   // The Maglev line (renderer/b/maglev.js v=a, Accord Phase 2, installed by tools/install_maglev.py): the Terminal (as big
   // as the Rail Station, its dock MAGLEV.head tiles up the screen), the pylon (no pad, its head MAGLEV.deck tiles up) and
   // the pylon shot down, the pod loaded and empty (top-down, facing +x, one tile) and one tile of guideway running east,

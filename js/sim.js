@@ -311,7 +311,7 @@ function needsOf(b) {
   // (Not a supply order since Nov 23 2026: a supply order is filled only from what storage holds beyond every other
   // need, and a colony whose Alloy and Chips go straight from its Smelter and Chip Fab into its Bot Foundry never has
   // any. Its parts are asked for like a factory's inputs, as urgently as a Bot Foundry's: see dispatch, step 3.)
-  if (def.yard && b.built && hasYardOrders(b)) for (const g of ['alloy', 'chip']) {
+  if (def.yard && b.built && hasYardOrders(b)) for (const g of yardGoods(b)) {
     const n = YARD.hopper - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g);
     if (e) { e[1] = Math.max(e[1], n); e[2] = false; } else out.push([g, n, false]);
   }
@@ -7265,7 +7265,7 @@ function spawnFromFoundry(b) {
 /** Could robot u be taken to a Bot Foundry and recycled? Not planes, ships, trains or the Murmur: nothing that can't get there. */
 function recyclable(u) {
   const bt = u && BOTS[u.type];
-  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
+  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !bt.capital && !u.dropping && !(u.ferryWait && u.ferryWait.ferry); // (never a capital ship: a Flagship lost loses the game)
 }
 
 /** Is robot u on its way to be recycled (or waiting to set off again once it's safe)? */
@@ -7761,7 +7761,7 @@ function updateDisruptor(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr;
-  const hit = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].wild && !BOTS[u.type].rail && !aloft(u) && dist2(u.x, u.y, cx, cy) <= r2 && !calmAt(u.x, u.y)); // (what's up in the air is out of its reach, as of a turret's)
+  const hit = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].wild && !BOTS[u.type].rail && (BOTS[u.type].capital ? hullDist(u, cx, cy) <= rr && u.cs > 0 : !aloft(u) && dist2(u.x, u.y, cx, cy) <= r2) && !calmAt(u.x, u.y)); // (what's up in the air is out of its reach, as of a turret's, but for a capital ship's shield: it drains that)
   if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: a Tanker brings it from storage'; b.cd = 0.5; return; }
   if (!(b.pulses > 0)) {
     if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: a Tanker brings it from storage'; b.cd = 1; return; }
@@ -7775,6 +7775,7 @@ function updateDisruptor(b, def, dt) {
   b.flash = S.time;
   b.status = `Draining ${hit.length} enemy robot${hit.length > 1 ? 's' : ''}`;
   for (const u of hit) {
+    if (BOTS[u.type].capital) { capHit(u, BULWARK.drain * CAPITAL.disrupt, b.owner, cx, cy, true); arcFx(cx, cy - 0.62, u.x, u.y - 0.35); continue; } // (a capital ship's shield, CAPITAL.disrupt times a Bulwark's drain; never its hull)
     u.bat = Math.max(0, (u.bat ?? 100) - d.drain);
     if (BOTS[u.type].shield && u.sh > 0) { u.sh = Math.max(0, u.sh - BULWARK.drain); u.shHit = S.time; if (u.sh <= 0) shieldFail(u); } // (it drains a Bulwark's shield too)
     if (BOTS[u.type].war && d.jam) u.cd = Math.max(u.cd || 0, d.jam); // jammed: its guns are dead for a moment
@@ -9768,6 +9769,8 @@ function eliminate(old, by, how) {
       postMsg(Q.id, allies(Q.id, old) ? `${playerName(by)} captured ${playerName(old, true)}'s Command Base: ${playerName(old, true)} is down and watches until it's retaken. Capture that base back to bring them back in.`
         : `${playerName(by)} captured ${playerName(old, true)}'s Command Base. ${playerName(old, true)} is down, but back in the game if their team retakes it.`, x, y, allies(Q.id, old) ? 'lost' : 'warn');
     }
+  } else if (how === 'flagship') {
+    // (The Void Fleet: its Flagship destroyed, the colony gives up: flagshipLost said so)
   } else if (how !== 'surrender') {
     postMsg(by, `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.`, x, y, 'good');
     if (isMe(old)) postMsg(ME, `${playerName(by)} captured your Command Base!`, x, y, 'lost');
@@ -9775,7 +9778,7 @@ function eliminate(old, by, how) {
   }
   // The narrator: a rival's command core is ours (its buildings answer to us now; its robots shut down above), or changed hands between two others.
   // (Losing our own is for the end screen.)
-  if (how !== 'nuke') {
+  if (how !== 'nuke' && how !== 'flagship') {
     narrate(by, 'captured', x, y, 1);
     for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', colonyName(old)).replace('{by}', colonyName(by)));
   }
@@ -11860,6 +11863,30 @@ const AG_ORDERS = {
 };
 
 function agList(owner) { return (S.agroups || []).filter((g) => g.owner === owner); }
+/** Can unit u be in an Army Group: an army unit, or a Gunship (space expansion, phase 3: it hovers over its group's flag, agGuns). */
+function agUnit(u) { return isArmy(u) || !!(u && BOTS[u.type] && BOTS[u.type].gunship); }
+/** Owner's units among `ids` that can be in an Army Group (orderable, and Gunships). */
+function agOrderable(owner, ids) { return ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && agUnit(u)); }
+/** A Gunship of group g off its flag r (u.task.rally): no more, back to its pad or Flagship. */
+function agGunOff(u, r) { if (BOTS[u.type].gunship && u.task && u.task.rally === r) { u.task = null; if (u.sf) craftHome(u); return true; } return false; }
+/**
+ * Group g's Gunships keep over its flag r (a slot each round it, as warbots stand round theirs), firing at anything in reach;
+ * one low on Fuel or hull flies home to its pad or Flagship (updateGunship) and comes back once it is ready.
+ */
+function agGuns(g, r, us) {
+  const gs = us.filter((u) => BOTS[u.type].gunship && !u.grpNew);
+  gs.forEach((u, k) => {
+    const a = k * 2.399, rr = k ? 0.9 + 0.35 * Math.sqrt(k) : 0, x = clamp(r.x + dcos(a) * rr, 0.5, S.W - 0.5), y = clamp(r.y + dsin(a) * rr, 0.5, S.H - 0.5);
+    const t = u.task;
+    if (t && t.rally === r.id && t.type === 'hold') { t.x = x; t.y = y; return; }
+    if (t && (t.type === 'attack' || t.type === 'hunt') && t.rally === r.id && gunshipGoal(u)) return; // (after what came near the flag)
+    if (t && t.rally !== r.id && (t.type === 'attack' || t.type === 'hunt') && gunshipGoal(u)) return; // (a guard's chase: back after)
+    const ready = (u.bat ?? 100) >= SPACE.low + 20 && u.hp >= u.maxHp * Math.min(1, SPACE.hurt + 0.3);
+    if (!ready && !u.sf) return; // (on its pad, refuelling and mending)
+    if (!ready && u.sf && (!t || t.rally === r.id)) return;
+    u.task = { type: 'hold', x, y, rally: r.id, slot: k };
+  });
+}
 function agById(id) { for (const g of S.agroups || []) if (g.id === id) return g; return null; }
 /** Group g's units (its recruits waiting at the Reserve too). */
 function agMembers(g) { return S.bots.filter((u) => !u.dead && u.grp === g.id && u.owner === g.owner); }
@@ -12006,7 +12033,7 @@ function agBatch(g, r, us) {
 function agTick() {
   const all = S.agroups;
   // Units of a group that's gone (disbanded, its colony out) or isn't their owner's any more (captured) are free again.
-  for (const u of S.bots) if (u.grp && !u.dead) { const g = agById(u.grp); if (!g || g.owner !== u.owner || !isArmy(u)) { delete u.grp; delete u.grpNew; delete u.grpGo; } }
+  for (const u of S.bots) if (u.grp && !u.dead) { const g = agById(u.grp); if (!g || g.owner !== u.owner || !agUnit(u)) { delete u.grp; delete u.grpNew; delete u.grpGo; } }
   for (const g of all.slice()) {
     if (!S.players[g.owner] || S.players[g.owner].out) { agDisband(g, true); continue; }
     // Home lost (wrecked, taken): it's the spot where it stood now.
@@ -12024,12 +12051,13 @@ function agTick() {
       if (!O.raid) { delete r.safe; delete r.target; delete r.follow; delete r.raid; }
       const join = [];
       for (const u of us) {
-        if (u.grpNew) continue;
+        if (u.grpNew || BOTS[u.type].gunship) continue; // (its Gunships: agGuns)
         if (u.task && u.task.type === 'hold' && u.task.rally === r.id) continue;
         if (u.resume && u.resume.type === 'hold' && u.resume.rally === r.id) continue; // (away being mended: it comes back)
         if (agFree(u)) join.push(u);
       }
       agJoin(g, r, join);
+      agGuns(g, r, us);
       agBatch(g, r, us);
       agRotate(g, r, us);
     }
@@ -12078,7 +12106,7 @@ function agPickFor(owner, f) {
 /** Take units `us` into group g (out of any other), their post given up: on its flag unless it waits for orders. */
 function agTake(g, us) {
   for (const u of us) { u.grp = g.id; delete u.grpNew; delete u.grpGo; u.post = 0; }
-  if (!g.paused) agJoin(g, agFlag(g), us.filter(agFree));
+  if (!g.paused) agJoin(g, agFlag(g), us.filter((u) => !BOTS[u.type].gunship && agFree(u))); // (its Gunships: agGuns, next tick)
 }
 
 /** A new group for `owner`: units `ids` (any army units of theirs, out of any other group) in it, or none. Its id, or why not. */
@@ -12088,7 +12116,7 @@ function agNew(owner, ids) {
   if (mine.length >= AGROUP.max) return `You have ${AGROUP.max} groups already: disband one first.`;
   let n = 1;
   while (mine.some((g) => g.n === n)) n++;
-  const us = orderable(owner, ids || []);
+  const us = agOrderable(owner, ids || []);
   const g = { id: S.nextId++, owner, n, name: agOrdinal(n), home: null, size: Math.max(1, Math.min(AGROUP.maxSize, us.length || 6)), ord: { k: 'hold', pts: [], at: 0 }, paused: 0, flag: 0, beh: Object.assign({}, AGROUP.beh) };
   // Home: the Outpost or Keep (or Command Base) they're in or beside, else where they stand, else the Command Base.
   let home = null;
@@ -12117,6 +12145,7 @@ function agDisband(g, quiet) {
   for (const u of S.bots) {
     if (u.dead || u.grp !== g.id) continue;
     delete u.grp; delete u.grpNew; delete u.grpGo;
+    if (agGunOff(u, g.flag)) continue;
     if (u.task && u.task.type === 'hold' && u.task.rally === g.flag) callBack(u);
     if (u.resume && u.resume.type === 'hold' && u.resume.rally === g.flag) u.resume = null;
   }
@@ -12140,7 +12169,7 @@ function agResume(g) {
   g.paused = 0;
   g.ord.t = 0;
   const r = agFlag(g);
-  agJoin(g, r, agMembers(g).filter((u) => !u.grpNew && !(u.task && u.task.type === 'hold' && u.task.rally === r.id) && agFree(u)));
+  agJoin(g, r, agMembers(g).filter((u) => !u.grpNew && !BOTS[u.type].gunship && !(u.task && u.task.type === 'hold' && u.task.rally === r.id) && agFree(u)));
 }
 
 /** Call group g's units home (Recall all, or its flag's Call them back): they march back, and the group waits (paused). */
@@ -12149,6 +12178,7 @@ function agRecall(g) {
   let n = 0;
   for (const u of agMembers(g)) {
     if (u.resume && u.resume.type === 'hold' && u.resume.rally === g.flag) u.resume = null;
+    if (agGunOff(u, g.flag)) { n++; continue; }
     if (u.task && u.task.type === 'hold' && u.task.rally === g.flag) { callBack(u); n++; }
   }
   return n;
@@ -18877,7 +18907,7 @@ function orderAtYard(b, kind, n) {
 /** Can yard b launch what it builds: a Port needs open water at its docks, a Rail Station track beside it. */
 function yardOpen(b, kind) {
   if (BDEFS[b.type].airfield) return airfieldRoom(b, { type: kind, owner: b.owner });
-  if (BDEFS[b.type].pad) return padRoom(b, { type: kind, owner: b.owner }); // (space: SPACE.holds craft to a pad)
+  if (BDEFS[b.type].pad) return BOTS[kind].capital ? lineCount(b.owner) < CAPITAL.line.most : padRoom(b, { type: kind, owner: b.owner }); // (space: SPACE.holds craft to a pad; a Line Ship needs no room on it, but four to a colony)
   if (BDEFS[b.type].magterm) return magPodRoom(b); // (a line, with room on it)
   return BDEFS[b.type].port ? portDocks(b.x, b.y).length > 0 : railPlatforms(b.x, b.y).length > 0;
 }
@@ -18899,16 +18929,17 @@ function updateYard(b, def, dt) {
   if (!kind) { b.yardStatus = ''; return; }
   const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
   if (BOTS[kind].war && !warOn()) { b.yardStatus = ''; return; }
-  if (!yardOpen(b, kind)) { b.yardStatus = def.pad ? `The pad is full: it is home to ${SPACE.holds} spacecraft` : def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The network has its ${magPodCap(b)} pods already (${MAGLEV.perLine} a line)` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
+  if (!yardOpen(b, kind)) { b.yardStatus = def.pad && BOTS[kind].capital ? `${CAPITAL.line.most} Line Ships fly already: that is all a colony may have` : def.pad ? `The pad is full: it is home to ${SPACE.holds} spacecraft` : def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch ${aOrAn(name)}: no open water at its docks` : def.magterm ? (magPartner(b) ? `The network has its ${magPodCap(b)} pods already (${MAGLEV.perLine} a line)` : 'No line yet: plan one in Paths (Maglev) from this Terminal') : `Can't build ${aOrAn(name)}: lay track beside the station`; return; }
   if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
-  const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0), rd = BOTS[kind].round || { alloy: 1, chip: 1 }; // (a round of parts: 1 Alloy, 1 Chip; a Maglev Pod's 2 Alloy, 1 Chip)
-  if (free('alloy') < rd.alloy || free('chip') < rd.chip) { b.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${free('alloy') < rd.alloy ? (free('chip') < rd.chip ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
+  const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0), rd = BOTS[kind].round || { alloy: 1, chip: 1 }; // (a round of parts: 1 Alloy, 1 Chip; a Maglev Pod's 2 Alloy, 1 Chip; a Line Ship's 2 Alloy, 1 Chip and 1 Fuel)
+  const short = Object.keys(rd).filter((g) => free(g) < rd[g]);
+  if (short.length) { b.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${short.length === 2 && short.join() === 'alloy,chip' ? 'Alloy and Chips' : short.map((g) => GOOD[g].name).join(' and ')}`; b.yardT = 0; return; }
   b.yardT = (b.yardT || 0) + dt;
   b.yardStatus = `Building ${aOrAn(name)}: part ${have + 1} of ${need}`;
   b.yardFrac = (have + Math.min(1, b.yardT / YARD.work)) / need;
   if (b.yardT < YARD.work) return;
   b.yardT = 0;
-  for (const g of ['alloy', 'chip']) { bump(b.stock, g, -rd[g]); usedGood(b.owner, g, rd[g]); }
+  for (const g in rd) { bump(b.stock, g, -rd[g]); usedGood(b.owner, g, rd[g]); }
   b.yardParts = b.yardParts || {};
   if (have + 1 < need) { b.yardParts[kind] = have + 1; return; }
   delete b.yardParts[kind];
@@ -18920,6 +18951,7 @@ function updateYard(b, def, dt) {
 
 /** A finished ship puts to sea from Port b (tied up there), a finished train rolls out at Rail Station b. */
 function launchFromYard(b, kind) {
+  if (BOTS[kind].capital) { padLaunchCapital(b, kind); return; } // (a Line Ship: it lifts off the pad and stays up)
   const P = S.players[b.owner];
   P.madeBots = P.madeBots || {};
   P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
@@ -23345,6 +23377,8 @@ function hashState() {
     for (const m of S.space.mods) { int(m.id); int(m.owner); int(m.jam); int(m.done); }
     for (const u of S.bots) if (!u.dead && BOTS[u.type].craft) { int(u.id); num(u.alt); num(u.vel); num(u.ramp); str(u.sf && u.sf.ph); num(u.sf && u.sf.tx); num(u.sf && u.sf.ty); str(u.mission && u.mission.kind); str(u.mission && u.mission.phase); num(u.cd); int(u.home || 0); for (const id of u.aboard || []) int(id); }
     for (const b of S.buildings) if (!b.dead && BDEFS[b.type].pd) { num(b.aim); num(b.spin); int(b.rounds || 0); int(b.tgt || 0); }
+    for (const u of S.bots) if (!u.dead && (BOTS[u.type].capital || u.wing)) { int(u.id); int(u.wing || 0); num(u.cs); num(u.csT); num(u.mag); int(u.rearm || 0); num(u.pdCd); num(u.yardT); obj(u.yard); obj(u.yardParts); str(u.task && u.task.type); num(u.task && u.task.x); num(u.task && u.task.y); num(u.sf && u.sf.face); } // (The Void Fleet: capital ships, Flagships' wings)
+    if (S.vf) for (const P of S.players) int(P.flag || 0);
   }
   if (S.grave) { int(S.grave.owner); int(S.grave.jam); num(S.grave.held || 0); num(S.grave.acc || 0); int(S.grave.paid || 0); } // (The Graveyard: the Arbiter)
   for (const k of T4_LAYERS) if (S[k]) { str(k); const A = S[k]; for (let t = 0; t < A.length; t++) if (A[t]) { int(t); int(A[t]); } } // (earthworks, floods, caved tunnels: stage 4)
@@ -27635,6 +27669,7 @@ function craftLaunch(u, tx, ty, land) {
 }
 /** Craft u in the air (or landed in the field) turns for its pad (or another with room), to land on it; with none left it comes down where it is. */
 function craftHome(u) {
+  if (u.wing && wingOf(u) && u.sf) { wingHold(u, wingOf(u)); return; } // (a Flagship's wing: back to it)
   const b = craftPad(u) || freePad(u);
   if (b) u.home = b.id;
   const p = b ? { x: b.x + 1, y: b.y + 1 } : null;
@@ -27696,9 +27731,10 @@ function craftBumps(u) {
   }
 }
 
-/** Craft u is hit (by Point-Defence, a Gunship's laser, an asteroid: by -1): it breaks up and falls when it has no hit points left. */
-function craftHit(u, dmg, by) {
+/** Craft u is hit (by Point-Defence, a Gunship's laser, an asteroid: by -1; from (sx, sy)): it breaks up and falls when it has no hit points left. A capital ship's shield takes it first (capHit). */
+function craftHit(u, dmg, by, sx, sy) {
   if (u.dead) return;
+  if (BOTS[u.type].capital) { capHit(u, dmg, by, sx, sy); return; }
   if (!(u.alt > 0.3)) { damageBot(u, dmg); return; } // (on the ground it is hit like anything there)
   u.hp -= dmg;
   u.hurtT = S.time;
@@ -27726,6 +27762,7 @@ function craftLost(u) {
 function updateCraft(u, dt) {
   if (u.bat === undefined) u.bat = 100;
   u.moved = 0;
+  if (BOTS[u.type].capital) { updateCapital(u, dt); return; } // (a Flagship or Line Ship: The Void Fleet's capital ships)
   if (BOTS[u.type].gunship) { updateGunship(u, dt); return; }
   const M = u.mission;
   if (u.sf) {
@@ -28013,7 +28050,7 @@ function gunshipTarget(u, goal) {
   let best = null, bs = Infinity;
   for (const v of S.bots) {
     if (v.dead || !foes(v.owner, u.owner) || v.inside || v.dropping || v.under || BOTS[v.type].air || calmAt(v.x, v.y)) continue;
-    const d = dist2(v.x, v.y, u.x, u.y);
+    const d = BOTS[v.type].capital ? sq(hullDist(v, u.x, u.y)) : dist2(v.x, v.y, u.x, u.y); // (a capital ship: in reach of its hull)
     if (d > r2) continue;
     const s = d + (BOTS[v.type].craft ? 0 : armedThreat(v) ? 100 : 200) - (v === goal ? 150 : 0);
     if (s < bs) { bs = s; best = v; }
@@ -28032,7 +28069,9 @@ function gunshipTarget(u, goal) {
 /** Each tick, for a Gunship: off on its order, back to its pad to refuel and mend, or parked (taking off at enemies near its pad). */
 function updateGunship(u, dt) {
   u.cd = (u.cd || 0) - dt;
-  const base = craftPad(u), t = u.task;
+  const base = craftPad(u), t = u.task, wf = u.wing ? wingOf(u) : null;
+  if (u.wing && !wf) { u.wing = 0; if (u.sf) craftHome(u); } // (its Flagship is gone: off to a Launch Pad)
+  if (!u.sf && wf) { exitBuilding(u); u.sf = { ph: 'up', tx: u.x, ty: u.y, land: false }; }
   if (!u.sf) {
     if (!base || u.inside !== base.id) {
       if (S.tick % 30 === u.id % 30) { const b = freePad(u); if (b) { u.home = b.id; if (u.inside === b.id) parkCraft(u, b); else { exitBuilding(u); u.sf = { ph: (u.alt || 0) > 0 ? 'go' : 'up', tx: b.x + 1, ty: b.y + 1, land: true, pad: b.id }; } } }
@@ -28056,7 +28095,7 @@ function updateGunship(u, dt) {
     return;
   }
   // In the air (or come down somewhere with no pad).
-  if (u.sf.ph === 'ground') { if (S.tick % 30 === u.id % 30 && freePad(u)) craftHome(u); return; }
+  if (u.sf.ph === 'ground') { if (S.tick % 30 === u.id % 30 && (wf || freePad(u))) craftHome(u); return; }
   const low = u.bat < SPACE.low || u.hp < u.maxHp * SPACE.hurt;
   if (low && t) { u.task = null; if (isMe(u.owner) && S.time - (u.lowMsg ?? -99) > 30) { u.lowMsg = S.time; postMsg(u.owner, `A Gunship is flying home to ${u.bat < SPACE.low ? 'refuel' : 'mend'}.`, Math.floor(u.x), Math.floor(u.y), 'info'); } }
   let goal = gunshipGoal(u);
@@ -28069,12 +28108,13 @@ function updateGunship(u, dt) {
     goal = gunshipGoal(u);
   }
   const T = u.task;
-  if (!T) { if (!u.sf.land || !u.sf.pad) craftHome(u); }
+  if (!T && wf) wingHold(u, wf); // (a Flagship's wing: by it, mended and refuelled there)
+  else if (!T) { if (!u.sf.land || !u.sf.pad) craftHome(u); }
   else if (T.type === 'hold') { u.sf.tx = T.x; u.sf.ty = T.y; u.sf.land = false; u.sf.pad = 0; if (u.sf.ph === 'down') u.sf.ph = 'up'; }
   else if (goal) {
     // Close to within GUNSHIP.hold of it, on the side it is coming from.
     const gx = goal.ent === 'b' ? bCentre(goal).x : goal.x, gy = goal.ent === 'b' ? bCentre(goal).y : goal.y;
-    const d = dist(u.x, u.y, gx, gy), keep = GUNSHIP.hold;
+    const d = dist(u.x, u.y, gx, gy), keep = GUNSHIP.hold + capR(goal); // (off a capital ship's hull)
     if (d > keep + 0.4 || d < keep - 1.2) { const k = d > 0.01 ? (d - keep) / d : 0; u.sf.tx = u.x + (gx - u.x) * k; u.sf.ty = u.y + (gy - u.y) * k; if (u.sf.ph === 'hold') u.sf.ph = 'go'; }
     u.sf.land = false; u.sf.pad = 0;
     if (u.sf.ph === 'down') u.sf.ph = 'up';
@@ -28095,7 +28135,7 @@ function updateGunship(u, dt) {
   const side = u.fireN ? 1 : -1, mx = u.x + dcos(u.face) * 0.55 - dsin(u.face) * 0.16 * side, my = u.y + dsin(u.face) * 0.55 + dcos(u.face) * 0.16 * side;
   addFx('laser', mx, my, { x2: tx, y2: ty, life: 0.26, side });
   if (tg.ent === 'b') laserHit(tg, GUNSHIP.bld, u.owner);
-  else if (BOTS[tg.type].craft && (tg.alt || 0) > 0.3) craftHit(tg, GUNSHIP.craft, u.owner);
+  else if (BOTS[tg.type].craft && (tg.alt || 0) > 0.3) craftHit(tg, GUNSHIP.craft, u.owner, u.x, u.y);
   else damageBot(tg, GUNSHIP.bot, u.x, u.y);
   if (isMe(u.owner) || isMe(tg.owner)) sfx('laser', u.x, u.y);
 }
@@ -28138,10 +28178,21 @@ function orderGunships(owner, ids, kind, tid, x, y) {
  */
 function spaceCommand(p, ids, s) {
   const us = ids.map(getE).filter((u) => u && !u.dead && u.owner === p);
-  const guns = us.filter((u) => BOTS[u.type].gunship), drops = us.filter((u) => u.type === 'dropship'), rest = us.filter((u) => !BOTS[u.type].craft);
-  if (!guns.length && !drops.length) return null;
-  const out = { kind: 'craft', n: 0, guns: 0, squad: 0 };
+  const guns = us.filter((u) => BOTS[u.type].gunship), drops = us.filter((u) => u.type === 'dropship'), rest = us.filter((u) => !BOTS[u.type].craft), caps = us.filter((u) => BOTS[u.type].capital);
+  if (!guns.length && !drops.length && !caps.length) return null;
+  const out = { kind: 'craft', n: 0, guns: 0, squad: 0, caps: 0 };
   const b = s.b ? getE(s.b) : null, foe = !b && s.foe ? getE(s.foe) : null;
+  if (caps.length) { // (capital ships: a Flagship moves to the spot; Line Ships attack the enemy tapped, hold the spot, or, their Flagship tapped, escort it)
+    const fl = caps.filter((u) => u.type === 'flagship').map((u) => u.id), ls = caps.filter((u) => u.type === 'line').map((u) => u.id);
+    const at = inMap(s.i, s.j) ? [s.i + 0.5, s.j + 0.5] : b ? [b.x + 0.5, b.y + 0.5] : null;
+    if (fl.length && at) out.caps += orderCapital(p, fl, 'move', 0, at[0], at[1]);
+    if (ls.length) {
+      if (b && !b.dead && foes(b.owner, p) && b.owner >= 0) out.caps += orderCapital(p, ls, 'attack', b.id);
+      else if (foe && !foe.dead && foes(foe.owner, p)) out.caps += orderCapital(p, ls, 'hunt', foe.id);
+      else if (foe && foe.type === 'flagship' && foe.owner === p) out.caps += orderCapital(p, ls, 'home');
+      else if (at) out.caps += orderCapital(p, ls, 'hold', 0, at[0], at[1]);
+    }
+  }
   if (guns.length) {
     const gids = guns.map((u) => u.id);
     if (b && !b.dead && foes(b.owner, p) && b.owner >= 0) out.guns = orderGunships(p, gids, 'attack', b.id);
@@ -28155,7 +28206,7 @@ function spaceCommand(p, ids, s) {
     const why = d ? orderSquad(p, d, i, j, rest.map((u) => u.id)) : squadBlocked(p, drops[0], i, j);
     if (why) out.why = why; else out.squad = d.mission.n;
   }
-  out.n = out.guns + out.squad;
+  out.n = out.guns + out.squad + out.caps;
   if (!out.n && !out.why) out.why = drops.length && !rest.length ? 'Pick robots with the Dropship (Shift-click or a box), then tap where to land them.' : 'Tap an enemy, open ground or space for the Gunships, or their Launch Pad to send them home.';
   return out;
 }
@@ -28167,7 +28218,7 @@ function craftNear(owner, x, y, range) {
   let best = null, bs = Infinity;
   for (const u of S.bots) {
     if (u.dead || !foes(u.owner, owner) || !BOTS[u.type].craft || !((u.alt || 0) > 0.3) || calmAt(u.x, u.y)) continue;
-    const d = dist2(u.x, u.y, x, y);
+    const d = sq(hullDist(u, x, y)); // (a capital ship: in reach of its hull)
     if (d > range * range) continue;
     const s = d - (BOTS[u.type].gunship ? 1000 : 0);
     if (s < bs) { bs = s; best = u; }
@@ -28182,7 +28233,7 @@ function updatePD(b, def, dt) {
   b.scanT = (b.scanT || 0) - dt;
   let tg = focusTarget(b, range) || (b.tgt ? getE(b.tgt) : null);
   const ok = (v) => v && !v.dead && v.ent === 'u' && foes(v.owner, b.owner) && !v.inside && !v.dropping && !v.under && !calmAt(v.x, v.y) &&
-    (BOTS[v.type].craft && (v.alt || 0) > 0.3 ? dist2(v.x, v.y, cx, cy) <= range * range : !BOTS[v.type].air && dist2(v.x, v.y, cx, cy) <= sq(PDT.ground + auraRange(b)));
+    (BOTS[v.type].craft && (v.alt || 0) > 0.3 ? hullDist(v, cx, cy) <= range : !BOTS[v.type].air && dist2(v.x, v.y, cx, cy) <= sq(PDT.ground + auraRange(b)));
   if (!ok(tg)) tg = null;
   if ((!tg || !BOTS[tg.type].craft) && b.scanT <= 0) { b.scanT = 0.25; tg = craftNear(b.owner, cx, cy, range) || tg || nearestEnemyBot(b.owner, cx, cy, PDT.ground + auraRange(b), true); }
   b.tgt = tg ? tg.id : 0;
@@ -28203,7 +28254,7 @@ function updatePD(b, def, dt) {
   const air = BOTS[tg.type].craft && (tg.alt || 0) > 0.3;
   b.status = air ? `Firing at an enemy ${BOTS[tg.type].name}` : 'Firing at enemy robots';
   b.flash = S.time;
-  if (air) craftHit(tg, PDT.craft, b.owner); else damageBot(tg, PDT.bot, cx, cy, false, true);
+  if (air) craftHit(tg, PDT.craft, b.owner, cx, cy); else damageBot(tg, PDT.bot, cx, cy, false, true);
   // (the look: a pair of tracers from the twin guns, the muzzles' flash)
   const busy = S.fx.length > FX_MAX;
   for (const s of [-1, 1]) {
@@ -28763,4 +28814,493 @@ function spaceCheckSave(o, bad) {
   if (!P.lanes.every((L) => obj(L) && (line(L) || orbit(L)) && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(L.k))) bad();
   if (!P.rocks.every((r) => obj(r) && int(r.id) && int(r.lane) && r.lane >= 0 && r.lane < P.lanes.length && ['plain', 'ore', 'crystal', 'salvage', 'junk'].includes(r.k) && ['t0', 'ph', 'amt', 'x', 'y', 'gone'].every((k) => num(r[k])) && int(r.tow) && int(r.tw))) bad();
   if (!P.mods.every((m) => obj(m) && int(m.id) && DERELICT.kinds.includes(m.k) && int(m.x) && int(m.y) && m.x >= 0 && m.y >= 0 && m.x < o.W - 1 && m.y < o.H - 1 && int(m.owner) && m.owner >= -1 && m.owner < o.players.length && int(m.jam) && (m.done === 0 || m.done === 1) && int(m.st) && m.st >= 0 && m.st < o.W * o.H)) bad();
+}
+
+/* ------------------------------------------------------------------ capital ships (space expansion, phase 3: The Void Fleet) */
+
+/*
+ * Capital ships (BOTS capital: the Flagship and the Line Ship; CAPITAL in defs.js; the look and panels in js/fleet.js). Space
+ * craft, not aircraft: always at flying height (u.alt 1), never landing, no Fuel, slow to turn. u.sf = { ph: 'go' | 'hold',
+ * tx, ty, face } (capFly), u.cs its shield (CAPITAL[type].sh at most) and u.csT when it was last hit: the shield takes every
+ * hit first (capHit) and recharges CAPITAL.wait s after the last. A Disruptor's pulse drains it CAPITAL.disrupt times as fast
+ * (updateDisruptor) and leaves the hull be.
+ *   - The Flagship (each colony's on The Void Fleet, S.players[p].flag: vfSetup) holds where it is, or u.task { type: 'move',
+ *     x, y }; its deck builds Gunships and Line Ships (u.yard, u.yardT, u.yardParts: flagYard) paid from the Command Base;
+ *     its aura mends, refuels and rearms its colony's craft (flagAura); its point-defence fires at enemy craft (capPD). Its
+ *     Gunships fly as its wing (u.wing: wingHold). Lost, its colony is out (flagshipLost: the Flagship victory).
+ *   - A Line Ship takes a Gunship's orders in u.task ('attack' a building, 'hunt' a robot or craft, 'hold' a spot) or none
+ *     (it escorts its Flagship, else holds); broadsides (lineFire) from u.mag shells; empty, it goes to rearm (u.rearm).
+ */
+function isCapital(u) { return !!u && !!BOTS[u.type] && !!BOTS[u.type].capital; }
+/** A capital ship's reach from its middle to its ends (0 for anything else). */
+function capR(u) { return isCapital(u) ? CAPITAL.r[u.type] : 0; }
+/** Distance from (x, y) to v's hull: its middle, less a capital ship's reach. */
+function hullDist(v, x, y) { return Math.max(0, dist(v.x, v.y, x, y) - capR(v)); }
+/** Player p's Flagship, if it still flies. */
+function flagshipOf(p) { const P = S.players[p], u = P && P.flag ? getE(P.flag) : null; return u && !u.dead && u.owner === p && u.type === 'flagship' ? u : null; }
+/** The Flagship Gunship u flies with as its wing, if it still flies. */
+function wingOf(u) { const f = u.wing ? getE(u.wing) : null; return f && !f.dead && f.owner === u.owner && f.type === 'flagship' ? f : null; }
+/** Player p's Line Ships flying, and on order (at its Launch Pads' yards and its Flagship's). */
+function lineCount(p, ordered) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'line') n++;
+  if (ordered) {
+    for (const b of S.buildings) if (!b.dead && b.owner === p && b.yard && b.yard.line > 0) n += b.yard.line;
+    const F = flagshipOf(p); if (F && F.yard && F.yard.line > 0) n += F.yard.line;
+  }
+  return n;
+}
+/** Flagship f's wing: the Gunships flying with it. */
+function wingCraft(f) { const out = []; for (const v of S.bots) if (!v.dead && v.wing === f.id && v.owner === f.owner && BOTS[v.type].gunship) out.push(v); return out; }
+
+/** A capital ship of player p's, `type`, at (x, y) facing `face`, at flying height, its shield up. */
+function addCapital(p, type, x, y, face) {
+  const u = addBot(p, type, Math.floor(x), Math.floor(y));
+  u.x = x; u.y = y; u.alt = 1; u.vel = 0; u.face = face || 0; u.bat = 100;
+  u.cs = CAPITAL[type].sh; u.csT = -99;
+  u.sf = { ph: 'hold', tx: x, ty: y, land: false };
+  if (type === 'line') u.mag = CAPITAL.line.mag;
+  return u;
+}
+
+/** The Void Fleet: each colony's Flagship, parked over the void just past its station's far edge, nose toward the enemy (newGame). */
+function vfSetup() {
+  if (!S.vf) return;
+  const st = S.vf.st[0], x = S.W / 2, y = st.y0 - VFLEET.park - 0.5;
+  for (const P of S.players) {
+    if (P.absent || P.out || P.id > 1) continue;
+    const u = addCapital(P.id, 'flagship', P.id ? S.W - x : x, P.id ? S.H - y : y, P.id ? Math.PI / 2 : -Math.PI / 2);
+    P.flag = u.id;
+  }
+}
+
+/** Is capital ship u's shield down (nothing left of it)? */
+function shieldDown(u) { return !(u.cs > 0); }
+
+/**
+ * Capital ship u is hit for `dmg` by player `by` (from (sx, sy), for the look): the shield takes it first, the hull the
+ * rest. `drain`: a Disruptor's pulse, the shield only.
+ */
+function capHit(u, dmg, by, sx, sy, drain) {
+  if (u.dead || !(dmg > 0)) return;
+  if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
+  u.csT = S.time; u.hurtT = S.time;
+  const a = sx !== undefined ? datan2(sy - u.y, sx - u.x) : hash2(u.id, S.tick, 3) * 6.283;
+  if (u.cs > 0) {
+    const take = Math.min(u.cs, dmg);
+    u.cs -= take; dmg -= take;
+    if (S.fx.length < FX_MAX) addFx('caphit', u.x, u.y, { u: u.id, a, life: 0.6, drain: drain ? 1 : 0 });
+    if ((isMe(u.owner) || isMe(by)) && S.time - (u.csSfx ?? -9) > 0.5) { u.csSfx = S.time; sfx('shieldhit', u.x, u.y); }
+    if (u.cs <= 1e-6) {
+      u.cs = 0;
+      addFx('capfall', u.x, u.y, { u: u.id, life: 1.2 });
+      if (isMe(u.owner) || isMe(by)) sfx('shieldbreak', u.x, u.y);
+      if (S.time - (u.csMsg ?? -99) > 20) {
+        u.csMsg = S.time;
+        postMsg(u.owner, `Your ${BOTS[u.type].name}'s shield is down: the hull takes every hit until it recharges.`, Math.floor(u.x), Math.floor(u.y), u.type === 'flagship' ? 'bad' : 'warn');
+        if (isMe(u.owner)) sfx('alert');
+        if (by >= 0 && foes(by, u.owner)) postMsg(by, `The enemy ${BOTS[u.type].name}'s shield is down.`, Math.floor(u.x), Math.floor(u.y), 'good');
+      }
+      if (by >= 0 && foes(by, u.owner) && S.players[by]) S.players[by].stats.capShields = (S.players[by].stats.capShields || 0) + 1; // (a mission goal: The Void Fleet)
+    }
+  }
+  if (drain || dmg <= 0) return;
+  if (S.fx.length < FX_MAX && hash2(u.id, S.tick, 9) < 0.5) addFx('spark', u.x + dcos(a) * capR(u) * 0.5, u.y + dsin(a) * capR(u) * 0.3, { life: 0.4, color: '#ffd9a0' });
+  u.hp -= dmg;
+  if (u.type === 'flagship' && S.time - (u.hullMsg ?? -99) > 25) { u.hullMsg = S.time; postMsg(u.owner, `Your Flagship's hull is under fire (${Math.max(0, Math.round((u.hp / u.maxHp) * 100))}% left)!`, Math.floor(u.x), Math.floor(u.y), 'bad'); }
+  if (u.hp <= 0) capDown(u, by);
+}
+
+/** Capital ship u breaks up: a Line Ship is lost; a Flagship takes its colony out of the game (flagshipLost). */
+function capDown(u, by) {
+  if (u.dead) return;
+  blastFx(u.x, u.y, u.type === 'flagship' ? 2.2 : 1.5);
+  addFx('smoke', u.x, u.y, { r: 1.4, life: 3 });
+  addFx('capdie', u.x, u.y, { u: u.id, type: u.type, owner: u.owner, face: u.face || 0, life: 2.4 });
+  sfx('planefall', u.x, u.y, 1.6);
+  const x = Math.floor(u.x), y = Math.floor(u.y), p = u.owner;
+  if (u.type === 'line') {
+    postMsg(p, 'Your Line Ship was destroyed!', x, y, 'bad');
+    if (by >= 0 && foes(by, p)) postMsg(by, 'You destroyed an enemy Line Ship.', x, y, 'good');
+    if (isMe(p)) sfx('alert');
+  }
+  killBot(u, true);
+  if (u.type === 'flagship') flagshipLost(p, by, x, y);
+}
+
+/** Player p's Flagship is gone: on The Void Fleet its colony is out, everything it had passing to the colony that brought it down (the Flagship victory). */
+function flagshipLost(p, by, x, y) {
+  const P = S.players[p];
+  if (!P || P.out || !S.vf) return;
+  if (!(by >= 0) || by === p || !foes(by, p) || !S.players[by] || S.players[by].out) {
+    by = -1;
+    for (const Q of S.players) if (!Q.absent && !Q.out && Q.id !== p && foes(Q.id, p) && !isWild(Q.id)) { by = Q.id; break; }
+    if (by < 0) return;
+  }
+  postMsg(by, `You destroyed ${playerName(p, true)}'s Flagship! Without its tender the colony is finished: everything it had is yours.`, x, y, 'good');
+  if (isMe(p)) postMsg(ME, `Your Flagship was destroyed by ${playerName(by)}! Without its tender the colony cannot hold.`, x, y, 'lost');
+  else if (!isMe(by)) postMsg(ME, `${playerName(by)} destroyed ${playerName(p, true)}'s Flagship.`, x, y, 'warn');
+  eliminate(p, by, 'flagship');
+}
+
+/** Each tick: capital ship u's shield recharges once nothing has hit it for CAPITAL.wait s. */
+function capShield(u, dt) {
+  const max = CAPITAL[u.type].sh;
+  if (u.cs === undefined) u.cs = max;
+  if (u.cs >= max || S.time - (u.csT ?? -99) < CAPITAL.wait) return;
+  const was = u.cs;
+  u.cs = Math.min(max, u.cs + CAPITAL[u.type].regen * dt);
+  if (was <= 0 && u.cs > 0) addFx('capup', u.x, u.y, { u: u.id, life: 1.0 });
+}
+
+/**
+ * One step of capital ship u's flight toward (sf.tx, sf.ty): it turns slowly (CAPITAL.turn) and makes way only while
+ * nearly on its heading, easing in to stop over the spot; there it holds, turning to sf.face if it has one. 'over' on arriving.
+ */
+function capFly(u, dt) {
+  const F = u.sf, bt = BOTS[u.type], w = CAPITAL.turn[u.type];
+  u.alt = 1;
+  const tx = clamp(F.tx, 1, S.W - 1), ty = clamp(F.ty, 1, S.H - 1), dx = tx - u.x, dy = ty - u.y, d = dhypot(dx, dy);
+  const turnTo = (a) => { u.face = wrapAngle((u.face || 0) + clamp(wrapAngle(a - (u.face || 0)), -w * dt, w * dt)); };
+  if (F.ph === 'hold') {
+    u.vel = Math.max(0, (u.vel || 0) - bt.brake * dt);
+    if (u.vel > 0) { u.x += dcos(u.face) * u.vel * dt; u.y += dsin(u.face) * u.vel * dt; u.moved = 1; }
+    if (d > 0.6) F.ph = 'go';
+    else if (F.face !== undefined) turnTo(F.face);
+    return null;
+  }
+  if (d < 0.12) { u.vel = 0; F.ph = 'hold'; return 'over'; }
+  const vmax = bt.speed * evSpeed();
+  if (d < 1.2) { // (close in: it eases straight onto the spot)
+    const step = Math.min(d, Math.max(0.15, Math.min(vmax, u.vel || 0)) * dt);
+    u.x += (dx / d) * step; u.y += (dy / d) * step; u.moved = 1;
+    u.vel = Math.max(0.15, Math.min(vmax, Math.sqrt(2 * bt.brake * d)));
+    if (d - step < 0.12) { u.vel = 0; F.ph = 'hold'; return 'over'; }
+    return null;
+  }
+  const want = datan2(dy, dx), err = wrapAngle(want - (u.face || 0));
+  turnTo(want);
+  const stop = Math.sqrt(2 * bt.brake * d), aligned = Math.abs(err) < 0.45;
+  u.vel = aligned ? Math.min(vmax, stop, (u.vel || 0) + bt.accel * dt) : Math.max(Math.abs(err) < 1.2 ? vmax * 0.3 : 0, (u.vel || 0) - bt.brake * dt);
+  const step = Math.min(d, (u.vel || 0) * dt);
+  if (step > 0) { u.x += dcos(u.face) * step; u.y += dsin(u.face) * step; u.moved = 1; u.odo = ((u.odo || 0) + step) % 1000; }
+  u.x = clamp(u.x, 0.5, S.W - 0.5); u.y = clamp(u.y, 0.5, S.H - 0.5);
+  return null;
+}
+
+/** Each tick, for a capital ship (from updateCraft). */
+function updateCapital(u, dt) {
+  if (!u.sf) u.sf = { ph: 'hold', tx: u.x, ty: u.y, land: false };
+  u.inside = 0; u.alt = 1; u.bat = 100;
+  capShield(u, dt);
+  if (u.type === 'flagship') updateFlagship(u, dt); else updateLine(u, dt);
+}
+
+/** Where escort `u` holds by Flagship f: the k-th of a ring of slots round it, `r` tiles out from its hull. */
+function escortSpot(f, k, r) {
+  const a = (f.face || 0) + Math.PI + (k % 2 ? 1 : -1) * (0.9 + 0.55 * Math.floor(k / 2));
+  const R = capR(f) + r;
+  return { x: clamp(f.x + dcos(a) * R, 1, S.W - 1), y: clamp(f.y + dsin(a) * R, 1, S.H - 1) };
+}
+
+/** A Flagship, each tick: it flies where it is told, its point-defence fires, its aura and deck work, its wing guards it. */
+function updateFlagship(u, dt) {
+  const T = u.task, F = u.sf;
+  if (T && T.type === 'move') { F.tx = T.x; F.ty = T.y; delete F.face; if (F.ph === 'hold' && dist2(u.x, u.y, T.x, T.y) > 0.36) F.ph = 'go'; }
+  const ev = capFly(u, dt);
+  if (ev === 'over' && T && T.type === 'move') u.task = null;
+  if (u.hp < u.maxHp && S.time - (u.csT ?? -99) >= CAPITAL.wait) u.hp = Math.min(u.maxHp, u.hp + CAPITAL.flagship.self * dt); // (its own crews mend its hull while nothing hits it)
+  capPD(u, dt, CAPITAL.flagship.pd);
+  if (S.tick % 10 === u.id % 10) flagAura(u, 10 * SIM_STEP);
+  flagYard(u, dt);
+  // Its wing goes up after an enemy craft or armed robot near it (and comes back after).
+  if (warOn() && S.tick % 15 === u.id % 15) {
+    let foe = null, fd = CAPITAL.flagship.guard;
+    for (const v of S.bots) {
+      if (v.dead || !foes(v.owner, u.owner) || v.owner < 0 || v.inside || v.dropping || v.under || BOTS[v.type].air || BOTS[v.type].wild || !(BOTS[v.type].craft || armedThreat(v))) continue;
+      const d = hullDist(u, v.x, v.y) - capR(v);
+      if (d < fd) { fd = d; foe = v; }
+    }
+    if (foe) for (const g of wingCraft(u)) if (!g.task && (g.bat ?? 100) >= SPACE.low + 20 && g.hp >= g.maxHp * Math.min(1, SPACE.hurt + 0.3)) g.task = { type: 'hunt', target: foe.id, guard: 1 };
+  }
+}
+
+/** Point-defence on capital ship u (its `pd`): every `reload` s, a burst at the nearest enemy craft in the air within `range` of its hull (Gunships first), else at an enemy robot on the ground within `ground`. */
+function capPD(u, dt, pd) {
+  u.pdCd = (u.pdCd || 0) - dt;
+  if (u.pdCd > 0 || !warOn()) return;
+  let tg = null, bs = Infinity;
+  for (const v of S.bots) {
+    if (v.dead || !foes(v.owner, u.owner) || v.owner < 0 || !BOTS[v.type].craft || !((v.alt || 0) > 0.3) || calmAt(v.x, v.y)) continue;
+    const d = hullDist(u, v.x, v.y) - capR(v);
+    if (d > pd.range) continue;
+    const s = d - (BOTS[v.type].gunship ? 100 : 0);
+    if (s < bs) { bs = s; tg = v; }
+  }
+  if (!tg && pd.ground) { const v = nearestEnemyBot(u.owner, u.x, u.y, pd.ground + capR(u), true); if (v && !aloft(v)) tg = v; }
+  if (!tg) { u.pdCd = 0.25; return; }
+  u.pdCd = pd.reload;
+  const air = BOTS[tg.type].craft && (tg.alt || 0) > 0.3;
+  // (from the sponson nearest it: one of four along its flanks)
+  const a = datan2(tg.y - u.y, tg.x - u.x), loc = wrapAngle(a - (u.face || 0)), fx = (loc > -Math.PI / 2 && loc < Math.PI / 2 ? 0.55 : -0.55) * capR(u), fy = (loc > 0 ? 1 : -1) * capR(u) * 0.3;
+  const mx = u.x + dcos(u.face || 0) * fx - dsin(u.face || 0) * fy, my = u.y + dsin(u.face || 0) * fx + dcos(u.face || 0) * fy;
+  if (air) craftHit(tg, pd.craft, u.owner, mx, my); else damageBot(tg, pd.bot, mx, my, false, true);
+  if (S.fx.length < FX_MAX) addFx('pdtracer', mx, my - 0.35, { x2: tg.x + (hash2(u.id, S.tick, 5) - 0.5) * 0.4, y2: tg.y - (air ? 0.35 : 0), life: Math.max(0.08, dist(mx, my, tg.x, tg.y) / 24), cap: 1 });
+  if ((isMe(u.owner) || isMe(tg.owner)) && S.time - (u.sfxT || -9) > 0.4) { u.sfxT = S.time; sfx('minigun', mx, my); }
+}
+
+/** Flagship f's aura, every few ticks (dt the time since): its colony's craft within CAPITAL.flagship.aura of its hull are mended, refuelled and rearmed. */
+function flagAura(f, dt) {
+  const A = CAPITAL.flagship;
+  for (const v of S.bots) {
+    if (v.dead || v === f || v.owner !== f.owner || !BOTS[v.type].craft || v.inside || hullDist(f, v.x, v.y) - capR(v) > A.aura) continue;
+    if (v.hp < v.maxHp) v.hp = Math.min(v.maxHp, v.hp + A.mend * dt);
+    if (!isCapital(v) && (v.alt || 0) > 0.3) v.bat = Math.min(100, (v.bat ?? 100) + A.fuel * dt);
+    if (v.type === 'line') v.mag = Math.min(CAPITAL.line.mag, (v.mag || 0) + A.rearm * dt);
+  }
+}
+
+/** What Flagship f's deck builds next: the first of CAPITAL.flagship.yard ordered that it may (its wing not full; Line Ships under CAPITAL.line.most). */
+function flagYardKind(f) {
+  if (!f.yard) return null;
+  for (const k of CAPITAL.flagship.yard) {
+    if (!(f.yard[k] > 0) || botBanned(f.owner, k)) continue;
+    if (k === 'gunship' && wingCraft(f).length >= CAPITAL.flagship.wing) continue;
+    if (k === 'line' && lineCount(f.owner) >= CAPITAL.line.most) continue;
+    return k;
+  }
+  return null;
+}
+/** Where Flagship f's deck takes its parts from: player p's stores (the Command Base first, then its Depots and Launch Pads, in the order they stand). */
+function flagStores(p) {
+  const L = getE(S.players[p].lander), out = L && !L.dead && L.owner === p && L.built ? [L] : [];
+  for (const b of S.buildings) if (!b.dead && b !== L && b.owner === p && b.built && BDEFS[b.type].store && !BDEFS[b.type].wild) out.push(b);
+  return out;
+}
+/** Order n more (0: none) of `kind` on Flagship f's deck. */
+function orderAtFlag(f, kind, n) {
+  if (!CAPITAL.flagship.yard.includes(kind)) return;
+  f.yard = f.yard || {};
+  f.yard[kind] = n === 0 ? 0 : clamp((f.yard[kind] || 0) + n, 0, 99);
+  if (!Object.keys(f.yard).some((k) => f.yard[k] > 0)) delete f.yard;
+}
+/** Flagship f's deck at work: a round of parts every YARD.work s, from its colony's stores (flagStores; as a yard's from its own); with all its rounds in, the craft is launched. */
+function flagYard(f, dt) {
+  const kind = flagYardKind(f);
+  if (!kind || (BOTS[kind].war && !warOn())) { f.yardStatus = f.yard ? (f.yard.gunship > 0 && wingCraft(f).length >= CAPITAL.flagship.wing ? `Its wing is full: ${CAPITAL.flagship.wing} Gunships` : f.yard.line > 0 ? `${CAPITAL.line.most} Line Ships fly already` : '') : ''; return; }
+  const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (f.yardParts && f.yardParts[kind]) || 0, rd = BOTS[kind].round || { alloy: 1, chip: 1 };
+  if (botCount(f.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { f.yardStatus = 'Bot limit reached'; return; }
+  const stores = flagStores(f.owner), free = (g) => { let n = 0; for (const b of stores) n += Math.max(0, (b.stock[g] || 0) - (b.res[g] || 0)); return n; }, short = Object.keys(rd).filter((g) => free(g) < rd[g]);
+  if (!stores.length) { f.yardStatus = 'No stores to send parts up from'; return; }
+  if (short.length) { f.yardStatus = `Building ${aOrAn(name)} (part ${have + 1} of ${need}): waiting for ${short.map((g) => GOOD[g].name).join(' and ')} in your stores`; f.yardT = 0; return; }
+  f.yardT = (f.yardT || 0) + dt;
+  f.yardStatus = `Building ${aOrAn(name)}: part ${have + 1} of ${need}`;
+  f.yardFrac = (have + Math.min(1, f.yardT / YARD.work)) / need;
+  if (f.yardT < YARD.work) return;
+  f.yardT = 0;
+  for (const g in rd) { let n = rd[g]; for (const b of stores) { const k = Math.min(n, Math.max(0, (b.stock[g] || 0) - (b.res[g] || 0))); if (k > 0) { bump(b.stock, g, -k); n -= k; } if (n <= 0) break; } usedGood(f.owner, g, rd[g]); }
+  f.yardParts = f.yardParts || {};
+  if (have + 1 < need) { f.yardParts[kind] = have + 1; return; }
+  delete f.yardParts[kind];
+  f.yard[kind]--;
+  if (!Object.keys(f.yard).some((k) => f.yard[k] > 0)) delete f.yard;
+  f.yardFrac = 0;
+  flagLaunch(f, kind);
+}
+/** A craft finished on Flagship f's deck goes out: a Gunship lifts off its launch rail to fly as its wing, a Line Ship casts off beside it. */
+function flagLaunch(f, kind) {
+  const P = S.players[f.owner];
+  P.madeBots = P.madeBots || {};
+  P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
+  const c = dcos(f.face || 0), s = dsin(f.face || 0);
+  if (kind === 'line') {
+    const k = lineCount(f.owner), side = k % 2 ? 1 : -1, x = f.x - s * side * 3.2, y = f.y + c * side * 3.2;
+    const u = addCapital(f.owner, 'line', clamp(x, 1, S.W - 1), clamp(y, 1, S.H - 1), f.face || 0);
+    addFx('ring', u.x, u.y, { color: PLAYER_COLORS[f.owner], r: 2.2 });
+    postMsg(f.owner, 'A Line Ship cast off from your Flagship.', Math.floor(u.x), Math.floor(u.y), 'good');
+  } else {
+    const rail = (wingCraft(f).length % 2 ? 1 : -1) * 0.3, x = f.x + c * 0.6 - s * rail * capR(f) * 0.25, y = f.y + s * 0.6 + c * rail * capR(f) * 0.25;
+    const u = addBot(f.owner, kind, Math.floor(x), Math.floor(y));
+    u.x = x; u.y = y; u.bat = 100; u.alt = 0.55; u.face = f.face || 0; u.vel = 0; u.wing = f.id; u.home = 0;
+    u.sf = { ph: 'up', tx: x, ty: y, land: false };
+    addFx('caplaunch', f.x, f.y, { u: f.id, rail, life: 1.6 });
+    postMsg(f.owner, `A ${BOTS[kind].name} launched from your Flagship's deck: it flies as its wing.`, Math.floor(x), Math.floor(y), 'good');
+  }
+  if (isMe(f.owner)) sfx('complete');
+}
+
+/** Gunship u flies as Flagship f's wing: with no order it holds a slot round it (and is mended and refuelled there, flagAura). */
+function wingHold(u, f) {
+  const ws = wingCraft(f), k = Math.max(0, ws.indexOf(u)), p = escortSpot(f, k, 1.6 + (k % 3) * 0.5);
+  u.sf.tx = p.x; u.sf.ty = p.y; u.sf.land = false; u.sf.pad = 0;
+  if (u.sf.ph === 'down' || u.sf.ph === 'ground') u.sf.ph = 'up';
+  else if (u.sf.ph === 'hold' && dist2(u.x, u.y, p.x, p.y) > 0.25) u.sf.ph = 'go';
+}
+
+/* -- the Line Ship */
+
+/** The building, robot or craft Line Ship u's order is about, if still there and an enemy's. */
+function lineGoal(u) {
+  const t = u.task;
+  if (!t || (t.type !== 'attack' && t.type !== 'hunt')) return null;
+  const e = getE(t.target);
+  if (!e || e.dead || e.owner < 0 || !foes(e.owner, u.owner)) return null;
+  if (e.ent === 'u' && (e.inside || e.dropping || e.under)) return null;
+  return e;
+}
+/** What Line Ship u fires its broadsides at, within CAPITAL.line.range of it: enemy capital ships, its goal, defences, armed robots, other buildings, other robots, small craft last. */
+function lineTarget(u, goal) {
+  const R = CAPITAL.line.range;
+  let best = null, bs = Infinity;
+  for (const v of S.bots) {
+    if (v.dead || v.owner < 0 || !foes(v.owner, u.owner) || v.inside || v.dropping || v.under || BOTS[v.type].air || calmAt(v.x, v.y)) continue;
+    const d = hullDist(v, u.x, u.y);
+    if (d > R) continue;
+    const s = d + (isCapital(v) ? -1000 : v === goal ? -500 : BOTS[v.type].craft ? 300 : armedThreat(v) ? 100 : 200);
+    if (s < bs) { bs = s; best = v; }
+  }
+  if (best && (isCapital(best) || best === goal)) return best;
+  let bb = null, bbs = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner < 0 || !foes(b.owner, u.owner) || BDEFS[b.type].wild || calmB(b)) continue;
+    const d = footDist(b, u.x, u.y);
+    if (d > R) continue;
+    const s = d + (b === goal ? -500 : DEFENCE_TYPES.has(b.type) ? 0 : 50);
+    if (s < bbs) { bbs = s; bb = b; }
+  }
+  if (bb && (bb === goal || !best || bbs < 50 || bs >= 200)) return bb;
+  return best || bb;
+}
+
+/** A Line Ship, each tick: off on its order, escorting its Flagship, or off to rearm; its broadsides and light point-defence. */
+function updateLine(u, dt) {
+  const L = CAPITAL.line, F = u.sf, f = flagshipOf(u.owner);
+  u.cd = (u.cd || 0) - dt;
+  if (u.mag === undefined) u.mag = L.mag;
+  if (u.mag < 1 && !u.rearm) { u.rearm = 1; if (isMe(u.owner)) postMsg(u.owner, `A Line Ship is out of shells: it goes to rearm ${f ? 'beside your Flagship' : 'over a Launch Pad'}.`, Math.floor(u.x), Math.floor(u.y), 'info'); }
+  if (u.rearm && u.mag >= L.mag - 0.01) u.rearm = 0;
+  let goal = lineGoal(u);
+  if (u.task && (u.task.type === 'attack' || u.task.type === 'hunt') && !goal) {
+    // Its target is gone: the next enemy building close by, else it holds where it is (one sent up on guard goes back).
+    const was = u.task;
+    let nb = null, nd = 64;
+    if (!was.guard) for (const b of S.buildings) { if (b.dead || b.owner < 0 || !foes(b.owner, u.owner) || BDEFS[b.type].wild || calmB(b)) continue; const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y); if (d < nd) { nd = d; nb = b; } }
+    u.task = nb ? { type: 'attack', target: nb.id } : was.guard ? null : { type: 'hold', x: u.x, y: u.y };
+    goal = lineGoal(u);
+  }
+  const T = u.task;
+  delete F.face;
+  if (u.rearm) {
+    if (f) { const p = escortSpot(f, 6 + (u.id % 4), 1.2); F.tx = p.x; F.ty = p.y; }
+    else {
+      let pad = null, pd = Infinity;
+      for (const b of S.buildings) if (!b.dead && b.owner === u.owner && b.built && BDEFS[b.type].pad) { const d = dist2(b.x + 1, b.y + 1, u.x, u.y); if (d < pd) { pd = d; pad = b; } }
+      if (pad) { F.tx = pad.x + 1; F.ty = pad.y + 1; if (pd < 2.25) u.mag = Math.min(L.mag, u.mag + L.padRearm * dt); }
+    }
+  } else if (T && T.type === 'hold') { F.tx = T.x; F.ty = T.y; }
+  else if (goal) {
+    // Stand off at CAPITAL.line.keep from its hull, on the side it is coming from, broadside on.
+    const gx = goal.ent === 'b' ? bCentre(goal).x : goal.x, gy = goal.ent === 'b' ? bCentre(goal).y : goal.y;
+    const d = dist(u.x, u.y, gx, gy), keep = L.keep + capR(goal) + (goal.ent === 'b' ? 0.5 : 0);
+    if (d > keep + 0.6 || d < keep - 1.5) { const k = d > 0.01 ? (d - keep) / d : 0; F.tx = u.x + (gx - u.x) * k; F.ty = u.y + (gy - u.y) * k; }
+  } else if (f) {
+    // No order: it escorts its Flagship, on a slot of its own round it (and is rearmed there).
+    const ls = S.bots.filter((v) => !v.dead && v.owner === u.owner && v.type === 'line'), k = Math.max(0, ls.indexOf(u)), p = escortSpot(f, k, 2.6);
+    F.tx = p.x; F.ty = p.y;
+  }
+  if (F.ph === 'hold' && dist2(u.x, u.y, F.tx, F.ty) > 0.36) F.ph = 'go';
+  // (hove to, it turns its broadside to what it fires at)
+  const tg = warOn() ? lineTarget(u, goal) : null;
+  if (tg) { const tx = tg.ent === 'b' ? bCentre(tg).x : tg.x, ty = tg.ent === 'b' ? bCentre(tg).y : tg.y, a = datan2(ty - u.y, tx - u.x), off = wrapAngle(a - (u.face || 0)); F.face = wrapAngle(a - (off > 0 ? 1 : -1) * Math.PI / 2); }
+  capFly(u, dt);
+  capPD(u, dt, L.pd);
+  if (!tg || u.cd > 0 || u.mag < 1) return;
+  lineFire(u, tg);
+}
+
+/** Line Ship u fires a broadside at tg: CAPITAL.line.salvo shells (as many as its magazine holds), from the side it faces. */
+function lineFire(u, tg) {
+  const L = CAPITAL.line, n = Math.min(L.salvo, Math.floor(u.mag));
+  u.cd = L.reload;
+  u.mag -= n;
+  const tx = tg.ent === 'b' ? bCentre(tg).x : tg.x, ty = tg.ent === 'b' ? bCentre(tg).y : tg.y;
+  const a = datan2(ty - u.y, tx - u.x), off = wrapAngle(a - (u.face || 0)), side = off > 0 ? 1 : -1, c = dcos(u.face || 0), s = dsin(u.face || 0);
+  addFx('broadside', u.x, u.y, { u: u.id, side, life: 0.5 });
+  for (let k = 0; k < n; k++) {
+    const along = (k ? -0.35 : 0.3) * capR(u), mx = u.x + c * along - s * side * 0.35, my = u.y + s * along + c * side * 0.35;
+    const jx = (hash2(u.id, S.tick, 11 + k) - 0.5) * 0.6, jy = (hash2(S.tick, u.id, 13 + k) - 0.5) * 0.6;
+    if (S.fx.length < FX_MAX || !k) addFx('capshell', mx, my, { x2: tx + jx, y2: ty + jy, life: Math.max(0.15, dist(mx, my, tx, ty) / 14), side, k });
+    if (tg.dead) continue;
+    if (tg.ent === 'b') lineBld(tg, L.bld, u.owner);
+    else if (isCapital(tg)) capHit(tg, L.cap, u.owner, mx, my);
+    else if (BOTS[tg.type].craft && (tg.alt || 0) > 0.3) craftHit(tg, L.craft, u.owner, mx, my);
+    else damageBot(tg, L.bot, mx, my);
+  }
+  if (isMe(u.owner) || isMe(tg.owner)) sfx('howitzer', u.x, u.y);
+}
+/** A Line Ship's shell hits building b: as a Gunship's laser (a Command Base or Keep held at its floor, anything else wrecked at 0). */
+function lineBld(b, dmg, by) {
+  const def = BDEFS[b.type];
+  if (calmB(b)) return;
+  b.armor -= keepShield(b, dmg);
+  b.lastHit = S.time;
+  hitByNow(b.owner, by);
+  if (captureOnly(b)) { const fl = missileFloor(b); if (b.armor < fl) b.armor = Math.min(fl, b.armor + dmg); if (b.armor <= 0) { b.armor = 0; cityDown(b, by); } return; }
+  if (b.armor <= 0) {
+    postMsg(by, `Your Line Ships wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
+    postMsg(b.owner, `Enemy Line Ships wrecked your ${def.name}!`, b.x, b.y, 'lost');
+    fortTaken(b, by);
+    destroyBuilding(b, true);
+    return;
+  }
+  if (S.time - (b.lastAlert || -99) > 12) { b.lastAlert = S.time; postMsg(b.owner, `Enemy Line Ships are shelling your ${def.name}!`, b.x, b.y, 'bad'); }
+}
+
+/* -- orders */
+
+/**
+ * Order player p's capital ships `ids`: a Flagship 'move's to (x, y) (or 'home': holds where it is); a Line Ship 'attack's
+ * building `tid`, 'hunt's robot or craft `tid`, 'hold's at (x, y), or goes 'home' (escorts its Flagship). How many took it.
+ */
+function orderCapital(p, ids, kind, tid, x, y) {
+  let n = 0;
+  for (const id of ids) {
+    const u = getE(id);
+    if (!u || u.dead || u.owner !== p || !isCapital(u)) continue;
+    if (u.type === 'flagship') {
+      if (kind === 'move' || kind === 'hold') { u.task = { type: 'move', x: clamp(x, 1, S.W - 1), y: clamp(y, 1, S.H - 1) }; n++; }
+      else if (kind === 'home') { u.task = null; u.sf.tx = u.x; u.sf.ty = u.y; n++; }
+      continue;
+    }
+    if (kind === 'home') { u.task = null; n++; continue; }
+    if (kind === 'move' || kind === 'hold') { u.task = { type: 'hold', x: clamp(x, 1, S.W - 1), y: clamp(y, 1, S.H - 1) }; n++; continue; }
+    if (kind === 'attack' || kind === 'hunt') { u.task = { type: kind, target: tid }; n++; }
+  }
+  return n;
+}
+
+/** A save's S.vf (checkSave): the stations' boxes and the rocks, plain numbers on the map. */
+function vfCheckSave(o, bad) {
+  const V = o.vf, obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v), num = Number.isFinite;
+  if (!obj(V) || !Array.isArray(V.st) || V.st.length > 4 || !Array.isArray(V.rocks) || V.rocks.length > 16) bad();
+  if (!V.st.every((r) => obj(r) && ['x0', 'y0', 'x1', 'y1'].every((k) => Number.isInteger(r[k]) && r[k] >= 0) && r.x1 < o.W && r.y1 < o.H)) bad();
+  if (!V.rocks.every((r) => obj(r) && ['x', 'y', 'r'].every((k) => num(r[k])))) bad();
+}
+
+/** The goods yard b's parts take: Alloy and Chips, and Fuel too while a Line Ship is on order there (its rounds burn it). */
+function yardGoods(b) {
+  const out = ['alloy', 'chip'];
+  if (b.yard) for (const k in b.yard) if (b.yard[k] > 0 && BOTS[k] && BOTS[k].round && BOTS[k].round.fuel && !out.includes('fuel')) out.push('fuel');
+  return out;
+}
+/** A Line Ship finished at Launch Pad b lifts straight off it and stays up, its nose toward the middle of the map. */
+function padLaunchCapital(b, kind) {
+  const P = S.players[b.owner];
+  P.madeBots = P.madeBots || {};
+  P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
+  const x = b.x + 1, y = b.y + 1, u = addCapital(b.owner, kind, x, y, datan2(S.H / 2 - y, S.W / 2 - x));
+  addFx('ring', x, y, { color: PLAYER_COLORS[b.owner], r: 2.2 });
+  postMsg(b.owner, `A ${BOTS[kind].name} lifted off the Launch Pad.`, b.x, b.y, 'good');
+  if (isMe(b.owner)) sfx('complete');
+  return u;
 }

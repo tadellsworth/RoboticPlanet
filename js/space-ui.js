@@ -17,6 +17,7 @@ function myPads() { return S.buildings.filter((b) => !b.dead && b.owner === ME &
 
 /** What craft u is doing, in words (lower case first). */
 function craftStatus(u) {
+  if (BOTS[u.type].capital) return capStatus(u); // (a capital ship: js/fleet.js)
   const M = u.mission, F = u.sf, t = u.task;
   if (BOTS[u.type].gunship) {
     const g = typeof gunshipGoal === 'function' ? gunshipGoal(u) : null, what = g ? (g.ent === 'b' ? `the enemy ${BDEFS[g.type].name}` : `an enemy ${BOTS[g.type].name}`) : '';
@@ -39,16 +40,18 @@ function craftStatus(u) {
 
 /** The extra rows on a craft's panel (its tank, what it seats or carries). */
 function craftRows(u) {
-  const P = craftPad(u);
+  if (BOTS[u.type].capital) return capRows(u);
+  const P = craftPad(u), wf = u.wing ? wingOf(u) : null;
   return `<div class="kv"><span>Fuel</span><span>fills up on its Launch Pad, one Fuel ${SPACE.fill}% of the tank; it burns ${SPACE.burn}% a second in the air</span></div>` +
     (u.type === 'dropship' ? `<div class="kv"><span>Seats</span><span>${ferryAboard(u).length} of ${BOTS.dropship.seats} taken</span></div>` : '') +
     (u.type === 'shuttle' ? `<div class="kv"><span>Hold</span><span>${u.cargo ? sumValues(u.cargo) : 0} of ${BOTS.shuttle.carry} goods${dockHeld(u.owner) ? '; a Docking Ring of yours makes it faster' : ''}</span></div>` : '') +
     (BOTS[u.type].gunship ? `<div class="kv"><span>Lasers</span><span>a bolt every ${GUNSHIP.reload} s out to ${GUNSHIP.range} tiles: ${GUNSHIP.craft} off a craft, ${GUNSHIP.bot} off a robot, ${GUNSHIP.bld} off a building</span></div>` : '') +
-    `<div class="kv"><span>Base</span><span>${P ? 'the Launch Pad ' + dirText(getE(S.players[u.owner].lander) || P, P) + ' from the Command Base' : 'no Launch Pad'}</span></div>`;
+    `<div class="kv"><span>Base</span><span>${wf ? 'your Flagship: it flies as its wing, mended and refuelled beside it' : P ? 'the Launch Pad ' + dirText(getE(S.players[u.owner].lander) || P, P) + ' from the Command Base' : 'no Launch Pad'}</span></div>`;
 }
 
 /** A craft's buttons on its panel (yours). */
 function craftButtons(u) {
+  if (BOTS[u.type].capital) return capButtons(u);
   if (u.type === 'shuttle') return `<div class="actions"><button class="btn primary" id="sh-sp-tow">${S.grave ? 'Tow salvage' : 'Tow an asteroid'}</button><button class="btn" id="sh-sp-post">Land a Drop Outpost</button></div><button class="btn" id="sh-sp-home">Call off</button><p class="hint">${S.grave ? '<b>Tow salvage</b>: tap a wreck drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken down for ' + costText(DRIFT.salvage) + '.' : '<b>Tow an asteroid</b>: tap an Ore or Crystal rock drifting through the void; it flies out, hooks it and tows it home to its pad, where it is broken up into a field beside the pad to mine.'} <b>Land a Drop Outpost</b> (${costText(BDEFS.dropost.cost)}): tap open ground on a deck or hulk nobody holds; it lands the kit there and it unfolds, claiming the land round it. Supplies: switch on <b>Supply by air</b> in a Depot\'s or Outpost\'s panel, and it keeps that place stocked by itself.</p>`;
   if (u.type === 'dropship') return `<div class="actions"><button class="btn primary" id="sh-sp-sq-w">Land ${BOTS.dropship.seats} Warbots</button><button class="btn" id="sh-sp-sq-k">Land ${BOTS.dropship.seats} Workers</button></div><button class="btn" id="sh-sp-home">Call off</button><p class="hint">Then tap where: any flat, free ground, a deck behind a raised drawbridge or a rock no bridge reaches. They board at its pad (Warbots from your garrisons, idle Workers), it flies straight over the void, lands and they walk out down its ramp. With a mouse, select robots and the Dropship together and right-click where to land them.</p>`;
   if (BOTS[u.type].gunship) return '<div class="actions"><button class="btn primary" id="sh-sp-gun">Attack: tap a target</button><button class="btn" id="sh-sp-home">Come home</button></div><p class="hint">Tap an enemy building, robot or craft to attack it, open space or ground to hold there, or its Launch Pad to come home. With a mouse, select it and right-click, as for warbots. It flies home by itself to refuel and mend.</p>';
@@ -57,6 +60,7 @@ function craftButtons(u) {
 
 /** Wire a craft's buttons. */
 function bindCraftButtons(u) {
+  if (BOTS[u.type].capital) { bindCapButtons(u); return; }
   if ($('sh-sp-tow')) $('sh-sp-tow').onclick = () => { sfx('click'); startSpaceMode('tow', u.id); };
   if ($('sh-sp-post')) $('sh-sp-post').onclick = () => { sfx('click'); startSpaceMode('post', u.id); };
   if ($('sh-sp-sq-w')) $('sh-sp-sq-w').onclick = () => { sfx('click'); startSpaceMode('squad', u.id, { sub: 'warbot' }); };
@@ -93,6 +97,7 @@ function showSpaceBanner(problem) {
   const A = UI.spaceAct, u = A && getE(A.uid);
   if (!u || u.dead) { setMode('normal'); return; }
   const err = problem ? `<span class="err">${problem}</span> ` : '';
+  if (capBanner(A, err)) return; // (a capital ship's pick: js/fleet.js)
   if (A.kind === 'tow') { showBanner(err + (S.grave ? 'Tap a <b>salvage wreck</b> drifting through the void: the Shuttle tows it home to its pad, where it is broken down for Alloy and Chips.' : 'Tap an <b>Ore or Crystal asteroid</b> drifting through the void: the Shuttle tows it home to its pad.'), null, 'Cancel'); return; }
   if (A.kind === 'post') { showBanner(err + (R.spaceAt ? 'Land the Drop Outpost here?' : `Tap where the Shuttle lands a <b>Drop Outpost</b> (${costText(BDEFS.dropost.cost)}): open ground on a deck or hulk nobody holds.`), R.spaceAt ? 'Land' : null, 'Cancel'); return; }
   if (A.kind === 'gun') { showBanner(err + 'Tap an <b>enemy</b> to attack, <b>open space or ground</b> to hold there, or its <b>Launch Pad</b> to come home.', null, 'Cancel'); return; }
@@ -104,6 +109,7 @@ function spaceFoeAt(wx, wy) {
   let best = null, bd = 0.7 * 0.7;
   for (const v of S.bots) {
     if (v.dead || v.inside || !foes(v.owner, ME) || v.owner < 0) continue;
+    if (BOTS[v.type].capital) { const e = capAtTap(v, wx, wy); if (e >= 0 && e * 0.2 < bd) { bd = e * 0.2; best = v; } continue; } // (anywhere on a capital ship's hull)
     const d = dist2(v.x, v.y - (v.alt || 0) * 0.35, wx, wy);
     if (d < bd) { bd = d; best = v; }
   }
@@ -124,6 +130,7 @@ function modAtTap(wx, wy) {
 function spaceTap(i, j, wx, wy) {
   const A = UI.spaceAct, u = A && getE(A.uid);
   if (!u || u.dead) { setMode('normal'); return; }
+  if (capSpaceTap(A, u, i, j, wx, wy)) return; // (a capital ship's pick: js/fleet.js)
   if (A.kind === 'tow') {
     const r = rockAtTap(wx, wy);
     if (!r) { sfx('error'); showSpaceBanner('No asteroid there.'); return; }
@@ -213,7 +220,7 @@ function openModSheet(m) {
 
 function refreshSpaceTab() {
   const pads = myPads(), craft = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].craft);
-  const sig = JSON.stringify([pads.map((b) => [b.id, b.yard]), craft.map((u) => [u.id, craftStatus(u)])]);
+  const sig = JSON.stringify([pads.map((b) => [b.id, b.yard]), craft.map((u) => [u.id, craftStatus(u), BOTS[u.type].capital ? [Math.round(u.cs || 0), Math.round(u.hp)] : 0])]);
   if (sig === UI.armySig) return;
   UI.armySig = sig;
   const L = getE(S.players[ME].lander);
@@ -225,6 +232,7 @@ function refreshSpaceTab() {
   const row = (u, btns) => `<div class="kv army-row"><span><b>${BOTS[u.type].name}</b>: ${craftStatus(u)}</span><span>${btns}<button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
   const parked = (u) => u.inside && craftPad(u) && u.inside === craftPad(u).id && !u.mission;
   const guns = craft.filter((u) => BOTS[u.type].gunship);
+  if (warOn()) h += capArmyRows(); // (The Void Fleet's capital ships, and Line Ships anywhere: js/fleet.js)
   if (warOn()) {
     h += '<div class="section-label">Gunships <span class="label-note">purple lasers</span></div>';
     h += guns.length ? guns.map((u) => row(u, `<button class="btn small" data-act="spgun" data-id="${u.id}">Attack</button><button class="btn small" data-act="sphome" data-id="${u.id}">Home</button>`)).join('') + `<div class="army-cmds"><button class="btn ghost" data-act="spselgun">Select all Gunships</button></div>`
@@ -242,6 +250,7 @@ function refreshSpaceTab() {
 }
 /** A Space tab button (from armyButton). True if it was one. */
 function spaceArmyButton(btn, what, e) {
+  if (capArmyButton(btn, what, e)) return true;
   switch (what) {
     case 'spgun': if (e) startSpaceMode('gun', e.id); return true;
     case 'sphome': if (e) act('craftHome', [e.id], () => { UI.armySig = ''; }); return true;

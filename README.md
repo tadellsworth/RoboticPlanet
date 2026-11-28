@@ -311,7 +311,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), The Graveyard (two players; `graveMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze, Grand Canyon (two players; `grandCanyonShape` in js/world.js), Passenger Town (two to four players; `townSetup` in js/world.js), The Walking Factory (two to four players; `walkerSetup` in js/world.js), The Dam (two to four players; `damShape` in js/world.js), The Ring (two players; `ringMap` in js/world.js), Orbital platforms (two players; `orbitalMap` in js/world.js), The Graveyard (two players; `graveMap` in js/world.js), The Void Fleet (two players; `voidMap` in js/world.js), Half underground (two or four players; `cavesMap` in js/world.js) or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small through
 Planetary). On Standard, Huge is 60×84 tiles, Immense is 84×118, and Planetary is 120×168. Planetary supports up to
 two colonies, including solo Colony play. Long and wide shapes preserve their proportions within the 20,160-tile
@@ -628,7 +628,7 @@ The Ring (`aiAir` is allowed here too).
 
 **Space: spacecraft, Point-Defence, drifting asteroids and derelict modules** (space expansion, phase 1: the owner's design and
 picks, Nov 2026; `SPACE`, `GUNSHIP`, `PDT`, `DRIFT`, `DERELICT` in js/defs.js; the rules at the end of js/sim.js; the look in
-js/space.js; the panels in js/space-ui.js). On the three maps out in space (`spaceMap()`: The Ring, Orbital platforms and The Graveyard, `ringShape`)
+js/space.js; the panels in js/space-ui.js). On the four maps out in space (`spaceMap()`: The Ring, Orbital platforms, The Graveyard and The Void Fleet, `ringShape`)
 nothing flies on wings and the Flak Gun has no place: `spaceOff` (js/world.js, first in `worldBan`) refuses the Airfield, Mooring Mast
 and Flak Gun there and the Launch Pad and Point-Defence Turret (`BDEFS[type].space`) anywhere else, the build menu leaves them out
 (`spaceHidden`), and `spaceBotOff` (in `botBanned`) bars every aircraft (`BOTS[k].air`: Cargo Plane, Vulcan Bomber, Airship) out in
@@ -671,6 +671,7 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   `bld` off a building (`laserHit`, as a bomb: a Command Base or Keep is held at its `missileFloor`, anything else wrecked at 0). Its goal gone,
   it takes the nearest enemy building within 6 tiles or holds where it is. Below `SPACE.low` tank or `SPACE.hurt` of its hull it flies home.
   Parked with no order, it is **on guard**: an enemy craft or armed robot within `SPACE.guard` (8) tiles of its pad and it goes up after it.
+  It can join an **Army Group** (`agUnit`, `agGuns`: see The Void Fleet below), and one built on a Flagship's deck flies as its wing.
 - **Point-Defence Turret** (`BDEFS.pdturret`: `pd`, 7 tiles, Ammo; `updatePD`; in `DEFENCE_TYPES`, aimable like the other guns: `canFocus`):
   the nearest enemy craft in the air in reach, Gunships first (`craftNear`), else an enemy robot within `PDT.ground` (3); turns (`PDT.turn`),
   spins up (`PDT.spin` s), then a burst every `PDT.reload` s: `PDT.craft` (1.5) off a craft, `PDT.bot` (0.8) off a robot, `PDT.rounds` (30)
@@ -797,6 +798,79 @@ the backdrop is The Ring's (`R.void`: `ringSpace`). `graveShape()` tells it apar
   (`drawArb`, among the buildings: `grave-arb` derelict, `grave-arb@T` held, its beacon pulsing, a ring round the relay in its holder's colour,
   flashing red while jammed); salvage and debris (`drawGraveRock`, from `drawRock`); a diamond on the minimap (`graveMinimap`); the Arbiter's
   panel (`openArbSheet`). Art: ART_GUIDE.md, Batch 44.
+
+**The Void Fleet** (`SHAPE_PRESETS` `vfleet`, under Heights and depths, two players; flat, `noMurmur`; space expansion phase 3, the owner's
+design, Nov 2026) is open void out past the Ring with almost no ground, where each colony's **Flagship**, its vanguard Carrier's tender, fights
+for it. `voidMap` (js/world.js, called first by `generateMap`) lays it out point-symmetric to the tile, on colony 0's half (the bottom) turned
+onto the other; 1.15 × 1.6 the size's tiles. `ringShape`, `spaceMap` and `voidTile` are true for it (spacecraft, Point-Defence, no wings), the
+biome is forced to Lunar (`biomeForced` 'vfleet'), the backdrop is The Ring's, and `voidShape()` tells it apart. `S.vf = { st, rocks }`: the two
+stations' boxes and the rocks. No Uplinks here (`noUplinkShape`; `newGame` drops Victory: Uplinks to Capture).
+- **The map** (`VFLEET` in js/defs.js): a **home station** across each end (`VFLEET.home`: `hh` of the height, `hw` of the width, its corners
+  cut, two `berth` squares standing out on its far edge), painted as Orbital platforms' decks (`orbDeckPaint`, `vfStationAt`; the hull under its
+  southern edge as Orbital's, `orbVoidPaint`); a **small rock** out on each side (`VFLEET.rock`) and the **middle rock** (`VFLEET.mid`, its own
+  twin), round and a little ragged, painted as The Ring's. The home station has the standard starter fields (as The Graveyard's home hulk: Ore and
+  Crystal at least `VFLEET.field` tiles each, Stalk, fertile soil, three oil fields, Stone topped up to `VFLEET.stone`); the small rocks a small
+  Ore and Crystal field each (`spill.n`), the middle rock Ore east and west and Crystal north and south (`spill.mid`, each field its own twin).
+  `spaceSetup` lays `DRIFT.kinds.vfleet` (Ore, Crystal, Ore and two plain orbits) and the derelict modules, as on The Ring.
+- **The Flagship** (`BOTS.flagship`: `craft`, `capital`, `flagship`; 800 hull, `CAPITAL.flagship.sh` 400 shield). Each colony's is placed by
+  `vfSetup` (in `newGame`, Versus; the mission places its own), `VFLEET.park` tiles past its station's far edge over the void, nose to the
+  enemy, the two each other's twins; `S.players[p].flag`, `flagshipOf(p)`. None is built anywhere (no yard lists it). It holds where it is or
+  flies where told (order `capital` 'move'; `updateFlagship`, `capFly`: `CAPITAL.turn` rad/s, making way only near its heading, easing in).
+  Its **deck** (`u.yard`, `flagYard`: `CAPITAL.flagship.yard`, Line Ships first, then Gunships; a round of a craft's parts every `YARD.work` s,
+  taken from the colony's stores, `flagStores`: the Command Base first, then Depots and Launch Pads; order `fyard`). A Gunship built there flies
+  as its **wing** (`u.wing`, no pad: `wingHold` keeps it on a slot round the Flagship, `craftHome` brings it back there; `CAPITAL.flagship.wing`
+  at most; enemy craft or armed robots within `guard` of the hull send its idle wing up after them). Its **aura** (`flagAura`, every 10 ticks):
+  its colony's craft within `aura` (5.5) of its hull mend `mend` a second, refuel `fuel` of the tank a second and a Line Ship rearms `rearm`
+  shells a second. Its **point-defence** (`capPD`, `CAPITAL.flagship.pd`): a burst every `reload` s at the nearest enemy craft within `range`
+  of its hull, Gunships first, else a robot on the ground within `ground`. Its crews mend its hull `self` a second while nothing hits it.
+- **The Line Ship** (`BOTS.line`: `craft`, `capital`, `war`; 240 hull, 140 shield; 5 rounds of 2 Alloy, 1 Chip and 1 Fuel: `updateYard` takes
+  any goods a round names, and a yard with one on order asks for Fuel too, `yardGoods`). Built at a Launch Pad (`yard`: it lists `line`; it takes
+  no room, `yardOpen`, and lifts off the pad and stays up, `padLaunchCapital`) or on the Flagship's deck (`flagLaunch`: it casts off beside it);
+  `CAPITAL.line.most` (4) to a colony (`lineCount`). Orders as a Gunship's (`orderCapital`: 'attack', 'hunt', 'hold', 'home' to escort its
+  Flagship; `spaceCommand` hands it a right-click). With no order it escorts its Flagship on a slot of its own (`escortSpot`). It stands off
+  `keep` (5.5) from its goal's hull and turns broadside on (`sf.face`). **Broadsides** (`lineFire`): `salvo` (2) shells every `reload` (3) s at
+  what `lineTarget` picks within `range` (7) of its middle, measured to the target's hull: enemy capital ships first, its goal, defences, armed
+  robots, other buildings and robots, small craft last; `cap` (9) off a capital ship, `bld` (6) off a building (`lineBld`, as a Gunship's laser:
+  a Command Base or Keep held at its floor), `bot` (4) off a robot, `craft` (3) off a small craft. Its magazine (`u.mag`, `mag` 30); empty, it
+  goes to rearm (`u.rearm`): by its Flagship (the aura), or with none over a Launch Pad (`padRearm` a second). Its light point-defence
+  (`CAPITAL.line.pd`) barely troubles Gunships.
+- **Shields** (`u.cs`, `u.csT`; `CAPITAL.wait`): every hit on a capital ship goes through `capHit` (from `craftHit`: Gunships' lasers,
+  Point-Defence, a Flagship's point-defence, broadsides). The shield takes it first, the hull (`u.hp`) the rest; 0 hull and it breaks up
+  (`capDown`). Once nothing has hit it for `CAPITAL.wait` (6) s it recharges, `regen` a second (`capShield`). A Disruptor Tower's pulse
+  (`updateDisruptor`) reaches a capital ship's shield within its range of the hull and drains it `CAPITAL.disrupt` (3) times a Bulwark's drain
+  (`BULWARK.drain` 14: 42), never its hull. Capital ships are always at flying height (`u.alt` 1, `aloft`), so ground weapons never reach them;
+  everything that does measures its reach to the hull (`hullDist`, `capR`: `CAPITAL.r`).
+- **The Flagship victory**: a Flagship destroyed (`capDown` → `flagshipLost`) takes its colony out (`eliminate(p, by, 'flagship')`, everything it
+  had to the colony that brought it down; `S.endHow` 'flagship'), alongside Capture. The game-over screen and the menu's victory note say so.
+- **Gunships in Army Groups** (every map): `agUnit` lets a Gunship into a group (`agNew`, `agAdd`, `agLeave`, the selection bar's Army group);
+  `agGuns` keeps each over the group's flag on a slot of its own (a `hold` task with the flag's `rally`), so a group's Defend, Patrol, Attack
+  and Raid carry its Gunships along; low on Fuel or hull one flies home (`updateGunship`) and comes back when ready; disbanded, recalled or
+  taken out of the group, it goes home (`agGunOff`).
+- **The rival** (`aiVoid`, `AI_VOID` in js/ai.js, from `aiThink` beside `aiSpace`): a Launch Pad from `AI_VOID.pad` once a Smelter stands
+  (`aiPads`); Line Ships by the clock (`lines`: one from 7 minutes, four by 25), at a pad (its yard's hopper brings the parts) or on the
+  Flagship's deck when its Command Base has them spare; a wing later (`wing`). Point-Defence Turrets and Disruptor Towers round the spot over
+  its station where its Flagship holds (`aiVoidDefence`: `pd`, `dis`, one more Point-Defence once you have Line Ships). Short of Fuel from
+  `fuelAt` (under `fuelLow`), its plan puts more Oil Pumps and a second Refinery first: Line Ships burn Fuel to build. On guard, its Flagship
+  holds there and its Line Ships escort it, hunting any capital ship of yours within `near` of it or its Command Base; a Line Ship under
+  `mend[0]` of its hull pulls back to be mended. It **strikes** (`P.vfStrike`) with `strikeLines` Line Ships and `edge` times your fleet
+  (`aiFleetPower`), or past `late` (30 minutes) with whatever it has: its Line Ships go for your Flagship (an enemy Line Ship much nearer first), its
+  Flagship follows `behind` tiles back (unless under `follow` of its hull), its wing goes for your Line Ships. Every order is given again each
+  `every` s, a strike that has not dented your Flagship in `strikeMax` s is called off and the next waits `strikeGap` s, so it never waits on
+  a state that never comes (the lessons of `tools/ai-persistence-test.js`).
+- **State, saves and lockstep.** Orders: `capital`, `fyard`. `S.vf` is saved and checked (`vfCheckSave`); `hashState` takes in every capital
+  ship's shield, magazine, deck and orders, every wing Gunship's Flagship and each colony's Flagship, only where they exist. Tests:
+  `tools/void-fleet-test.js` (the map at every size and its twins, shields, recharge, the Disruptor's drain, the Flagship victory, the deck,
+  the wing and aura, a pad's Line Ship and the cap, a broadside and rearming, Gunships in an Army Group, Line Ships on The Ring, the mission's
+  setup, a save mid-fight and two runs alike, rivals left to it); `map-audit` and `map-symmetry` take it in with every map.
+- **The look and panels** (js/fleet.js, display only): the ships from the top, nose east (`drawCapital`: `flagship@T`, `flagship-launch@T` while
+  a Gunship goes up off its rails, `line@T`, `line-fireL@T` / `line-fireR@T` for a broadside), their engines' glow in code (longer and brighter
+  under way), a shadow far below, the broadside's flashes and smoke and its shells (`drawCapShell`), the launch rail's streak, the ship breaking
+  up (`drawCapDie`); the **shield** (`drawCapShield`): the Shield Dome's pale blue (`120,200,255`) drawn round the hull, a faint fill brighter at
+  the rim, a crisp rim, a hexagon lattice with a shimmer over it, a flash and a spreading ring where a shot lands (the Disruptor's drain a blue
+  crackle all round), flickering under a quarter, breaking up as it fails, closing back round from the stern as it recharges, a soft blue spill
+  under it at night; two bars over the ship (shield, then hull). Its panel (`capRows`, `capButtons`: the Flagship's Deck, Move, Hold here; a Line
+  Ship's Attack and Escort), the Army panel's Space tab (`capArmyRows`), tapping anywhere on a hull (`capAtTap`), a bar on the minimap
+  (`fleetMinimap`). Art: ART_GUIDE.md, Batch 45, in the lazy space-art bundle (`SPACE_ART`, `spaceArtKey`).
 
 **Half underground** (`SHAPE_PRESETS` `caves`, under Heights and depths, two or four players, never three: `evenOnly`, see `snapPlayers`; flat; the owner's idea from IDEAS.md) is half caves
 and half surface. `cavesMap` (js/world.js, called first by `generateMap`, as `ringMap` and `hollowMap` are) lays it out. The map is 1.2 × 1.5 times

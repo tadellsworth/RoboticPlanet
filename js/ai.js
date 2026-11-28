@@ -588,6 +588,8 @@ function aiThink(p) {
     const padN = aiPads(p, me, counts), pdN = aiPDs(p);
     if (padN && (counts.launchpad || 0) < padN) plan = [['launchpad', padN]].concat(plan.filter(([t]) => t !== 'launchpad'));
     if (pdN && (counts.pdturret || 0) < pdN) plan = [['pdturret', pdN]].concat(plan.filter(([t]) => t !== 'pdturret'));
+    // (The Void Fleet: Line Ships burn Fuel to build, so short of it, more Oil Pumps and a second Refinery: aiVoid)
+    if (S.vf && S.time >= AI_VOID.fuelAt && (playerGoods(p).fuel || 0) < AI_VOID.fuelLow) { const pu = counts.pump || 0; plan = (pu < 3 ? [['pump', pu + 1]] : (counts.refinery || 0) < 2 ? [['refinery', 2]] : []).concat(plan); }
   }
   if ((counts.airfield || counts.launchpad) && !P.airFuel) {
     const pumps = me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length;
@@ -1405,6 +1407,7 @@ function aiThink(p) {
   // 4d) A gap with no crossing on foot (The Ring, Sky islands): Cargo Planes fly warbots over it.
   if (S.mode !== 'colony') aiAir(p, me, kinds, lvl);
   if (S.space && S.mode !== 'colony') aiSpace(p, me, kinds, lvl); // (space: Launch Pads, the craft, Point-Defence)
+  if (S.vf && S.mode !== 'colony') aiVoid(p, me, lvl); // (The Void Fleet: the Flagship and its Line Ships)
 
   // 4d2) Orbital platforms: work the drawbridges whose control boxes we hold.
   if (S.orb && S.mode !== 'colony') aiBridges(p);
@@ -6033,6 +6036,7 @@ const AI_GUN_VALUE = { launchpad: 9, foundry: 8, smelter: 7, fab: 7, refinery: 6
 
 /** How many Launch Pads rival p wants now. */
 function aiPads(p, me, kinds) {
+  if (S.vf && S.space && !worldBan('launchpad')) return S.time < AI_VOID.pad || !me.some((b) => b.type === 'smelter' && b.built) ? 0 : S.time >= AI_SPACE.pad2 ? 2 : 1; // (The Void Fleet: its Line Ships come off a pad)
   if (S.grave && S.space && !worldBan('launchpad')) return S.time < AI_GRAVE.pad || !me.some((b) => b.type === 'smelter' && b.built) ? 0 : S.time >= AI_SPACE.pad2 || aiArmyOf(p) >= AI_AIR.second ? 2 : 1; // (The Graveyard: salvage is the economy)
   if (!S.space || worldBan('launchpad') || !me.some((b) => b.type === 'foundry' && b.built)) return 0;
   if (S.time < AI_SPACE.pad) return 0;
@@ -6198,7 +6202,7 @@ function aiSpace(p, me, kinds, lvl) {
   // Gunships: off at the richest enemy building no Point-Defence covers, or home on guard.
   if (S.time - (P.spGunT ?? -999) >= AI_SPACE.gunEvery) {
     P.spGunT = S.time;
-    const guns = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].gunship);
+    const guns = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].gunship && !u.wing); // (not a Flagship's wing: aiVoid)
     const ready = guns.filter((u) => !(u.task && u.task.type === 'attack' && gunshipGoal(u)) && u.bat >= SPACE.low + 25 && u.hp >= u.maxHp * 0.7);
     if (ready.length && warOn() && S.time >= lvl.grace) {
       const T = aiGunTarget(p, L);
@@ -6338,4 +6342,126 @@ function aiGravePostSpot(p, L) {
     if (d < bd) { bd = d; best = { cx, cy, z }; }
   }
   return best ? tryNear(best.cx, best.cy, best.z, 4) : null;
+}
+
+/*
+ * The Void Fleet (S.vf; space expansion, phase 3): how a rival fights with its Flagship and Line Ships (from aiThink, every
+ * think, beside aiSpace). The stall lessons of tools/ai-persistence-test.js kept in mind: every order is given again each
+ * AI_VOID.every s (none waits on a state that may never come), a strike that has gone on AI_VOID.strikeMax s without the
+ * enemy Flagship's hull going down is called off and a fresh one comes later, and past AI_VOID.late s it strikes with
+ * whatever it has (no waiting for an edge that never comes).
+ *   - Its first Launch Pad from AI_VOID.pad s once a Smelter stands (aiPads). Line Ships: `lines` [time s, how many]
+ *     (CAPITAL.line.most at most), ordered at a Launch Pad (its parts are brought to it, a yard's hopper) or, when its
+ *     Command Base has their parts spare, on the Flagship's deck. Gunships for its wing: `wing` [time s, how many].
+ *   - Guard (by default): the Line Ships escort the Flagship (no order) and the Flagship holds at its station, `hold`
+ *     tiles out toward the middle; enemy capital ships within `near` tiles of it, or of the Command Base, are hunted.
+ *   - Strike, once it has the edge (its fleet `edge` times the enemy's, `strikeLines` Line Ships at least) or past `late`:
+ *     the Line Ships go for the enemy Flagship (an enemy Line Ship much nearer first) and the Flagship follows `behind`
+ *     tiles back, so they rearm close; its wing goes at the enemy's Line Ships. Called off when its Flagship's hull is
+ *     under `flee` (home it goes), its Line Ships are thinned out, or `strikeMax` s go by without the enemy Flagship's hull
+ *     going down; the next waits `strikeGap` s.
+ */
+const AI_VOID = { pad: 240, fuelAt: 600, fuelLow: 15, every: 8, follow: 0.6, mend: [0.35, 0.8], pd: [[600, 1], [1200, 2], [1680, 3]], dis: [[900, 1], [1500, 2]], defGap: 30, lines: [[420, 1], [780, 2], [1140, 3], [1500, 4]], wing: [[900, 1], [1500, 2]], hold: 3, near: 16, edge: 1.3, strikeLines: 3, late: 1800, strikeMax: 420, strikeGap: 120, behind: 12, flee: 0.45 };
+
+/**
+ * Rival p's defences round its Flagship's guard spot `home` on its station, once every AI_VOID.defGap s: Point-Defence
+ * Turrets (`pd` [time s, how many]; one more once the enemy has Line Ships) and Disruptor Towers (`dis`: they drain a
+ * capital ship's shield three times as fast), each on its own station within 6 tiles of the spot.
+ */
+function aiVoidDefence(p, home, lvl) {
+  const P = S.players[p];
+  if (S.difficulty === 'easy' || S.time - (P.vfDefT ?? -999) < AI_VOID.defGap || aiSiteCount(p) >= lvl.maxSites) return;
+  P.vfDefT = S.time;
+  const foeLines = S.bots.some((u) => !u.dead && u.type === 'line' && u.owner >= 0 && foes(u.owner, p));
+  for (const [type, list, more] of [['pdturret', AI_VOID.pd, foeLines ? 1 : 0], ['disruptor', AI_VOID.dis, 0]]) {
+    if (worldBan(type)) continue;
+    const want = aiByClock(list) + more;
+    let have = 0;
+    for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === type && dist(b.x + 0.5, b.y + 0.5, home.x, home.y) <= 7) have++;
+    if (have >= want || !aiAffordable(p, type)) continue;
+    let best = null, bs = -Infinity;
+    for (let j = Math.floor(home.y - 6); j <= Math.ceil(home.y + 6); j++) for (let i = Math.floor(home.x - 6); i <= Math.ceil(home.x + 6); i++) {
+      if (!inMap(i, j) || !vfOnStation(p, i, j)) continue;
+      const d = dist(i + 0.5, j + 0.5, home.x, home.y);
+      if (d > 6 || d < 1.5) continue;
+      let near = 9;
+      for (const b of S.buildings) if (!b.dead && b.owner === p && (b.type === 'pdturret' || b.type === 'disruptor')) near = Math.min(near, dist(i, j, b.x, b.y));
+      const sc = Math.min(near, 4) * 2 - Math.abs(d - 3.5) - (i + j * 0.001) * 1e-6;
+      if (sc <= bs || !canPlace(p, type, i, j).ok || wouldBlock(tIdx(i, j))) continue;
+      bs = sc; best = { i, j };
+    }
+    if (best) { placeSite(p, type, best.i, best.j); return; }
+  }
+}
+/** Is tile (i, j) on player p's home station (S.vf.st[p])? */
+function vfOnStation(p, i, j) { const r = S.vf.st[p]; return !!r && i >= r.x0 && i <= r.x1 && j >= r.y0 && j <= r.y1; }
+
+/** Rival p's fleet strength: its Line Ships' hulls and shields, a little for each Gunship. */
+function aiFleetPower(p) {
+  let n = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p) continue;
+    if (u.type === 'line') n += (u.hp + (u.cs || 0)) / (u.maxHp + CAPITAL.line.sh);
+    else if (BOTS[u.type].gunship) n += 0.25;
+  }
+  return n;
+}
+/** How many rival p wants by now, from a list of [time s, how many]. */
+function aiByClock(list) { let n = 0; for (const [t, k] of list) if (S.time >= t) n = k; return n; }
+
+function aiVoid(p, me, lvl) {
+  const P = S.players[p], F = flagshipOf(p), L = getE(P.lander);
+  if (!F || !L || L.dead || !warOn() || S.time - (P.vfT ?? -999) < AI_VOID.every) return;
+  P.vfT = S.time;
+  const foe = S.players.find((Q) => Q.id !== p && !Q.absent && !Q.out && foes(Q.id, p)), EF = foe ? flagshipOf(foe.id) : null;
+  // The fleet: Line Ships ordered at a pad (or on the Flagship's deck when the Command Base has their parts), Gunships for its wing.
+  const wantLines = Math.min(CAPITAL.line.most, S.difficulty === 'easy' ? Math.min(2, aiByClock(AI_VOID.lines)) : aiByClock(AI_VOID.lines));
+  if (lineCount(p, true) < wantLines && !botBanned(p, 'line')) {
+    const pad = me.find((b) => b.built && BDEFS[b.type].pad && !(b.yard && b.yard.line > 0));
+    const rd = BOTS.line.round, spare = Object.keys(rd).every((g) => (L.stock[g] || 0) - (L.res[g] || 0) >= rd[g] * 2);
+    if (spare || !pad) orderAtFlag(F, 'line', 1); else orderAtYard(pad, 'line', 1);
+  }
+  const wantWing = S.difficulty === 'easy' ? 0 : aiByClock(AI_VOID.wing), wing = wingCraft(F).length + ((F.yard && F.yard.gunship) || 0);
+  if (wing < Math.min(wantWing, CAPITAL.flagship.wing) && !botBanned(p, 'gunship')) orderAtFlag(F, 'gunship', 1);
+  const lines = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'line');
+  const caps = S.bots.filter((u) => !u.dead && BOTS[u.type].capital && u.owner >= 0 && foes(u.owner, p));
+  // Its station: where the Flagship holds on guard, over its home station's far edge (its Point-Defence and Disruptors
+  // round it there: aiVoidDefence), and those defences.
+  const st = S.vf.st[p] || S.vf.st[0], home = P.vfHome || (P.vfHome = { x: F.x, y: p === 0 ? st.y0 + AI_VOID.hold : st.y1 - AI_VOID.hold });
+  aiVoidDefence(p, home, lvl);
+  // Strike: on with the edge (or late), off when the Flagship is hurt, the Line Ships are thinned out, or it has gone on too long.
+  const mine = aiFleetPower(p), theirs = foe ? aiFleetPower(foe.id) : 0;
+  if (P.vfStrike) {
+    const S0 = P.vfStrike;
+    if (EF && EF.hp < S0.hp0 - 20) { S0.hp0 = EF.hp; S0.t = S.time; } // (it is telling: the clock starts again)
+    if (!EF || (F.hp < F.maxHp * AI_VOID.flee && S.time < AI_VOID.late) || lines.length < (S.time >= AI_VOID.late ? 1 : 2) || S.time - S0.t > AI_VOID.strikeMax) { P.vfStrike = null; P.vfStrikeEnd = S.time; }
+  } else if (EF && S.time >= lvl.grace && S.time - (P.vfStrikeEnd ?? -999) >= AI_VOID.strikeGap && (F.hp >= F.maxHp * 0.7 || S.time >= AI_VOID.late) &&
+    ((lines.length >= AI_VOID.strikeLines && mine >= theirs * AI_VOID.edge) || (S.time >= AI_VOID.late && lines.length >= 1))) {
+    P.vfStrike = { t: S.time, hp0: EF.hp };
+  }
+  // A Line Ship badly hurt pulls back to the Flagship to be mended (and goes back in once it is).
+  for (const u of lines) { if (u.hp < u.maxHp * AI_VOID.mend[0] && !u.rearm) u.aiMend = 1; else if (u.hp >= u.maxHp * AI_VOID.mend[1]) u.aiMend = 0; if (u.aiMend && u.task) orderCapital(p, [u.id], 'home'); }
+  if (P.vfStrike && EF) {
+    for (const u of lines) {
+      if (u.rearm || u.aiMend) continue;
+      let tg = EF, td = dist(u.x, u.y, EF.x, EF.y);
+      for (const v of caps) if (v.type === 'line') { const d = dist(u.x, u.y, v.x, v.y); if (d < td - 6) { td = d; tg = v; } }
+      if (!(u.task && u.task.type === 'hunt' && u.task.target === tg.id)) orderCapital(p, [u.id], 'hunt', tg.id);
+    }
+    const d = dist(F.x, F.y, EF.x, EF.y), k = d > 0.1 ? Math.max(0, d - AI_VOID.behind) / d : 0;
+    if (F.hp < F.maxHp * AI_VOID.follow) { if (dist(F.x, F.y, home.x, home.y) > 1.5) orderCapital(p, [F.id], 'move', 0, home.x, home.y); } // (hurt, it stays home: its Line Ships strike alone)
+    else if (d > AI_VOID.behind + 2) orderCapital(p, [F.id], 'move', 0, F.x + (EF.x - F.x) * k, F.y + (EF.y - F.y) * k);
+    const el = caps.filter((v) => v.type === 'line');
+    for (const g of wingCraft(F)) if (!g.task && el.length && (g.bat ?? 100) > SPACE.low + 30 && g.hp > g.maxHp * 0.7) g.task = { type: 'hunt', target: el[g.id % el.length].id, guard: 1 };
+    return;
+  }
+  // Guard: home it holds; enemy capital ships near it or the Command Base are hunted.
+  if (dist(F.x, F.y, home.x, home.y) > 1.5 && !(F.task && F.task.type === 'move' && Math.abs(F.task.x - home.x) < 0.6 && Math.abs(F.task.y - home.y) < 0.6)) orderCapital(p, [F.id], 'move', 0, home.x, home.y);
+  let threat = null, td = AI_VOID.near;
+  for (const v of caps) { const d = Math.min(dist(v.x, v.y, F.x, F.y), dist(v.x, v.y, L.x, L.y)); if (d < td) { td = d; threat = v; } }
+  for (const u of lines) {
+    if (u.rearm || u.aiMend) continue;
+    if (threat) { if (!(u.task && u.task.target === threat.id)) orderCapital(p, [u.id], 'hunt', threat.id); }
+    else if (u.task) orderCapital(p, [u.id], 'home');
+  }
 }

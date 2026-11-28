@@ -36,7 +36,7 @@ const RT = { on: false, mover: 'ground', data: null, at: -99, calc: -99, sig: ''
 /** Is this a space map (The Ring, Orbital platforms, The Graveyard), where the air movers are spacecraft? */
 function rtSpace() {
   const sh = S && S.settings && typeof SHAPE_PRESETS !== 'undefined' ? SHAPE_PRESETS[S.settings.shape || 0] : null;
-  return !!(sh && (sh.asteroids || sh.orbital || sh.graveyard || sh.space));
+  return !!(sh && (sh.asteroids || sh.orbital || sh.graveyard || sh.vfleet || sh.space));
 }
 
 /** Can a ground robot step from tile a to its orthogonal neighbour b (terrain only: buildings aside)? */

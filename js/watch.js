@@ -117,7 +117,7 @@ function watchSummary(w) {
   if (watchUpWin(w)) main.push('Great Uplink win');
   const size = watchSize(w, n), otherBiome = chosenSecondBiome(w, size);
   if (otherBiome) main.push(BIOMES[otherBiome].name);
-  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, ['ring', 'orbital', 'grave'].includes(biomeForced(w.shapeRnd, w.shape)) ? 'Argos' : w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
+  main.push(w.shapeRnd ? 'Random map' : SHAPE_PRESETS[w.shape].name, ['ring', 'orbital', 'grave', 'vfleet'].includes(biomeForced(w.shapeRnd, w.shape)) ? 'Argos' : w.biomeRnd ? 'Random biome' : biomeName(w.biome), SIZE_PRESETS[size].name + ' size');
   const extra = [];
   if (w.seed !== null) extra.push(`Planet #${w.seed}`);
   if (w.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[w.rough].name + ' terrain');
@@ -220,7 +220,7 @@ function syncWatch() {
   $('w-victory-row').hidden = teams;
   for (const b of $('w-victory').children) {
     mark(b, b.dataset.v === vic);
-    b.disabled = noUplinks && b.dataset.v === 'uplinks';
+    b.disabled = (noUplinks || (!w.shapeRnd && voidShape(w.shape || 0))) && b.dataset.v === 'uplinks';
     b.title = b.disabled ? noUplinksWhy(w.shape) : '';
   }
   for (const b of $('w-diff').children) mark(b, b.dataset.v === w.diff);

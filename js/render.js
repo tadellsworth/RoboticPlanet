@@ -787,6 +787,7 @@ function bakeMap() {
   R.void = ringShape(); // (The Ring: the void tiles are left clear over the space behind: js/ring.js)
   R.orbital = orbitalShape(); // (Orbital platforms: station decks over the high atmosphere: js/orbital.js)
   R.grave = graveShape(); // (The Graveyard: the hulks of dead ships over The Ring's backdrop: js/grave.js)
+  R.vf = voidShape(); // (The Void Fleet: home stations' decks as Orbital's, rocks as The Ring's, over The Ring's backdrop: js/fleet.js)
   RSP.land = null;
   applyBiome();
   // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
@@ -1198,7 +1199,7 @@ function paintTile(ctx, i, j, other, blend) {
   ctx.fillRect(x, y, TP, TP);
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
   if (R.grave && (terr === T_GROUND || terr === T_ROCK)) { graveDeckPaint(ctx, i, j, x, y, t); } // (The Graveyard: a hulk's plating, its torn edges and wreckage: js/grave.js)
-  else if (R.orbital && (terr === T_GROUND || terr === T_ROCK)) { orbDeckPaint(ctx, i, j, x, y, t); } // (Orbital platforms: a deck's plating and railing over the ground)
+  else if ((R.orbital || (R.vf && vfStationAt(i, j))) && (terr === T_GROUND || terr === T_ROCK)) { orbDeckPaint(ctx, i, j, x, y, t); } // (Orbital platforms, and The Void Fleet's home stations: a deck's plating and railing over the ground)
   else if (tex.ground) {
     drawTexture(ctx, tex.ground, i, j, x, y);
     if (blend && terr === T_GROUND && other.tex.ground) blendTexture(ctx, other.tex.ground, blend, i, j, x, y);
@@ -1764,6 +1765,7 @@ function drawVoidTile(ctx, i, j, x, y) {
   ctx.clearRect(x, y, TP, TP);
   if (R.orbital) { orbVoidPaint(ctx, i, j, x, y); return; } // (Orbital platforms: a deck's hull, not rock)
   if (R.grave) { graveVoidPaint(ctx, i, j, x, y); return; } // (The Graveyard: a wreck's flank and snapped ribs: js/grave.js)
+  if (R.vf && (vfStationAt(i, j - 1) || vfStationAt(i, j - 2))) { orbVoidPaint(ctx, i, j, x, y); return; } // (The Void Fleet: under a home station, its hull, not rock)
   const one = terrAt(i, j - 1) === T_GROUND, two = !one && terrAt(i, j - 1) === T_CHASM && terrAt(i, j - 2) === T_GROUND;
   if (!one && !two) return;
   if (two && hash2(i, j, 771) < 0.4) return; // (a ragged bottom: not every column of the rock goes down a second tile)
@@ -10716,6 +10718,7 @@ function renderMinimap() {
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
   }
   if (S.grave) graveMinimap(ctx, sx, sy); // (The Graveyard: the Arbiter, js/grave.js)
+  if (S.space && typeof fleetMinimap === 'function') fleetMinimap(ctx, sx, sy); // (capital ships: js/fleet.js)
   // Uplinks: a ringed dot each, in the holder's colour (white while no one holds it; flashing while jammed).
   if (S.uplinks) for (const u of S.uplinks) {
     if (u.arb) continue; // (The Graveyard's: the Arbiter, above)

@@ -549,8 +549,10 @@ function saveSettings() {
 function menuUpWinOk() { const m = UI.menu; return !!m.mega && !(!m.shapeRnd && noSkyShape(m.shape)); }
 /** Does map type `shape` have no Uplinks and no Great Uplink win (the Hollow, which the Pathfinder never mapped, and Half underground's caves)? */
 function noSkyShape(shape) { const P = SHAPE_PRESETS[shape || 0] || {}; return !!(P.hollow || P.caves); }
+/** Has map type `shape` no Uplinks: the Hollow, Half underground, and The Void Fleet (won by Capture or by the Flagship)? */
+function noUplinkShape(shape) { return noSkyShape(shape) || voidShape(shape || 0); }
 /** Why map type `shape` has no Uplinks: the sentence for the menus. */
-function noUplinksWhy(shape) { return (SHAPE_PRESETS[shape || 0] || {}).caves ? 'No Uplinks on Half underground: the Pathfinder never mapped the caves.' : 'No Uplinks in the Hollow: the Pathfinder never mapped it.'; }
+function noUplinksWhy(shape) { if (voidShape(shape || 0)) return 'No Uplinks on The Void Fleet: it is won by Capture, or by destroying the rival Flagship.'; return (SHAPE_PRESETS[shape || 0] || {}).caves ? 'No Uplinks on Half underground: the Pathfinder never mapped the caves.' : 'No Uplinks in the Hollow: the Pathfinder never mapped it.'; }
 /** Is the Great Uplink win on for the game the menu would start (Versus)? */
 function menuUpWin() { return UI.menu.mode === 'versus' && !!UI.menu.upwin && menuUpWinOk(); }
 const menuSizePlayers = () => UI.menu.mode !== 'versus' && !UI.menu.shapeRnd ? minPlayers(UI.menu.shape || 0) : menuPlayers();
@@ -1101,7 +1103,7 @@ function syncMenu() {
     btn.dataset.info = off ? 'Warlord waves never end: always Endless.' : HORDE_GOAL_INFO[btn.dataset.v];
   }
   // (The Hollow has no Uplinks, the Pathfinder never having mapped it: that choice is greyed out, and the game is Capture.)
-  const noUplinks = !m.shapeRnd && noSkyShape(m.shape), vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
+  const noUplinks = !m.shapeRnd && noUplinkShape(m.shape), vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
   for (const btn of $('m-victory').children) {
     mark(btn, btn.dataset.v === vic);
     if (btn.dataset.v === 'uplinks') { const gy = !m.shapeRnd && graveShape(m.shape || 0); btn.textContent = gy ? GRAVE_VICTORY.name : VICTORY.uplinks.name; btn.dataset.info = gy ? GRAVE_VICTORY.info : VICTORY.uplinks.info; } // (The Graveyard: Hold the Arbiter)
@@ -1125,6 +1127,7 @@ function syncMenu() {
   $('m-upwin-row').dataset.info = upOk ? $('m-upwin-row').dataset.base
     : !m.mega ? 'Great Uplink win: it needs Megastructures (Rules) on: the Great Uplink is one of them.' : 'Great Uplink win: not in the Hollow or Half underground, which have no open sky to transmit to.';
   $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? noUplinksWhy(m.shape).replace(/\.$/, '') + ': this game is won by Capture.' : vic === 'uplinks' && !m.shapeRnd && graveShape(m.shape || 0) ? GRAVE_VICTORY.note : (VICTORY[vic] || VICTORY.capture).note;
+  if (!m.shapeRnd && voidShape(m.shape || 0)) $('m-victory-note').textContent += ' On The Void Fleet, destroying the rival Flagship wins too, and losing your own loses.'; // (the Flagship victory, alongside Capture)
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -1274,10 +1277,10 @@ function shapePickRow(row, rnd, shape, np, when = 'when you land') {
   drawThumbOnce(row.querySelector('canvas'), 'shape:' + (rnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, rnd ? null : SH));
 }
 /** Does map type `shape` set its own look, whatever the biome picked? 'hollow' (The Hollow), 'ring' (The Ring: Argos's), 'orbital' (Orbital platforms: Argos's rules), or false. */
-function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : P.orbital ? 'orbital' : P.graveyard ? 'grave' : false) : false; }
+function biomeForced(rnd, shape) { const P = rnd ? null : SHAPE_PRESETS[shape || 0]; return P ? (P.hollow ? 'hollow' : P.asteroids ? 'ring' : P.orbital ? 'orbital' : P.graveyard ? 'grave' : P.vfleet ? 'vfleet' : false) : false; }
 /** A Biome row (.m-pick), shared likewise: Random or BIOME_ORDER[biome] (`forced`: 'hollow' or 'ring', the map type sets its own look). */
 function biomePickRow(row, rnd, biome, forced, when = 'when you land') {
-  const ring = forced === 'ring' || forced === 'orbital' || forced === 'grave', hollow = !!forced && !ring, mapName = forced === 'orbital' ? 'Orbital platforms' : forced === 'grave' ? 'The Graveyard' : 'The Ring';
+  const ring = forced === 'ring' || forced === 'orbital' || forced === 'grave' || forced === 'vfleet', hollow = !!forced && !ring, mapName = forced === 'orbital' ? 'Orbital platforms' : forced === 'grave' ? 'The Graveyard' : forced === 'vfleet' ? 'The Void Fleet' : 'The Ring';
   if (ring) { rnd = false; biome = BIOME_ORDER.indexOf('lunar'); }
   const bk = BIOME_ORDER[biome];
   row.querySelector('.m-pick-name').textContent = rnd ? 'Random' : biomeName(biome);
@@ -1715,6 +1718,18 @@ function drawShapeThumb(cv, P) {
     rock(0.5, 0.88, 0.32, 0.085); rock(0.5, 0.7, 0.1, 0.045); rock(0.15, 0.7, 0.1, 0.04); rock(0.5, 0.5, 0.17, 0.06); rock(0.14, 0.5, 0.08, 0.045);
     for (const [u, v, k] of [[0.34, 0.9, 1], [0.66, 0.84, 2], [0.5, 0.56, 3], [0.17, 0.7, 0], [0.16, 0.5, 1]]) { ctx.fillStyle = THUMB.res[k]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.026), 0, 7); ctx.fill(); } }
     crags = 0;
+  } else if (P.vfleet) {
+    // The Void Fleet: open void (stars), a grey station deck at each end with its two berths, a small rock each side and the
+    // middle rock, drifting rocks (dots), and the two Flagships in their colours, long hulls off their stations.
+    ctx.fillStyle = '#070a14'; ctx.fillRect(x0, y0, mw, mh);
+    ctx.fillStyle = 'rgba(214,226,255,0.7)';
+    for (let k = 0; k < 26; k++) ctx.fillRect(X(rnd()), Y(rnd()), Math.max(1, U * 0.012), Math.max(1, U * 0.012));
+    const deck = (u0, v0, u1, v1) => { for (const [a, b, cc, d] of [[u0, v0, u1, v1], [1 - u1, 1 - v1, 1 - u0, 1 - v0]]) { ctx.fillStyle = '#4a5466'; ctx.fillRect(X(a), Y(b), X(cc) - X(a), Y(d) - Y(b)); ctx.strokeStyle = '#9aa6b6'; ctx.lineWidth = Math.max(1, U * 0.012); ctx.strokeRect(X(a), Y(b), X(cc) - X(a), Y(d) - Y(b)); } };
+    deck(0.2, 0.8, 0.8, 0.97); deck(0.24, 0.75, 0.34, 0.8); deck(0.66, 0.75, 0.76, 0.8);
+    for (const [u, v, r] of [[0.22, 0.6, 0.05], [0.5, 0.5, 0.075]]) for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.fillStyle = '#6d6a66'; ctx.beginPath(); ctx.arc(X(uu), Y(vv), U * r, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#8a8278'; for (const [u, v] of [[0.8, 0.55], [0.15, 0.42], [0.72, 0.68]]) for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.016), 0, 7); ctx.fill(); }
+    for (const [k, v] of [[ME, 0.68], [1, 0.32]]) { ctx.strokeStyle = PLAYER_COLORS[k] || '#fff'; ctx.lineWidth = Math.max(2, U * 0.035); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(X(0.5), Y(v - 0.045)); ctx.lineTo(X(0.5), Y(v + 0.045)); ctx.stroke(); ctx.strokeStyle = 'rgba(120,200,255,0.7)'; ctx.lineWidth = Math.max(1, U * 0.01); ctx.beginPath(); ctx.ellipse(X(0.5), Y(v), U * 0.035, U * 0.07, 0, 0, 7); ctx.stroke(); }
+    crags = 0;
   } else if (P.graveyard) {
     // The Graveyard: dark wrecked hulls in space (a home hulk each at opposite corners, a bridge wreck toward the middle, a far
     // wreck beside home, the Arbiter's pale hull in the middle with its relay), the spans between (dashes), salvage (gold
@@ -1990,7 +2005,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.orbital && !P.graveyard && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !P.asteroids && !P.orbital && !P.graveyard && !P.vfleet && !P.caves && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -2157,10 +2172,10 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital || (SHAPE_PRESETS[p.st.shape || 0] || {}).graveyard ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : ringShape(p.st.shape || 0) ? 'lunar' : p.st.biome; // (the Hollow has its own look; The Ring is on Argos's ground)
   const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
-    chasm: (SHAPE_PRESETS[p.st.shape || 0] || {}).asteroids || (SHAPE_PRESETS[p.st.shape || 0] || {}).orbital || (SHAPE_PRESETS[p.st.shape || 0] || {}).graveyard ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space, on The Ring)
+    chasm: ringShape(p.st.shape || 0) ? [7, 10, 20] : [18, 12, 10], fertile: [92, 98, 40] }; // (space: The Ring, Orbital platforms, The Graveyard, The Void Fleet) // (space, on The Ring)
   if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const caveMask = m.cave || null; // (Half underground: the caves are the Hollow's look over their tiles)
   const other = caveMask ? biomeLook('hollow')?.mm : p.st.biome2 ? biomeLook(p.st.biome2)?.mm : null;
@@ -3440,7 +3455,7 @@ function refreshSelection() {
   // (its parts are made once, by initSelBar: made again if one isn't there, so a bar that lost a part can't stop this)
   if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-scorch', 'sel-breach', 'sel-recycle', 'selbar-group', 'sel-agroup'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
   $('sel-scorch').hidden = !orderable(ME, UI.sel).some((u) => BOTS[u.type].flame); // (Torches selected: Scorch the earth)
-  $('sel-agroup').hidden = !orderable(ME, UI.sel).length || !!UI.watch; // (army units selected: Army group)
+  $('sel-agroup').hidden = !agOrderable(ME, UI.sel).length || !!UI.watch; // (army units or Gunships selected: Army group)
   $('sel-box').classList.toggle('on', INPUT.boxArmed);
   // (Breach: under a finger, warbots selected and an earthwork of yours or an ally's standing: js/terraform4.js)
   const breach = touch && !UI.watch && typeof t4BreachOffered === 'function' && t4BreachOffered();
@@ -4035,6 +4050,7 @@ function startNewGame(again) {
     postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${nColonies() > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
   if (opts.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && (S.hollow || S.caves)) postMsg(ME, noUplinksWhy(S.settings.shape) + ' This game is won by Capture.', 0, 0, 'info');
+  if (S.vf && flagshipOf(ME)) { const F = flagshipOf(ME); postMsg(ME, `Your Flagship, the Carrier's tender, holds station off your home station. Destroy the rival Flagship, or capture their Command Base, to win; lose your own Flagship and you lose. Its panel's Deck builds Gunships and Line Ships from your stores.`, Math.floor(F.x), Math.floor(F.y), 'info'); }
   if (S.victory === 'uplinks' && S.uplinks && S.grave) postMsg(ME, `Hold the Arbiter: the old relay ship in the middle of the wreck field is the one Uplink (a ringed diamond on the minimap). It is yours while your land covers its relay: build an Outpost on its deck, or land a Drop Outpost there by Shuttle. It comes online ${UPLINK.online / 60} minutes in: from then on your clock runs while you hold it, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots by its relay jam it.`, ((S.grave.core.x0 + S.grave.core.x1) >> 1), ((S.grave.core.y0 + S.grave.core.y1) >> 1), 'info');
   else if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
@@ -4402,8 +4418,8 @@ function showGameOver() {
   if (how === 'contact') gupSilence(); else sfx(won ? 'win' : 'lose');
   // (the heading, the word that flares in: overFlare; under it, how it was won or lost)
   const word = won ? (how === 'contact' ? 'Contact' : 'Victory') : 'Defeat';
-  const kick = won ? (S.teams ? 'Your team wins' : { green: 'Ithaca I made ready', domination: 'Domination', uplinks: 'Uplinks held', contact: 'The planet is yours', surrender: 'The rivals surrendered', nuke: 'Nuclear strike' }[how] || 'Capture')
-    : how === 'surrender' && S.players[ME].out ? 'You surrendered' : how === 'contact' ? 'A rival made contact' : how === 'domination' ? 'Rival domination' : how === 'uplinks' ? 'A rival held the Uplinks'
+  const kick = won ? (S.teams ? 'Your team wins' : { green: 'Ithaca I made ready', domination: 'Domination', uplinks: 'Uplinks held', contact: 'The planet is yours', surrender: 'The rivals surrendered', nuke: 'Nuclear strike', flagship: 'Flagship destroyed' }[how] || 'Capture')
+    : how === 'flagship' && S.players[ME].out ? 'Flagship lost' : how === 'surrender' && S.players[ME].out ? 'You surrendered' : how === 'contact' ? 'A rival made contact' : how === 'domination' ? 'Rival domination' : how === 'uplinks' ? 'A rival held the Uplinks'
       : S.players[ME].out ? 'Command Base lost' : 'The planet is lost';
   $('o-text').textContent = won
     ? (how === 'green' ? `${Math.floor(greenShare(ME) * 100)}% of the open land is green: soil, groves, water and graded ground. Ithaca I is made ready.`
@@ -4411,11 +4427,13 @@ function showGameOver() {
       : how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
       : how === 'uplinks' ? (S.grave ? `You held the Arbiter for ${UPLINK.hold / 60} minutes. The planet is yours.` : `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`)
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
+      : how === 'flagship' ? `You destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Flagship, its Carrier's tender: without it the colony could not hold, and everything it had is yours.`
       : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : `Your nuclear missile destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
         : many ? `${nColonies() > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
     : how === 'contact' ? `${The} held its Great Uplink's transmission for ${GUP.hold / 60} minutes and made contact. Regroup and try again.`
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? (S.grave ? `${The} held the Arbiter for ${UPLINK.hold / 60} minutes. Regroup and try again.` : `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`)
+      : how === 'flagship' && S.players[ME].out ? `${The} destroyed your Flagship, your Carrier's tender: without it the colony could not hold. Regroup and try again.`
       : how === 'surrender' && S.players[ME].out ? `You surrendered to ${The === 'The rival' ? 'the rival' : The}: everything you built is theirs. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   if (S.teams && how === 'contact') $('o-text').textContent = won ? `${S.winner === ME ? 'Your' : `${playerName(S.winner)}'s`} Great Uplink held its transmission for ${GUP.hold / 60} minutes and made contact: your team wins.`
@@ -7025,6 +7043,7 @@ function tapStack(rally, b, wx, wy) {
   const bots = [];
   for (const u of S.bots) {
     if (u.dead || u.inside || (u.under && !murmurInSight(u))) continue; // (nor a Sapper underground out of the colony's sight)
+    if (BOTS[u.type].capital) { const e = capAtTap(u, wx, wy); if (e >= 0) bots.push([e, u]); continue; } // (a capital ship: anywhere on its hull, js/fleet.js)
     const bt = BOTS[u.type], r2 = bt.airship ? 1.1 : bt.crawler || bt.siege || bt.truck || bt.rail || bt.magpod || bt.craft ? 0.6 : 0.3; // (an Airship is big)
     const d = dist2(u.x, u.y - (bt.magpod ? MAGLEV.head : 0) - (u.alt || 0) * 0.35, wx, wy); // (a Maglev pod rides at deck height)
     if (d < r2) bots.push([d, u]);
@@ -9678,7 +9697,7 @@ function shieldRows(u) {
 }
 
 /** Does a robot's panel offer Recycle this unit (anything that walks or drives: not a plane, ship or train)? */
-function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !bt.wild; }
+function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.magpod && !bt.wild && !bt.capital; }
 
 /** The Recycle section of one of your robots' panels: Recycle this unit (or why not), or Keep this unit while it's on its way. */
 function refreshRecycle(u) {
@@ -9974,7 +9993,7 @@ function oilAround(i, j) {
  */
 function openArmySheet(tab) {
   if (tab) UI.armyTab = tab;
-  if (UI.armyTab === 'air' && !myAirfields().length && !myPads().length) UI.armyTab = 'army';
+  if (UI.armyTab === 'air' && !myAirfields().length && !myPads().length && !myCapitals().length) UI.armyTab = 'army';
   UI.armyTab = UI.armyTab || 'army';
   UI.armyN = UI.armyN || 4;
   const sky = spaceMap() ? 'Space' : 'Air'; // (out in space the Air tab is the Space tab: js/space-ui.js)
@@ -9987,6 +10006,8 @@ function openArmySheet(tab) {
   refreshArmySheet();
 }
 
+/** Your capital ships (The Void Fleet's Flagship, Line Ships). */
+function myCapitals() { return S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].capital); }
 function myAirfields() { return S.buildings.filter((b) => !b.dead && b.owner === ME && b.built && BDEFS[b.type].airfield); }
 
 /** How many of `avail` warbots a group of the chosen size takes. */
@@ -9996,7 +10017,7 @@ function armyWant() { return UI.armyN === 'all' ? -1 : UI.armyN || 4; }
 function armyNText() { return UI.armyN === 'all' ? 'every spare warbot' : `${UI.armyN} warbots`; }
 
 function refreshArmySheet() {
-  const air = myAirfields().length > 0 || myPads().length > 0;
+  const air = myAirfields().length > 0 || myPads().length > 0 || myCapitals().length > 0; // (and capital ships: the Space tab lists them, js/fleet.js)
   $('ar-tab-air').hidden = !air;
   $('ar-tabs').hidden = !air; // (just the Army until there's an Airfield)
   for (const btn of $('ar-tabs').children) btn.classList.toggle('on', btn.dataset.t === UI.armyTab);
@@ -10359,6 +10380,7 @@ function refreshSheet() {
     $('sh-status').textContent = botActivity(u);
     refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
+    if (BOTS[u.type].capital) { $('sh-dyn').innerHTML = capRows(u); if (u.owner === ME && u.type === 'flagship') renderFlagYard(u); } else // (a capital ship: its shield and hull, js/fleet.js)
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       (BOTS[u.type].magpod ? `<div class="kv"><span>Power</span><span>${u.magTo ? (u.crawl ? 'none: crawling at a Worker\'s pace' : 'from the Generators by the Terminals') : u.inside && magPartner(getE(u.inside) || {}) ? (magLinePowered(getE(u.inside)) ? 'the line is powered' : 'the line has no power: it would crawl') : 'no line'}</span></div><div class="kv"><span>Hold</span><span>${u.cargo ? sumValues(u.cargo) : 0} of ${BOTS[u.type].carry} goods</span></div>` :
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
@@ -11175,8 +11197,8 @@ function agNewGroup(ids) {
 
 /** The selection bar's Army group: add the selection to a group, a new one, or take it out of its groups. */
 function openAgSelSheet() {
-  const ids = orderable(ME, UI.sel).map((u) => u.id);
-  if (!ids.length) { sfx('error'); toast('Select warbots (or other army units) first.', 'info'); return; }
+  const ids = agOrderable(ME, UI.sel).map((u) => u.id); // (army units, and Gunships: they keep over the group's flag)
+  if (!ids.length) { sfx('error'); toast('Select warbots (or other army units, or Gunships) first.', 'info'); return; }
   const gs = agMine(), inG = ids.filter((id) => getE(id).grp).length;
   let h = `<div class="sheet-title"><div><h3>Army group</h3></div></div><p class="desc">${ids.length} unit${ids.length > 1 ? 's' : ''} selected${inG ? `, ${inG} in a group` : ''}. A unit is in one group at a time.</p><div class="ag-list">`;
   for (const g of gs) { const s = agStats(g); h += `<button class="btn ag-pickg" id="ag-add-${g.n}" data-g="${g.n}" style="--agc:${agColor(g)}"><span class="ag-badge">${g.n}</span>Add to the ${g.name} <span class="label-note">${s.n}/${g.size}</span></button>`; }
