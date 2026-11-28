@@ -2172,6 +2172,27 @@ and only **then revamp the Missions** (to use the new units) and **then the Main
     Generator keeps the line firing home; and **a rival's automatic shipments keep 6 of a good, not 20** (`aiReserve`):
     a rival's Alloy and Chips never sit in storage, so its pairs had little to fire (the Architect's held Fuel past 20
     only now and then).
+    **Decided (the owner, Nov 28 2026): new Mass Driver rules, built.** (1) A Driver aims at another of your Mass
+    Drivers or at one of your Catchers, nothing else: the Outpost/Keep resupply is gone (`MASSDRIVER.forts`,
+    `mdFortType`, its texts); a save with a Driver aimed at a fort loads with it stood down. (2) **Driver to Driver is a
+    two-way line**: aiming A at B (12–50 tiles, B yours and built) pairs them (B is aimed back), with the old line's
+    pace, power, Auto and goods-list rules; a Driver is in one line at most (a Driver already in a line is refused,
+    "already in a line"), and Stand down on either end or re-aiming one breaks the pair for both. (3) **A Catcher only
+    catches**: it never fires or needs power, its shot-back art (`drawCatcherLamps`) is gone (its arms still swing in),
+    a Driver to it is one way, its spare goods no longer come home by canister (Haulers or other transport only), and it
+    still takes two Drivers, both delivering to it. (4) The Catcher kit stays. Calls made: the Catcher's cost stays 8
+    Cement, 5 Alloy, 3 Chips against the Driver's 12, 10, 5: already about half, and the kit costs the Catcher's cost,
+    so a cheaper Catcher would make kit footholds near free; a kit no longer re-aims a Driver already in a line (it
+    would have broken a pair); a far Driver whose line is one way (its Catcher at home) ships its spare home but
+    stocks nothing. **Rivals** (`aiMassDriver`): where their Workers reach the foothold and a mine, quarry or the like
+    stands round it (`aiMdTwoWay`), a second Driver there and a pair; else a Catcher (or a kit where they can't reach);
+    a reachable Catcher line is upgraded to a pair once mines stand round it. Measured, 15 AI-vs-AI games (Islands, Sky
+    islands, Four Isles, Canyon maze, Grand Canyon; seeds 11, 22, 33; 40 min) before and after: 14 identical (no rival
+    built a line before 900 s mattered: most end by conquest at 12–28 minutes), and Sky islands seed 11, the one with
+    a line, chose a pair at its mesa (a quarry there) where it had built a Catcher: same winner, 17.9 min against
+    18.2, the far Driver still going up at the end (it had never fired before either). 10 colony games (45 min) on the
+    same maps: identical, no rival line either way. *Open:* rivals rarely reach a line before a versus game is
+    decided; whether a rival should open lines earlier is a separate question.
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
