@@ -21,7 +21,7 @@
  * Effects volume; a tap on the subtitle skips it.
  */
 
-const VOICE = { on: true, cur: null, lvl: 1.4 };
+const VOICE = { on: true, cur: null, lvl: 0.7 }; // (lvl: the voice's level on the Effects bus; halved from 1.4 at the owner's ask, Nov 28 2026)
 try { if (localStorage.getItem('botfall.voice') === '0') VOICE.on = false; } catch (e) { /* storage unavailable */ }
 function setVoiceOn(on) {
   VOICE.on = !!on;
