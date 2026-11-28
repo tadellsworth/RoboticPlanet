@@ -78,7 +78,19 @@ Calls made, to confirm:
 - **The canvas**: a board of the installed art (the sprite sheet and the in-game shots) was prepared but not published to the
   design canvas from this session (the publish was not allowed here); the art is in the repository and ART_GUIDE.
 
-Measured: see "The Void Fleet: AI-vs-AI" below.
+Measured (AI-vs-AI, Medium, Normal, seeds 1 to 12, games to 70 minutes, on the code as merged with the rival stall fixes):
+**P0 7 wins, P1 5, none undecided**, every game ended by the Flagship victory, in **24 to 36 minutes** (median 32½, mean
+31½: 24.1, 24.4, 31.1, 31.9, 32.2, 32.4, 32.5, 32.9, 33.4, 33.5, 33.6, 35.6). 7 of 12 is well inside seed noise, and the
+layout, the Flagships and the rival's guard spot and defence sites are exact twins. Numbers changed on the way, and why:
+the Flagship's hull 420 → 600 → 800 and shield 240 → 300 → 400 (two Line Ships killed a 660-point Flagship in about a minute:
+games ended at 20 to 26 minutes, decided by whoever had two Line Ships first); the Line Ship 6 rounds → 5 (rivals, short of
+Chips and Fuel, had one Line Ship by 20 minutes); the rival strikes with three Line Ships (not two) and, past 30 minutes, with
+whatever it has (one seed stalled to 70 minutes with both sides out of Fuel and one Line Ship); the Flagship's deck takes
+parts from every store (only the Command Base starved it: Alloy goes from the Smelter to the Foundry); the Flagship mends
+its own hull when quiet (a hurt rival Flagship never struck again). Before the fixes: 9 games, 21 to 36 minutes, one stall.
+
+Not run: the three tests that load the page from a local server (breach-touch, menu, smoke: this session could not start
+one); immense-map fails the same way on main (Hollowgate's opening deposits), not from this work.
 
 Open questions:
 - Should the Flagship have any real guns against capital ships (now only light point-defence: it relies on its escorts)?
