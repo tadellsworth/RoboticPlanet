@@ -659,7 +659,8 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
   hold the spot under a flag (on the spot ordered, so a rival's band finds it: see `aiAir`), Workers go to work; then it flies home.
   Out in space a deck or rock where your Workers stand is one you can build on (`buildZones` takes in their areas on a space map:
   `workersLanded`), so Workers landed past a raised bridge or on a rock no Viaduct reaches can put up an Outpost (switch its site to
-  Supply by air: a Shuttle flies it the goods), as a Drop Outpost gives a foothold on a planet; `BUILD_REACH` still holds. The order
+  Supply by air: a Shuttle flies it the goods), as a Drop Outpost gives a foothold on a planet; `BUILD_REACH` still holds. It counts
+  for any building, not Outposts only (the owner's call, Nov 27 2026); with the land rules, in practice an Outpost goes up first. The order
   for the AI is the Cargo Plane's (`u.mission.kind` 'warbot'). With a mouse, robots selected with a Dropship and a right-click on ground do it
   (`spaceCommand`).
 - **Gunship** (`BOTS.gunship`: `war`, 6 rounds of 2 Alloy and 2 Chips, 14 hit points). Army orders, not `army` (it is no warbot: no garrison,
@@ -2442,7 +2443,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   gun's reach (`hotStep`: `dangerMap` bit 1, past the first `SAFE_POCKET` (4) tiles out of a reach it starts in) is
   searched again with that ground closed (`safeRoute`, `findPath` `opts.safe`; only then, so it costs nothing on a
   peaceful map). With no way round, it waits (`noSafeRoute`): the route isn't tried for `NOSAFE_WAIT` (10 s), nor
-  is a job at the building there handed out (`unreachUntil`), the building's panel says *No safe route: enemy
+  is a job at the building there handed out (`unreachUntil`; not for storage, which stays open to the carriers that
+  can reach it: two cut-off Haulers closed a rival's Command Base to six inside it for 40 minutes), the building's panel says *No safe route: enemy
   defences in the way* (`b.noSafe`, in `hashState`) and its owner is told (every 45 s at most, `P.safeMsgAt`). Once a
   second (`dangerSweep`) a carrier on its way whose route ahead now runs into a gun is flagged (`u.rv = -1`) so
   `routeCheck` plans again, round it, or stops it where it is and drops the job (`haltUnsafe`: a load aboard stays,
@@ -2460,7 +2462,24 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   status says *Haulers turning back: Murmur near the road* with the wait, and the "Why idle?" and the Economy panel's
   bottlenecks name it (`haulWhy`, `outWhy`). A rival (`aiMurmur`, by day, with its army at its attack threshold and
   `AI_NEST_SPARE` more) sends `AI_ROAD_GUARD.n` (3) warbots to a rally flag where they last turned back, one flag at
-  a time for `AI_ROAD_GUARD.hold` (90) s (`P.roadRally`).
+  a time for `AI_ROAD_GUARD.hold` (90) s (`P.roadRally`); with a smaller army, `AI_ROAD_GUARD.few` (2) against a lone
+  Murmur or two out in the open (none of them a nest's guards, within 5 tiles of the spot) while it keeps two more
+  armed warbots.
+- **Gatherers turning back** (the rival-persistence follow-up, Nov 27 2026; `GATHER_SHY`, `gatherShy`, `shyNode`). A
+  gatherer's worker (Mine, Tap, Harvester, Farm...) that turns back on its way out to a node used to go straight out
+  to the same node again: on Standard seed 11 a Settler rival's Harvester workers turned back 101 times in four
+  minutes and its Fiber stopped. Now the node is passed over for three times the wait (`b.shyNodes`, by `findNode` and
+  `findPlantSpot`) and the worker waits inside (`b.gatherWait`, its status says so): `SHY_WAIT`, or from the Murmur
+  `shyRoadWait(b.gshyN)` (5, 10, 20, 40 s), `b.gshyN` counting turn-backs in a row and cleared by a trip that brings
+  something back. Two in a row count for `murmurShy` (the panel says *Workers turning back*; `haulShy` is the
+  carriers' half, for the "Why idle?" texts) and so for `aiRoadGuard`. In `hashState`.
+- **Where the Murmur bite** (`GUARD_BITE`, bit 4 of the danger map). A nest's guards in Versus bite only what comes
+  within `GUARD_VERSUS` (3) tiles of the nest's corner, so within `GUARD_BITE` (3.75) of its middle; the danger map
+  keeps the padded circle (`GUARD_VERSUS + 1`) in bit 2 (jobs, gatherers' nodes and routes keep off it, `hotFor`) and
+  the bite in bit 4. `foeSweep` turns a robot back, or sends it for cover, only for bit 4 (for every other enemy the
+  two are the same circle), and paving skips only guns, bit 4, radiation and a rival's `dangerAt` (`paveHot`): on
+  seed 11 the only way up to that rival's groves crossed the padded ring by one tile. A danger spot in `S.dng.f` has a
+  fifth number for the bite radius when it differs (saves without it load as before).
 - **Cargo pickups:** after the usual capacity and network checks, dispatch compares estimated travel times when multiple carriers are eligible. The estimate uses their routes and travel speeds, including road surface and direction. It is reused for that carrier and pickup for the current dispatch pass. It does not predict traffic queues or boarding waits.
 - **Marching together** (the owner's rule, November 2026 balance pass; `marchTogether`, `paceContact`, `PACE_CONTACT`):
   army robots sent together (`orderMove`, `orderAttack`, `sendAttack`, `sendToRally`; the player's and the rival's,
@@ -3222,8 +3241,11 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the links the next robot waits for
   (the Foundry while it has a part of each kind, or always with more than three workers; the Chip Fab while Chips are
   short; the Smelter while Alloy is short; a Mine while Alloy and Ore both are; and a gatherer short of its good), so
-  the few workers go down the chain to the link that can work, and the Foundry makes workers alone, a Hauler first
-  when it has none and three workers (`P.triage`). With no Hauler left, one worker stays free to carry, and a link
+  the few workers go down the chain to the link that can work, and the Foundry makes workers alone, with Haulers first
+  once it has three workers (`aiTriageHaulers`): with none; with fewer than one for every four buildings that make
+  goods and work (2 to 4, `AI_TRIAGE_HAUL`); or, up to the Haulers it wants outside triage, while two or more stand
+  full of what they make with no Hauler free (`P.triage`). It used to make one only with none left, and a Warlord with
+  one Hauler kept full Mines waiting for minutes. With no Hauler left, one worker stays free to carry, and a link
   that holds a round of its inputs, with room for what it makes (`hasRound`), takes even that one until the round
   is used (`dispatch`). Without it a colony left with one to three workers carried, or ran a Smelter piling up Alloy
   with no Chips, and never made another. At the bot limit (90 in Versus) it
@@ -3464,7 +3486,13 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
 - **The rival's roads and Ramps** (`aiRoads`, `aiRampCut` in `js/ai.js`): where its road to a site would run the long
   way round a one-level cliff (8 tiles or more), or no slope leads there at all, it cuts up to two Ramps instead, as
   Route to does in Paths, when that way (each Ramp counted as 6 tiles) is at most 60% of the long road and 6 tiles
-  shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
+  shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way.
+  A road planned over ground its Workers won't pave (`paveHot`, or no way there: `P.paveSkip`) for
+  `AI_ROAD_DETOUR.wait` (45) s on end (`P.roadHot`, by id) is planned again round it (`aiRoadDetour`: `roadRouteTo`
+  with `safe`, where each such tile costs `ROAD_HOT_AVOID` (40) more; at most twice as long and 10 tiles more), the
+  blocked tiles it leaves called off (refunded); with no way round, a site waiting like that for two minutes, three
+  minutes old at least, is given up and its spot avoided for four (`AI_HOT_SITE`). Paving skipped such tiles, so on
+  Standard seed 25 (Warlord, rival holding at 12) replacement Mines waited *No road to storage yet* with Workers idle. It
   cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
   tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to. A site waiting four minutes
   with no construction or incoming deliveries can be abandoned even when the missing road is already on the books.

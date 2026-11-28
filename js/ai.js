@@ -1188,9 +1188,10 @@ function aiThink(p) {
   const missileSite = st.missiles ? aiMissileShort(p, me) : null; // (an Architect's missile site waiting for Alloy or Chips)
   for (const b of me) {
     if (b.type !== 'foundry' || !b.built) continue;
-    // Triage: workers, and nothing else, until there are enough (but one Hauler first when there is none and a few
-    // workers already: until then a worker has to stay free to carry).
-    if (few) { b.mode = 'worker'; b.orders = !kinds.hauler && workers >= 3 ? { hauler: 1 } : {}; continue; }
+    // Triage: workers, and nothing else, until there are enough (but Haulers first while short of the few its
+    // economy can't run without, or of the ones it wants while goods wait for pickup with none free, once there are a
+    // few workers: until then a worker has to stay free to carry. See aiTriageHaulers).
+    if (few) { b.mode = 'worker'; b.orders = workers >= 3 && aiTriageHaulers(p, me, kinds, wantHaulers) ? { hauler: 1 } : {}; continue; }
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
     b.mode = S.mode === 'colony' && !S.horde ? 'worker' : workers < Math.min(staffSoon + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
@@ -1663,8 +1664,8 @@ function aiMurmur(p, lvl, lander, smart) {
     if (res && res.sent) { P.sapRally = { id: res.rally.id, t: S.time }; return; }
   }
   // 0b) A road its carriers keep turning back on from the Murmur: by day, with the army to spare, a few warbots to
-  //     clear it (aiRoadGuard).
-  if (!night && aiArmyOf(p) >= lvl.threshold + AI_NEST_SPARE && aiRoadGuard(p)) return;
+  //     clear it (aiRoadGuard; with a smaller army, two against one or two Murmur alone).
+  if (!night && aiRoadGuard(p, aiArmyOf(p) >= lvl.threshold + AI_NEST_SPARE)) return;
   // 1) Exits near its land, nearest first (the first three it might reach). By day, with nothing up round it, the
   //    garrisons send even the warbots they keep at home (all: only the Command Base keeps its own): a quiet exit is
   //    a short walk and a few shots, and every night it stays open it brings a pack.
@@ -1699,10 +1700,14 @@ function aiMurmur(p, lvl, lander, smart) {
  * to a rally flag where they last turned back from (b.shyX, b.shyY), to clear the road; the flag comes down after
  * AI_ROAD_GUARD.hold s. One such flag at a time; the building worst off first; by day, with the army to spare for a
  * nest (aiMurmur: a squad sent off early, before its first march, cost a Steward its Command Base on Standard seed 25).
- * True if it sent a squad.
+ * Its gatherers turning back on their way out count too (GATHER_SHY). With a smaller army (`spare` false), a lone
+ * Murmur or two (AI_ROAD_GUARD.lone or fewer within AI_ROAD_GUARD.look tiles of where they turned back, none of them
+ * a nest's guards) still gets AI_ROAD_GUARD.few warbots while it has AI_ROAD_GUARD.keep more at home: one Scuttler
+ * parked by its Harvesters starved a Settler rival of Fiber for the rest of the game (Standard seed 11: the
+ * rival-persistence review of Nov 27 2026). True if it sent a squad.
  */
-const AI_ROAD_GUARD = { n: 3, hold: 90, near: 3 };
-function aiRoadGuard(p) {
+const AI_ROAD_GUARD = { n: 3, hold: 90, near: 3, few: 2, lone: 2, look: 5, keep: 2 };
+function aiRoadGuard(p, spare) {
   const P = S.players[p];
   if (P.roadRally) {
     const r = rallyById(P.roadRally.id);
@@ -1711,8 +1716,21 @@ function aiRoadGuard(p) {
     P.roadRally = null;
   }
   let b = null;
-  for (const e of S.buildings) if (!e.dead && e.owner === p && e.shyX !== undefined && murmurShy(e) && (!b || e.shyN > b.shyN)) b = e;
+  const shyOf = (e) => Math.max(e.shyN || 0, e.gshyN || 0);
+  for (const e of S.buildings) if (!e.dead && e.owner === p && e.shyX !== undefined && murmurShy(e) && (!b || shyOf(e) > shyOf(b))) b = e;
   if (!b) return false;
+  let send = AI_ROAD_GUARD.n;
+  if (!spare) {
+    // (a smaller army: only against a lone Murmur or two out in the open, not a nest's guards)
+    let n = 0, guards = false;
+    const R2 = AI_ROAD_GUARD.look * AI_ROAD_GUARD.look;
+    for (const v of S.bots) if (!v.dead && isWild(v.owner) && foeReach(v) && dist2(v.x, v.y, b.shyX + 0.5, b.shyY + 0.5) <= R2) { n++; if (nestGuarding(v)) guards = true; }
+    if (!n || n > AI_ROAD_GUARD.lone || guards) return false;
+    let armed = 0;
+    for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u)) armed++;
+    if (armed < AI_ROAD_GUARD.few + AI_ROAD_GUARD.keep) return false;
+    send = AI_ROAD_GUARD.few;
+  }
   const hz = homeZone(p);
   let spot = null;
   for (let r = 0; r <= AI_ROAD_GUARD.near && !spot; r++) for (let dj = -r; dj <= r && !spot; dj++) for (let di = -r; di <= r && !spot; di++) {
@@ -1720,8 +1738,8 @@ function aiRoadGuard(p) {
     if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || S.zone[tIdx(i, j)] !== hz) continue;
     spot = [i, j];
   }
-  if (!spot || rallyAvailable(p, spot[0], spot[1]) < AI_ROAD_GUARD.n) return false;
-  const res = sendToRally(p, spot[0], spot[1], AI_ROAD_GUARD.n, false, true);
+  if (!spot || rallyAvailable(p, spot[0], spot[1]) < send) return false;
+  const res = sendToRally(p, spot[0], spot[1], send, false, true);
   if (!res || !res.sent) return false;
   P.roadRally = { id: res.rally.id, t: S.time };
   return true;
@@ -4793,6 +4811,9 @@ function aiRoads(p, me) {
       }
       continue;
     }
+    // Its road on paper runs over ground its Workers won't pave (aiRoadDetour): round it, or the site given up.
+    const detour = aiRoadDetour(p, b, route, budget);
+    if (detour) { if (detour > 0) { budget -= detour; done++; } continue; }
     // A road on paper can still leave a site with no deliveries. Give up an idle site after four minutes
     // even when its road is entirely planned: workers may never be able to lay those tiles.
     if (!route.length && !b.built && b.unlinked && !b.progress && !sumValues(b.inc) && S.time - b.born > 240) {
@@ -4811,6 +4832,74 @@ function aiRoads(p, me) {
     done++;
   }
   if (done < 3) aiJoinBases(p);
+}
+
+/**
+ * Does rival p in triage (down to a handful of workers) want another Hauler before its next worker? With none, yes;
+ * then while it has fewer than one for every AI_TRIAGE_HAUL.per buildings that make goods (AI_TRIAGE_HAUL.min to .max,
+ * and never past `want`, what the colony calls for outside triage); and, up to `want`, while AI_TRIAGE_HAUL.full or more
+ * of them stand full of what they make with no Hauler free to take it (losses to replace). Triage used to make one
+ * only when there was none: a Warlord with one Hauler left kept full Mines waiting for minutes (Standard seed 11,
+ * Warlord hold: the rival-persistence review of Nov 27 2026).
+ */
+const AI_TRIAGE_HAUL = { per: 4, min: 2, max: 4, full: 2 };
+function aiTriageHaulers(p, me, kinds, want) {
+  const have = kinds.hauler || 0;
+  if (!have) return true;
+  if (have >= want) return false;
+  let eco = 0, full = 0;
+  for (const b of me) {
+    const def = BDEFS[b.type];
+    if (!b.built || !def.out || def.store) continue;
+    if (!b.paused) eco++; // (one triage rested still holds what it made)
+    for (const g in def.out) if ((b.stock[g] || 0) - (b.res[g] || 0) >= def.out[g]) { full++; break; }
+  }
+  if (have < clamp(Math.ceil(eco / AI_TRIAGE_HAUL.per), AI_TRIAGE_HAUL.min, AI_TRIAGE_HAUL.max)) return true;
+  if (full < AI_TRIAGE_HAUL.full) return false;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'hauler' && !u.carry && (!u.task || u.task.type === 'home')) return false;
+  return true;
+}
+
+/**
+ * A road planned for b whose tiles its Workers won't pave (paveHot: an enemy gun reaches them, enemy warbots or the
+ * Murmur bite there, its robots were shot down nearby; or no Worker can get to them, P.paveSkip): paving skips such
+ * tiles, so the road waited, and the site with it, "No road to storage yet" with its Workers idle (Standard seed 25,
+ * Warlord, its rival holding at minute 12: Ore 0 from minute 12, its replacement Mines and its Terminal waiting on a
+ * road planned all the way: the rival-persistence review of Nov 27 2026). Once some of them have been out of bounds
+ * for AI_ROAD_DETOUR.wait s on end (P.roadHot, by id), the road is planned again round that ground (roadRouteTo with
+ * `safe`; at most AI_ROAD_DETOUR.most times as long and AI_ROAD_DETOUR.extra tiles more): the new tiles go down and
+ * the planned ones it no longer runs over that are out of bounds are called off (their goods come back). With no way
+ * round, a site (not a building already up) that has waited AI_HOT_SITE.stall s like this and is AI_HOT_SITE.age s old
+ * is given up and its spot avoided, as aiHotSites does. Returns the road tiles paid for when it planned a way round, -1
+ * if it gave the site up, 0 otherwise.
+ */
+const AI_ROAD_DETOUR = { wait: 45, most: 2, extra: 10 };
+function aiRoadDetour(p, b, route, budget) {
+  const P = S.players[p], skip = P.paveSkip || {};
+  const out = (t) => paveHot(p, t) || skip[t] > S.time;
+  const blocked = (route.planned || []).filter(out);
+  P.roadHot = P.roadHot || {};
+  for (const id in P.roadHot) { const e = getE(+id); if (!e || e.dead || e.owner !== p) delete P.roadHot[id]; }
+  if (!blocked.length) { delete P.roadHot[b.id]; return 0; }
+  if (P.roadHot[b.id] === undefined) P.roadHot[b.id] = S.time;
+  const since = P.roadHot[b.id];
+  if (S.time - since < AI_ROAD_DETOUR.wait) return 0;
+  const alt = roadRouteTo(p, b, false, true), was = route.length + route.planned.length;
+  if (alt && !alt.planned.some(out) && !alt.some(out) && alt.length + alt.planned.length <= was * AI_ROAD_DETOUR.most + AI_ROAD_DETOUR.extra &&
+      alt.cost <= budget && canAffordRoad(p, alt.goods)) {
+    const keep = new Set(alt.planned);
+    for (const t of blocked) if (!keep.has(t) && S.plan[t] === p + 1) cancelPlan(t);
+    for (const t of alt) buildRoad(p, t % S.W, (t / S.W) | 0);
+    delete P.roadHot[b.id];
+    return Math.max(1, alt.cost);
+  }
+  if (!b.built && S.time - since >= AI_HOT_SITE.stall && S.time - b.born >= AI_HOT_SITE.age) {
+    P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + AI_HOT_SITE.avoid }]);
+    delete P.roadHot[b.id];
+    demolish(b);
+    return -1;
+  }
+  return 0;
 }
 
 /**

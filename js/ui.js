@@ -9010,6 +9010,7 @@ function refreshBuildingSheet(b) {
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife && S.mode === 'colony' ? 'The Murmur are' : S.wildlife ? 'Enemies (warbots or the Murmur) are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife && S.mode === 'colony' ? '' : ' (send warbots to drive them off)'}.`
     : mine && S.time - (b.noSafe ?? -99) < NOSAFE_WAIT * 2 ? 'No safe route: enemy defences in the way. Your carriers wait until the way is clear (destroy the guns, or build a road round them).'
+    : mine && murmurShy(b) && (b.gshyN || 0) > (b.shyN || 0) ? `Workers turning back: the Murmur are where they go out to gather. Each turn-back in a row doubles the wait before the next trip (now ${Math.round(shyRoadWait(b.gshyN))}s, up to ${SHY_ROAD.max}s); send warbots to clear them.`
     : mine && murmurShy(b) ? `Haulers turning back: Murmur near the road. Each turn-back in a row doubles the wait before the next is sent (now ${Math.round(shyRoadWait(b.shyN))}s, up to ${SHY_ROAD.max}s); send warbots to clear the road.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)

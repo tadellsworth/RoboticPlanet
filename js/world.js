@@ -6210,9 +6210,14 @@ function roadNestAvoid(owner) {
   }
   return m;
 }
-function roadSearch(owner, seeds, done) {
+/**
+ * With `safe` (a rival re-planning a road its Workers couldn't lay: aiRoadDetour), each tile its Workers won't pave now
+ * (paveHot: an enemy gun reaches it, enemy warbots or the Murmur bite there) costs ROAD_HOT_AVOID tiles more.
+ */
+const ROAD_HOT_AVOID = 40;
+function roadSearch(owner, seeds, done, safe) {
   const W = S.W, N = S.W * S.H;
-  const nestAv = roadNestAvoid(owner);
+  const nestAv = roadNestAvoid(owner), hot = safe ? (t) => paveHot(owner, t) : null;
   const cost = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2); // (doubles, like the heap's keys: see the stale test below)
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
@@ -6235,7 +6240,7 @@ function roadSearch(owner, seeds, done) {
     const i = t % W;
     for (const n of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
       if (n < 0 || n >= N || !open(n) || !step(t, n)) continue;
-      let u = n, nc0 = c + roadWeight(n) + (nestAv && nestAv[n] ? ROAD_NEST_AVOID : 0);
+      let u = n, nc0 = c + roadWeight(n) + (nestAv && nestAv[n] ? ROAD_NEST_AVOID : 0) + (hot && !S.road[n] && hot(n) ? ROAD_HOT_AVOID : 0);
       if (ov && S.over[n]) {
         // An overpass: the road runs straight on over (or under) it, never round the corner there.
         u = overHop(t, n);
@@ -6270,20 +6275,22 @@ function roadSides(owner, x, y) {
 /**
  * The cheapest run of new road tiles that would link building b to one of its owner's storage
  * buildings by road: a list of tiles to pave (empty if it is already linked), or null if there is
- * no way through the owner's land. `.cost` is its price in road tiles (resources cost more).
+ * no way through the owner's land. `.cost` is its price in road tiles (resources cost more); `.planned` the tiles on
+ * the way already planned (waiting for Workers to pave them). `safe`: round ground its Workers won't pave now (see
+ * roadSearch).
  */
-function roadRouteTo(owner, b, join) {
+function roadRouteTo(owner, b, join, safe) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
   // (With join, b is a Command Base of ours on roads of its own, a captured one: the way to the others' roads.)
-  if (join ? g.stores.some((s) => roadLinked(s, b)) : onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
+  if (join ? g.stores.some((s) => roadLinked(s, b)) : onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; r.planned = []; return r; }
   const net = roadNet(owner);
-  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]);
+  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t], safe);
   if (res.end < 0) return null;
   const out = [];
-  out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0;
+  out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0; out.planned = [];
   for (let k = res.end; k >= 0; k = res.prev[k]) {
-    if (S.plan[k]) out.pending++; // already planned: waiting for workers to pave it
+    if (S.plan[k]) { out.pending++; out.planned.push(k); } // already planned: waiting for workers to pave it
     else if (!roadLike(k)) {
       out.push(k); out.cost += roadTileMul(k);
       const c = roadTileCost(k);
@@ -7096,7 +7103,7 @@ function checkSave(o) {
   // What the danger maps and the Murmur's gun cover were last worked out from (updateDanger, murmurGunMap): numbers.
   if (o.dng != null && !(obj(o.dng) && Number.isInteger(o.dng.ep) && (o.dng.n == null || Number.isInteger(o.dng.n)) &&
     Array.isArray(o.dng.g) && o.dng.g.length <= 1e5 && o.dng.g.every((g) => Array.isArray(g) && g.length === 6 && Number.isSafeInteger(g[0]) && owner(g[1]) && ownKey(BDEFS, g[2]) && [3, 4, 5].every((k) => Number.isFinite(g[k]))) &&
-    Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && f.length === 4 && owner(f[0]) && [1, 2, 3].every((k) => Number.isFinite(f[k]))))) bad();
+    Array.isArray(o.dng.f) && o.dng.f.length <= 1e5 && o.dng.f.every((f) => Array.isArray(f) && (f.length === 4 || f.length === 5) && owner(f[0]) && [1, 2, 3, 4].slice(0, f.length - 1).every((k) => Number.isFinite(f[k]))))) bad();
   if (o.mgn != null && !(obj(o.mgn) && Number.isInteger(o.mgn.ep) && Array.isArray(o.mgn.l) && o.mgn.l.length <= 1e5 && o.mgn.l.every((g) => Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)))) bad();
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
   // The Workforce settings (wfOrder): an order of row names, and rows' minimum and cap (whole numbers) and pin. A row this
