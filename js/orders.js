@@ -511,6 +511,8 @@ const ORDERS = {
   capital(p, ids, kind, tid, i, j) { if (!['attack', 'hunt', 'hold', 'move', 'home'].includes(kind)) return 0; const t = tid ? getE(tid) : null; if ((kind === 'attack' || kind === 'hunt') && (!t || t.dead || !foes(t.owner, p))) return 0; if ((kind === 'move' || kind === 'hold') && !inMap(i | 0, j | 0)) return 0; return orderCapital(p, ownIds(p, ids), kind, tid | 0, (+i || 0) + 0.5, (+j || 0) + 0.5); },
   /** Flagship uid's deck: d more (or fewer) of `kind` (a Gunship or a Line Ship) on order. Its order now. */
   fyard(p, uid, kind, d) { const u = ownU(p, uid, 'flagship'); if (!u || !CAPITAL.flagship.yard.includes(kind) || botBanned(p, kind)) return -1; const n = clamp(((u.yard && u.yard[kind]) || 0) + (d | 0), 0, 99); u.yard = u.yard || {}; u.yard[kind] = n; if (!n) delete u.yard[kind]; if (!Object.keys(u.yard).length) delete u.yard; return n; },
+  /** Gunships `ids` join Flagship fid's wing (fid 0: they leave it for a Launch Pad). How many took it. */
+  wing(p, ids, fid) { return wingJoin(p, ownIds(p, Array.isArray(ids) ? ids : []), fid | 0); },
   gunships(p, ids, kind, tid, i, j) { if (!['attack', 'hunt', 'hold', 'home'].includes(kind)) return 0; const t = tid ? getE(tid) : null; if ((kind === 'attack' || kind === 'hunt') && (!t || t.dead || !foes(t.owner, p))) return 0; return orderGunships(p, ownIds(p, ids), kind, tid | 0, (+i || 0) + 0.5, (+j || 0) + 0.5); },
   /** Shuttle uid flies a Drop Outpost kit out and lands it at (i, j) (space maps). */
   outpost(p, uid, i, j) { const u = ownU(p, uid, 'craft'); return u ? orderShuttleOutpost(p, u, i | 0, j | 0) : 'That Shuttle is gone.'; },
@@ -719,6 +721,8 @@ const ORDERS = {
   agOrder(p, gid, k, pts, r, fg, rep) { const g = agById(gid); if (!g || g.owner !== p) return 'That group is gone.'; return agSetOrder(g, String(k), pts, r | 0, fg | 0, rep === 0 ? 0 : 1); },
   /** Group gid's behaviours: ret (Retreat when weak: 0, 25 or 50 % health), rel (Reload rotation: 0 or 1), st (Stance: 'agg', 'def' or 'hold'); null leaves one as it is. The behaviours. */
   agBeh(p, gid, ret, rel, st) { const g = agById(gid); if (!g || g.owner !== p) return null; return agSetBeh(g, ret == null ? null : ret | 0, rel == null ? null : rel | 0, st == null ? null : String(st)); },
+  /** Group gid's Reinforce: on (1), new Gunships from your Launch Pads join it (and new warbots fill it before your other groups); off (0). */
+  agReinf(p, gid, on) { const g = agById(gid); if (!g || g.owner !== p) return false; if (on) g.reinf = 1; else delete g.reinf; return true; },
   /** A Raid's Repeat (1) or Once (0), the raid going on as it is. */
   agRaidRep(p, gid, rep) { const g = agById(gid); if (!g || g.owner !== p || g.ord.k !== 'raid') return false; g.ord.rep = rep ? 1 : 0; if (rep) delete g.ord.done; return true; },
   /** Back to order: group gid's standing order goes on, its units back on it. */

@@ -15,6 +15,7 @@ const result = host(`
   for (let shape = 0; shape < SHAPE_PRESETS.length; shape++) {
     const sh = SHAPE_PRESETS[shape];
     for (let players = minPlayers(shape); players <= maxPlayers(shape); players++) {
+      if (!playersFit(shape, players)) continue; // (Hollowgate takes two or four colonies, never three: snapPlayers)
       for (const teams of players === 4 ? [false, true] : [false]) {
         for (const seed of [11, 21, 37]) {
           const label = [sh.name, players, teams ? 'Teams' : 'FFA', seed].join(' ');
@@ -28,10 +29,14 @@ const result = host(`
           assert.equal(!!S.teams, teams, label);
           const starts = S.players.filter((p) => !p.absent && !isWild(p.id)).map((p) => getE(p.lander));
           assert.equal(new Set(starts.map((b) => tIdx(b.x, b.y))).size, players, label);
-          const openings = [];
+          // Hollowgate (S.caves) seats one kind of colony inside the caves, the other on the surface, apart by design (CAVES in
+          // js/defs.js): the surface has no Ore at all (its colonies start with Ore in store and fetch more through the cave
+          // mouths), and the two kinds start with different stock. Colonies are compared with those of their own kind.
+          const kind = (b) => (S.caves && S.caves.seats[b.owner] ? (S.caves.seats[b.owner].inside ? 'in' : 'out') : 'all');
+          const openings = {};
           for (const b of starts) {
             assert.equal(S.terrain[tIdx(b.x, b.y)], T_GROUND, label);
-            assert.deepEqual(b.stock, starts[0].stock, label + ' starting stock');
+            assert.deepEqual(b.stock, starts.find((o) => kind(o) === kind(b)).stock, label + ' starting stock');
             const nearby = { [R_ORE]: 0, [R_BOULDER]: 0 };
             for (let y = Math.max(0, b.y - 12); y < Math.min(S.H, b.y + 13); y++) {
               for (let x = Math.max(0, b.x - 12); x < Math.min(S.W, b.x + 13); x++) {
@@ -39,20 +44,26 @@ const result = host(`
                 if (dist2(x, y, b.x, b.y) <= 144 && S.zone[t] === S.zone[tIdx(b.x, b.y)] && S.res[t] in nearby) nearby[S.res[t]] += S.amt[t];
               }
             }
-            assert.ok(nearby[R_ORE] && nearby[R_BOULDER], label + ' accessible opening deposits');
-            openings.push(nearby);
+            if (kind(b) === 'out') assert.ok(b.stock.ore >= CAVES.stock.outside.ore && nearby[R_BOULDER], label + ' surface colony: Ore in store, Stone at hand');
+            else assert.ok(nearby[R_ORE] && nearby[R_BOULDER], label + ' accessible opening deposits');
+            (openings[kind(b)] = openings[kind(b)] || []).push(nearby);
           }
-          // Fully mirrored layouts have identical opening deposits. A three-way rotation rounds to the grid.
-          if (players === 2 || quadMap(S.settings) || haul4Map(S.settings)) {
-            for (const nearby of openings) assert.deepEqual(nearby, openings[0], label + ' mirrored opening deposits');
+          // Fully mirrored layouts have identical opening deposits. A three-way rotation rounds to the grid. (Hollowgate is
+          // mirrored west to east between an inside colony and an outside one: only its four-colony layout pairs twins.)
+          if ((players === 2 && !S.caves) || quadMap(S.settings) || haul4Map(S.settings)) {
+            for (const k in openings) for (const nearby of openings[k]) assert.deepEqual(nearby, openings[k][0], label + ' mirrored opening deposits');
           }
           if (sh.hollow) {
             assert.equal(S.hollow.nests.length, 18, label);
             assert.equal(S.posts.length, 0, label);
             assert.equal(S.victory, undefined, label);
+          } else if (sh.caves) { // (Hollowgate: the Pathfinder never mapped the caves, so no Trade Posts and no Uplinks; won by Capture)
+            assert.equal(S.posts.length, 0, label);
+            assert.notEqual(S.victory, 'uplinks', label);
           } else {
             assert.ok(S.posts.length > 0, label + ' Trade Posts');
-            if (!teams) assert.ok(S.uplinks.length >= 3, label + ' Uplinks');
+            // (The Graveyard's one Uplink is the Arbiter's relay in the middle; The Void Fleet has none: Capture or the Flagship)
+            if (!teams) assert.ok((S.uplinks || []).length >= (sh.graveyard ? 1 : sh.vfleet ? 0 : 3), label + ' Uplinks');
             if (sh.isles4 && !teams) assert.equal(S.uplinks.length, 5, label + ' shore Uplinks');
           }
           for (const site of [...S.posts, ...(S.uplinks || [])]) {
@@ -79,7 +90,10 @@ const result = host(`
       const immense = mapDims({ size: IMMENSE_SIZE, shape, players: 2 });
       assert.equal(S.settings.size, PLANETARY_SIZE);
       assert.equal(S.settings.players, 2);
-      assert.ok(S.W >= immense.W && S.H >= immense.H && S.W * S.H > immense.W * immense.H, SHAPE_PRESETS[shape].name);
+      // (A map type so big that its Immense map already fills the Planetary tile budget, The Graveyard's 1.45 x 1.45, keeps
+      // its proportions inside that budget, as every Planetary map does: then it can't grow past Immense, only fill the budget.)
+      if (immense.W * immense.H >= 120 * 168) assert.ok(S.W * S.H >= 0.97 * 120 * 168, SHAPE_PRESETS[shape].name + ' fills the Planetary budget');
+      else assert.ok(S.W >= immense.W && S.H >= immense.H && S.W * S.H > immense.W * immense.H, SHAPE_PRESETS[shape].name);
       assert.ok(S.W * S.H <= 120 * 168 && S.H % 2 === 0, 'tile budget and symmetry');
       assert.ok(S.players.slice(0, 2).every(P => getE(P.lander)?.built));
       if (S.hollow) assert.equal(S.hollow.nests.length, 20);

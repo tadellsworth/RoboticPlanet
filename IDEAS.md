@@ -27,6 +27,41 @@ follow-up (the owner: "fix all 3"; the review's "Follow-up" section has the numb
   collapse now plays out differently (the attacker wins at 15½ minutes), so each fix is checked with its own test,
   and the holds were compared over several seeds instead.
 
+## The Void Fleet follow-ups (built Nov 28 2026 from the owner's brief: calls made, open questions)
+
+Built: the Flagship's main battery (two heavy turrets, `CAPITAL.flagship.battery`: 5.5 tiles hull to hull, 8 a shell, a
+shell each every 5 s, capital ships only); Gunships from Launch Pads join the Flagship's wing (a Gunship's panel: **Join the
+Flagship's wing** / **Leave the wing**, or a right-click on your Flagship; new ones join by themselves while it has room);
+an Army Group's **Reinforce** (off by default: new Gunships go to it instead of the wing, new warbots fill it first); all
+orders (`wing`, `agReinf`) in js/orders.js, `g.reinf` in `hashState` and `checkSave`. The siege: Line Ships reach 8 tiles at
+a building (`bldRange`), past Point-Defence (4.5) and a Disruptor, and on an attack or hunt shell those first from just
+inside their own reach (`lineSiege`). Formation headings: escorts (Line Ships and the wing) near their slot hold the
+Flagship's heading with smoothed turning, and turn a broadside only while firing, never while the fleet is under way. The
+mission *The Void Fleet* moved to War, after Siege Breakers, with a siege goal. `tools/immense-map-test.js` passes
+again: it compared Hollowgate's (`caves`) surface colonies, which by design have no Ore at hand (Ore in store, fetched through
+the cave mouths), with the cave colonies; it now compares each colony with its own kind, skips three colonies there (never
+seated) and checks Hollowgate's no-Posts, no-Uplinks rules; with four colonies its Ringfall gives each side the strikes of
+both colonies on it. The test changed, not the map: say if Hollowgate's surface should get Ore near its colonies instead.
+
+Calls made:
+- **Battery reload 5 s** (tried 4: the same results but for one long game). It beats a lone Line Ship, never an escorted
+  fleet: three Line Ships destroy a Flagship alone (`tools/void-fleet-test.js`).
+- **The rival's Flagship duels.** With the enemy out of Line Ships and its own Flagship sound, the striking rival's Flagship
+  closes to its battery's reach and joins in (`aiVoid`): the battery had made a lone Line Ship's late strike hopeless, and
+  one seed (5) ran to 70 minutes with the loser's Line Ships gone and its economy out of Chips.
+
+Measured (AI-vs-AI, Medium, Normal, seeds 1 to 12, to 70 minutes): **P0 6 wins, P1 6, none undecided**, every game ended by
+the Flagship victory, **23.8 to 42.9 minutes** (median 31.6, mean 31.1: 23.8, 24.6, 27.8, 28.5, 29.4, 31.0, 32.2, 32.6, 32.9,
+33.4, 33.9, 42.9). Before the duel fix (reload 5): 6 to 5 and one stall to 70 minutes; with reload 4: 6 to 6, 23.8 to 43.8.
+The two edges: seed 1 (23.8) is one rival that never got a Line Ship out (Chips short), seed 5 (42.9) the duel waiting
+while the hurt Flagship mends to 60 %.
+
+Open questions:
+- Seed 5 still runs a little past 40 minutes: should a Flagship duel sooner (at 45 % of its hull rather than 60 %)?
+- A rival short of Crystal can't make Chips and so can't rebuild Line Ships for the rest of the game: more Crystal on the
+  home station, or a cheaper Line Ship round?
+- Reinforce takes new Gunships from the wing even when the Flagship's wing is empty: should the wing come first?
+
 ## Space expansion, phase 3: The Void Fleet (built Nov 28 2026: calls made, open questions for the owner)
 
 Built from the approved plan and the space canvas's capital-ship, shield and Void Fleet boards

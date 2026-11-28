@@ -7525,6 +7525,7 @@ function checkSave(o) {
       const B = g.beh;
       if (B != null && (!obj(B) || !AGROUP.rets.includes(B.ret) || ![0, 1].includes(B.rel) || !AGROUP.stances.includes(B.st))) bad();
       if (g.hitT != null && !Number.isFinite(g.hitT)) bad();
+      if (g.reinf != null && g.reinf !== 1) bad();
     }
   }
   for (const u of o.bots) if ((u.grp != null && !Number.isSafeInteger(u.grp)) || (u.grpNew != null && u.grpNew !== 1) || (u.grpGo != null && u.grpGo !== 1)) bad();
