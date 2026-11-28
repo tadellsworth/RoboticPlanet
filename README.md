@@ -824,7 +824,7 @@ stations' boxes and the rocks. No Uplinks here (`noUplinkShape`; `newGame` drops
   its colony's craft within `aura` (5.5) of its hull mend `mend` a second, refuel `fuel` of the tank a second and a Line Ship rearms `rearm`
   shells a second. Its **point-defence** (`capPD`, `CAPITAL.flagship.pd`): a burst every `reload` s at the nearest enemy craft within `range`
   of its hull, Gunships first, else a robot on the ground within `ground`. Its **main battery** (`flagBattery`, `CAPITAL.flagship.battery`,
-  the owner's call, Nov 2026): two heavy turrets on its centreline (`at`: fractions of its reach fore and aft), a shell each every `reload` (4)
+  the owner's call, Nov 2026): two heavy turrets on its centreline (`at`: fractions of its reach fore and aft), a shell each every `reload` (5)
   s, `cap` (8) a shell, at the nearest enemy capital ship within `range` (5.5) of its hull, hull to hull (a little short of a Line Ship's 7):
   it beats a lone Line Ship, never an escorted fleet (three Line Ships destroy it alone; `tools/void-fleet-test.js`). Capital ships only; the
   rival's fires by itself. Its crews mend its hull `self` a second while nothing hits it. **Wings**: Gunships from Launch Pads join it too
@@ -868,7 +868,8 @@ stations' boxes and the rocks. No Uplinks here (`noUplinkShape`; `newGame` drops
   holds there and its Line Ships escort it, hunting any capital ship of yours within `near` of it or its Command Base; a Line Ship under
   `mend[0]` of its hull pulls back to be mended. It **strikes** (`P.vfStrike`) with `strikeLines` Line Ships and `edge` times your fleet
   (`aiFleetPower`), or past `late` (30 minutes) with whatever it has: its Line Ships go for your Flagship (an enemy Line Ship much nearer first), its
-  Flagship follows `behind` tiles back (unless under `follow` of its hull), its wing goes for your Line Ships. Every order is given again each
+  Flagship follows `behind` tiles back (unless under `follow` of its hull; with you out of Line Ships it closes to its main battery's
+  reach and joins in, else a lone Line Ship could never outfight your Flagship's battery and the game would stall), its wing goes for your Line Ships. Every order is given again each
   `every` s, a strike that has not dented your Flagship in `strikeMax` s is called off and the next waits `strikeGap` s, so it never waits on
   a state that never comes (the lessons of `tools/ai-persistence-test.js`).
 - **State, saves and lockstep.** Orders: `capital`, `fyard`, `wing`, `agReinf` (an Army Group's Reinforce, `g.reinf`: checked by `checkSave`,

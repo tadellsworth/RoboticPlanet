@@ -1385,7 +1385,7 @@ const VFLEET = { home: { hh: [0.2, 15, 22], hw: [0.6, 22, 34], berth: 5 }, rock:
  */
 const CAPITAL = { wait: 6, disrupt: 3, r: { flagship: 3.0, line: 2.2 }, turn: { flagship: 0.3, line: 0.45 },
   flagship: { sh: 400, regen: 15, self: 1, pd: { range: 4.5, ground: 3, reload: 0.35, craft: 1.2, bot: 0.8 }, aura: 5.5, mend: 2, fuel: 6, rearm: 2, yard: ['line', 'gunship'], wing: 6, guard: 9,
-    battery: { range: 5.5, reload: 4, cap: 8, at: [0.68, -0.68] } },
+    battery: { range: 5.5, reload: 5, cap: 8, at: [0.68, -0.68] } },
   line: { sh: 140, regen: 9, range: 7, bldRange: 8, siege: 3, keep: 5.5, reload: 3, salvo: 2, cap: 9, craft: 3, bot: 4, bld: 6, mag: 30, padRearm: 1, pd: { range: 3, reload: 0.6, craft: 1, bot: 0.6 }, most: 4 } };
 const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 }, ringfall: 4 };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */

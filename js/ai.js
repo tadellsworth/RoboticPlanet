@@ -6446,7 +6446,8 @@ function aiGravePostSpot(p, L) {
  *     tiles out toward the middle; enemy capital ships within `near` tiles of it, or of the Command Base, are hunted.
  *   - Strike, once it has the edge (its fleet `edge` times the enemy's, `strikeLines` Line Ships at least) or past `late`:
  *     the Line Ships go for the enemy Flagship (an enemy Line Ship much nearer first) and the Flagship follows `behind`
- *     tiles back, so they rearm close; its wing goes at the enemy's Line Ships. Called off when its Flagship's hull is
+ *     tiles back, so they rearm close (with the enemy out of Line Ships, it closes to its main battery's reach and joins
+ *     in: a lone Line Ship can't outfight a Flagship's battery); its wing goes at the enemy's Line Ships. Called off when its Flagship's hull is
  *     under `flee` (home it goes), its Line Ships are thinned out, or `strikeMax` s go by without the enemy Flagship's hull
  *     going down; the next waits `strikeGap` s.
  */
@@ -6537,10 +6538,13 @@ function aiVoid(p, me, lvl) {
       for (const v of caps) if (v.type === 'line') { const d = dist(u.x, u.y, v.x, v.y); if (d < td - 6) { td = d; tg = v; } }
       if (!(u.task && u.task.type === 'hunt' && u.task.target === tg.id)) orderCapital(p, [u.id], 'hunt', tg.id);
     }
-    const d = dist(F.x, F.y, EF.x, EF.y), k = d > 0.1 ? Math.max(0, d - AI_VOID.behind) / d : 0;
+    // (the enemy out of Line Ships and its own Flagship sound: it closes to its main battery's reach and joins in, else its
+    // Line Ships alone could never outfight that Flagship's battery, and the game would stall)
+    const el = caps.filter((v) => v.type === 'line'), duel = !el.length && F.hp >= F.maxHp * AI_VOID.follow;
+    const back = duel ? CAPITAL.flagship.battery.range + capR(F) + capR(EF) - 1.5 : AI_VOID.behind;
+    const d = dist(F.x, F.y, EF.x, EF.y), k = d > 0.1 ? Math.max(0, d - back) / d : 0;
     if (F.hp < F.maxHp * AI_VOID.follow) { if (dist(F.x, F.y, home.x, home.y) > 1.5) orderCapital(p, [F.id], 'move', 0, home.x, home.y); } // (hurt, it stays home: its Line Ships strike alone)
-    else if (d > AI_VOID.behind + 2) orderCapital(p, [F.id], 'move', 0, F.x + (EF.x - F.x) * k, F.y + (EF.y - F.y) * k);
-    const el = caps.filter((v) => v.type === 'line');
+    else if (d > back + (duel ? 0.8 : 2)) orderCapital(p, [F.id], 'move', 0, F.x + (EF.x - F.x) * k, F.y + (EF.y - F.y) * k);
     for (const g of wingCraft(F)) if (!g.task && el.length && (g.bat ?? 100) > SPACE.low + 30 && g.hp > g.maxHp * 0.7) g.task = { type: 'hunt', target: el[g.id % el.length].id, guard: 1 };
     return;
   }
