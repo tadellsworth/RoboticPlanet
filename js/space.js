@@ -25,7 +25,7 @@
  * landmarks' and the Murmur's do. In a single-file copy it's a bundle beside the page (space-art.js: the day art and
  * each time's set). Until it's in, everything here is drawn plainly in code.
  */
-const SPACE_ART = /^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d|junk|arb)(@\d)?$/;
+const SPACE_ART = /^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d(-tow)?|junk|arb)(@\d)?$/;
 const _spaceArt = { state: '' };
 function spaceArtKey(key) { return SPACE_ART.test(key); }
 function ensureSpaceArt() {

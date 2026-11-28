@@ -34,29 +34,38 @@ wreck field of dead Accord ships, landable hulks drawn as decks of torn hull pla
 debris lanes, the derelict modules of phase 1, and the Arbiter in the middle. README ("The Graveyard"), How to play
 ("The Graveyard"), the guide, ART_GUIDE.md (Batch 44), a mission (*The Graveyard*, in Into the Void).
 
+Decided (the owner, Nov 27 2026, follow-ups):
+- **Two players only**, for good. The layout (a home hulk at opposite corners, a bridge wreck and a far wreck each, the
+  Arbiter in the middle) is built round the half turn, as The Ring's and Orbital's are.
+- **Longer games**: the map is taller (1.45 × 1.45), the gaps 5 tiles of space on Medium and up, a Viaduct here costs 4 Cement
+  and 1½ Alloy a tile spanned (three times the Alloy), and a rival spans only once its Smelter and Launch Pad stand.
+- **Salvage trimmed** to 8 Alloy and 5 Chips a wreck, the Arbiter's payout to 3 Alloy and 2 Chips every 30 s.
+- **Rivals jam** a rival's hold of the Arbiter: a Dropship lands spare warbots beside its relay.
+- **Rivals land Drop Outposts by Shuttle on The Ring and Orbital platforms** too, beside a derelict they can't walk to.
+- Art: the Arbiter's mast array tied by a lattice frame with crossed yards (it reads from above), faint deck scorch, salvage
+  in a tow harness while towed.
+
 Calls made, to confirm:
-- **Two players only.** The layout (a home hulk at opposite corners, a bridge wreck and a far wreck each, the Arbiter in the
-  middle) is built round the half turn, as The Ring's and Orbital's are; four would need a quarter-turn layout and a square map.
-- **Salvage is broken down at the pad at once**, 10 Alloy and 6 Chips a wreck, into the pad's store (Haulers take it from
+- **Salvage is broken down at the pad at once**, 8 Alloy and 5 Chips a wreck, into the pad's store (Haulers take it from
   there); it drifts back 2½ minutes later. Four salvage lane pairs. No new good, as decided.
 - **Fuel is home oil**: three oil fields on each home hulk (as on The Ring and Orbital) and one on each far wreck; no Fuel-tank
   salvage.
 - **The Arbiter: both.** Held (land over its relay, jammed by rival armed robots within 4 tiles), it always sends its holder
-  4 Alloy and 3 Chips every 30 s; and the Victory row's Uplinks choice is **The Arbiter** here: it is the one Uplink, on
+  3 Alloy and 2 Chips every 30 s; and the Victory row's Uplinks choice is **The Arbiter** here: it is the one Uplink, on
   the Uplinks clock (online at 8 minutes, 5 minutes held in all wins). The holder is the colony with the *most* land over its
   16 relay tiles (a tie keeps the holder it had), so a single tile can't tip it.
 - **A Shuttle lands a Drop Outpost** (6 Cement, 3 Alloy), on every space map: the way to a hulk no Viaduct reaches yet, and
   the rival's way to the Arbiter. It unfolds beside the Shuttle, never on the relay.
-- **Hulks are joined for Viaducts where it makes sense**: home to bridge wreck to Arbiter, 3 tiles of space each (a short span),
-  the far wreck 8 tiles out (a long span, or fly). On Small there are no bridge or far wrecks: the home hulk lies a short span
-  from the Arbiter.
+- **Hulks are joined for Viaducts where it makes sense**: home to bridge wreck to Arbiter, 3 to 5 tiles of space each (as the
+  map's height allows), the far wreck 8 tiles out (a long span, or fly). On Small there are no bridge or far wrecks: the home
+  hulk lies a span from the Arbiter.
 - **Debris lanes are a light hazard**: three shard clouds a lane, phase 1's asteroid rule (2 damage, at most every 3 s).
 - Past home there is a small Ore and a small Crystal field (spilled cargo) on each bridge and far wreck: scarce, not absent.
 
 Open questions:
-- AI games end by capture in about 10 to 25 minutes: the Viaduct chain through the Arbiter is short. A longer gap, or
-  Viaducts that cost more out here, would slow the rush and give salvage more time to matter.
-- The rival uses its Dropship bands and Gunships against what holds the Arbiter, but it doesn't yet land warbots just to jam it.
+- AI games on Medium now run about 19 to 34 minutes (Capture mostly 22 to 25, Hold the Arbiter 19 to 34), short of the 25 to
+  40 aimed for: what ends them is the warbot rush once the spans are up. More would need the rush itself slowed. One game in
+  eight runs on past 70 minutes: one colony holds the Arbiter for most of it but never takes the other's base.
 - Capital ships (the canvas's Tender and Line) and The Void Fleet are still to come (phase 3).
 
 ## Space expansion, phase 1 (built Nov 27 2026: calls made, open questions for the owner)

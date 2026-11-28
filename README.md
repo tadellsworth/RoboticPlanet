@@ -747,28 +747,30 @@ space and every spacecraft (`BOTS[k].craft`) elsewhere, so no yard builds them a
 **The Graveyard** (`SHAPE_PRESETS` `graveyard`, under Heights and depths, two players; flat, `noMurmur`; space expansion phase 2, the owner's
 design, Nov 2026) is a wreck field of dead Accord ships adrift in space, from the first fights after the Accord fell. `graveMap` (js/world.js,
 called first by `generateMap`, as `orbitalMap` is) lays it out point-symmetric to the tile, on colony 0's half (the bottom right) turned onto
-the other; 1.45 × 1.3 the size's tiles. `ringShape`, `spaceMap` and `voidTile` are true for it as on The Ring and Orbital platforms (the void is
+the other; 1.45 × 1.45 the size's tiles. `ringShape`, `spaceMap` and `voidTile` are true for it as on The Ring and Orbital platforms (the void is
 `T_CHASM` no one holds; nothing on wings flies; spacecraft and Point-Defence instead), the biome is forced to Lunar (`biomeForced` 'grave'), and
 the backdrop is The Ring's (`R.void`: `ringSpace`). `graveShape()` tells it apart. `S.grave = { hulks, core, owner, jam, held, paid, acc }`.
 - **The hulks** (`GRAVE` in js/defs.js): rectangles with their corners cut, each long hull's two ends broken off ragged (a tile or two in, from
   the canonical twin's noise), bites torn from the long edges away from the Command Base and the spans' heads, specks under 14 tiles back to void,
   a few piles of wreckage (`T_ROCK`) away from the rim and the home fields. A **home hulk** each (`GRAVE.home`: `hh` of the height, `hw` of the
   width), the **Arbiter's hulk** in the middle (`GRAVE.arb`: its own twin, whole, bare), a **bridge wreck** between each home hulk and the Arbiter
-  `GRAVE.gap` (3) tiles of space from both (a short Viaduct each way) where the map is tall enough (Medium up), and a **far wreck** beside each
+  3 to `GRAVE.gap` (5) tiles of space from both (as the map's height allows: a Viaduct each way) where the map is tall enough (Medium up), and a **far wreck** beside each
   home `GRAVE.farGap` (8) tiles away where it is wide enough. On Small the home hulk lies `gap` from the Arbiter itself. Every rim is kept clear.
 - **Economy.** The home hulk has the standard colony's starter fields (as Orbital's: Ore and Crystal each at least `GRAVE.field` (5) tiles),
   Stalk, fertile soil, three oil fields and Stone topped up to `GRAVE.stone`; `GRAVE.mul` richer. Past home only the wrecks' spilled cargo:
   a small Ore and a small Crystal field each (`GRAVE.spill`, at least 3 tiles), Stone, oil on the far one. The rest is **salvage**: `spaceSetup`
   lays `DRIFT.kinds.graveyard` (four salvage lane pairs and three debris lane pairs, searched longer, an arc may be 2 tiles shorter and orbits 3
-  apart). A Shuttle tows a `salvage` wreck (`orderTow`) to its pad, where `salvageIn` breaks it down at once for `DRIFT.salvage` (10 Alloy, 6
+  apart). A Shuttle tows a `salvage` wreck (`orderTow`) to its pad, where `salvageIn` breaks it down at once for `DRIFT.salvage` (8 Alloy, 5
   Chips) into the pad's store (`P.stats.towed`); it drifts back in `DRIFT.salvageBack` (150) s later. No new good.
+- **Dearer Viaducts**: `viaductCost` charges `GRAVE.via` a tile spanned here (4 Cement, 1.5 Alloy: three times the Alloy of `VIA_COST`),
+  so the way to the Arbiter is paid for in salvage (AI-vs-AI games on Medium: about 19 to 34 minutes). The first home stalk grove holds at least `GRAVE.stalk` (10) tiles.
 - **Debris lanes**: `junk` rocks, `DRIFT.junkN` (3) shards an orbit spread round it (each with its twin), never towed or mined, a bigger size
   (`DRIFT.r.junk`); `craftBumps` clips a craft that flies through, `SPACE.bump` (2) at most every `SPACE.bumpGap` (3) s.
 - **The Arbiter** (`graveTick`, once a second): its relay stands on `S.grave.core` (`GRAVE.arb.core`, 4 by 4, one wider on an odd width), bare
   ground where nothing is built (`canPlace`), laid (`canRoad`), spanned to (`viaductBlocked`), landed on (`craftLandable`) or broken up on, and no
   Trade Post near (`placePosts`). Held like an Uplink, by land: the colony with the most `S.owner` tiles over the core (a tie keeps the holder it
   had), unless an armed robot of another colony stands within `GRAVE.arb.jam` (4) tiles of its middle (`jam`): `arbHolder()`. Held, every
-  `GRAVE.arb.every` (30) s it sends `GRAVE.arb.haul` (4 Alloy, 3 Chips) into its holder's Command Base (`paid`, `P.stats.arbHauls`).
+  `GRAVE.arb.every` (30) s it sends `GRAVE.arb.haul` (3 Alloy, 2 Chips) into its holder's Command Base (`paid`, `P.stats.arbHauls`).
   **Hold the Arbiter**: with Victory: Uplinks, `placeUplinks` puts the one Uplink (`arb: 1`) at the relay and `updateUplinks` takes its holder
   and jam from `S.grave`: online at `UPLINK.online`, `UPLINK.hold` held in all wins (`endHow` 'uplinks'). The menu calls it *The Arbiter*
   (`GRAVE_VICTORY`), the win card and the game-over text say so.
@@ -776,12 +778,15 @@ the backdrop is The Ring's (`R.void`: `ringSpace`). `graveShape()` tells it apar
   (`BDEFS.dropost.cost`), it loads, flies out and lands (`craftLandSpot`), and after `SPACE.load` s the kit unfolds beside it
   (`shuttleOutpostDown`, `shuttleOutpostSpot`: as `deploySpot`, never on the relay, a module, a Trade Post or the craft's own tile): a Drop
   Outpost, `airSupply` on, claiming its ring. Called off before take-off, the goods go back (`craftAbort`); shot down in the air, the kit is lost.
-- **The rival** (`aiGrave`, `AI_GRAVE` in js/ai.js, from `aiSpace`): its first Launch Pad from `AI_GRAVE.pad` (150 s, no Bot Foundry needed:
-  `aiPads`), Shuttles at once (`shuttles`: one, a second at 9 minutes), and every idle Shuttle tows the nearest salvage no one else is after
+- **The rival** (`aiGrave`, `AI_GRAVE` in js/ai.js, from `aiSpace`): its first Launch Pad from `AI_GRAVE.pad` (150 s, once a Smelter stands,
+  no Bot Foundry needed: `aiPads`; its Viaducts wait for the Smelter too, and its Cement Works' limit rises to the span's Cement), Shuttles at once (`shuttles`: one, a second at 9 minutes), and every idle Shuttle tows the nearest salvage no one else is after
   (every `towEvery` s). While the Arbiter isn't its own and it can't walk there, a Shuttle lands a Drop Outpost beside the relay (`aiGravePostSpot`,
   once every `postGap` s, at most `postMost`); from `wreckAt` the nearest wreck no one holds too. `aiCrossTarget` makes its Viaducts reach for the
   Arbiter first, `aiSearchSpot` leans its Outposts toward the relay, and `aiAir`'s bands and `aiGunTarget`'s Gunships go first for the forts that
-  hold it for a rival (`aiArbFort`). `aiAirFoes` counts The Graveyard as a map with gaps to fly over.
+  hold it for a rival (`aiArbFort`). A rival's hold is also **jammed** (`aiGraveJam`): a parked Dropship lands its spare warbots (at least
+  `jamMin`) beside the relay, within `GRAVE.arb.jam`, once every `jamGap` s while no band of its own is out. `aiAirFoes` counts The Graveyard as
+  a map with gaps to fly over. On The Ring and Orbital platforms the rival's Shuttle lands a Drop Outpost too (`aiSpacePost`, `AI_SPACE_POST`):
+  beside a derelict module it doesn't hold, on ground it can't walk to and no one holds, from 10 minutes in, once every 2 minutes, two at most.
 - **State, saves and lockstep.** `S.grave` is saved, checked (`graveCheckSave`) and hashed (`hashState`: holder, jam, held, acc, paid) only on
   this map, so every other map's hash is as it was. Tests: `tools/graveyard-test.js` (the map at every size, symmetric and fair, landing on and
   building on a wreck, the relay kept clear, salvage towed in, the Arbiter taken, its salvage, jammed, Hold the Arbiter won, a debris lane's hits,

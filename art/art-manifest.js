@@ -246,7 +246,7 @@ const ART_MANIFEST = {
   // each, baked with the ground: -0 the dead hulls, -1 torn up, -2 the Arbiter's), the towable salvage, a debris lane's
   // shards and the Arbiter's relay (derelict, and a team's captured). js/grave.js draws them.
   'ground-grave-0': 'space/grave-plate-0.webp', 'ground-grave-1': 'space/grave-plate-1.webp', 'ground-grave-2': 'space/grave-plate-2.webp',
-  'grave-salvage-0': 'space/grave-salvage-0.webp', 'grave-salvage-1': 'space/grave-salvage-1.webp', 'grave-junk': 'space/grave-junk.webp',
+  'grave-salvage-0': 'space/grave-salvage-0.webp', 'grave-salvage-1': 'space/grave-salvage-1.webp', 'grave-salvage-0-tow': 'space/grave-salvage-0-tow.webp', 'grave-salvage-1-tow': 'space/grave-salvage-1-tow.webp', 'grave-junk': 'space/grave-junk.webp',
   'grave-arb': 'space/grave-arb.webp', 'grave-arb@0': 'space/grave-arb@0.webp', 'grave-arb@1': 'space/grave-arb@1.webp',
   // The Maglev line (renderer/b/maglev.js v=a, Accord Phase 2, installed by tools/install_maglev.py): the Terminal (as big
   // as the Rail Station, its dock MAGLEV.head tiles up the screen), the pylon (no pad, its head MAGLEV.deck tiles up) and

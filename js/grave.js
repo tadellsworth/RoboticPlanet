@@ -14,14 +14,15 @@
  *     southern edge the ship's flank going down, ribs bare, ports dark, fading into the void (Orbital's hull, wrecked).
  *   - drawArb (every frame, among the buildings): the Arbiter's relay over its core tiles (art: grave-arb derelict, grave-arb@T
  *     its holder's), a ring in the holder's colour (flashing red while jammed), its beacon's slow pulse.
- *   - drawGraveRock (from space.js's drawRock): the towable salvage (grave-salvage-0/1, slowly tumbling) and a debris lane's
+ *   - drawGraveRock (from space.js's drawRock): the towable salvage (grave-salvage-0/1, slowly tumbling; in tow, grave-salvage-K-tow,
+ *     its harness on, turned to its Shuttle) and a debris lane's
  *     shard clouds (grave-junk), in code when the art is missing.
  * With no art everything is drawn plainly in code.
  */
 
 const GRAVE_LOOK = {
   arbFrame: 5.6, // (tiles the relay's art is drawn across: its 46-unit frame, a little larger than life over the 4-tile relay)
-  salvageFrame: 1.2, junkFrame: 1.2, // (the art's frame over the rock's width: DRIFT.r)
+  salvageFrame: 1.2, junkFrame: 1.2, towFrame: 1.4, // (the art's frame over the rock's width: DRIFT.r; in its tow harness, a 14-unit frame)
   lip: '#20242a', rib: '#5d646c', ribD: '#2c3036', dead: ['#3a2a22', '#24303a', '#3b3020'], beacon: '#ffc860',
 };
 
@@ -171,7 +172,7 @@ function drawArb(ctx, cx, cy, z) {
 function drawGraveRock(ctx, r, ox, oy, z) {
   if (r.k !== 'salvage' && r.k !== 'junk') return false;
   const p = rockPos(r), x = ox + p.x * z, y = oy + p.y * z, d = 2 * DRIFT.r[r.k] * z;
-  const art = r.k === 'salvage' ? ART['grave-salvage-' + (r.id % 2)] : ART['grave-junk'];
+  const tow = r.tow && ART['grave-salvage-' + (r.id % 2) + '-tow'], art = tow || (r.k === 'salvage' ? ART['grave-salvage-' + (r.id % 2)] : ART['grave-junk']);
   let a = (R.time || 0) * (r.k === 'junk' ? 0.03 : 0.06) * (r.id % 2 ? 1 : -1) + r.id * 1.7;
   if (r.tow) {
     const u = getE(r.tow);
@@ -184,7 +185,7 @@ function drawGraveRock(ctx, r, ox, oy, z) {
     }
   }
   ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x + d * 0.35, y + d * 0.5, d * 0.45, d * 0.3, 0, 0, Math.PI * 2); ctx.fill();
-  if (art) { drawArt(ctx, art, x, y, d * (r.k === 'salvage' ? GRAVE_LOOK.salvageFrame : GRAVE_LOOK.junkFrame), a); return true; }
+  if (art) { drawArt(ctx, art, x, y, d * (tow ? GRAVE_LOOK.towFrame : r.k === 'salvage' ? GRAVE_LOOK.salvageFrame : GRAVE_LOOK.junkFrame), a); return true; }
   ctx.save(); ctx.translate(x, y); ctx.rotate(a);
   if (r.k === 'salvage') { ctx.fillStyle = '#b9b6ad'; ctx.fillRect(-d * 0.35, -d * 0.25, d * 0.7, d * 0.5); ctx.fillStyle = '#23272b'; ctx.fillRect(-d * 0.45, -d * 0.15, d * 0.3, d * 0.3); }
   else for (let k = 0; k < 6; k++) { const q = hash2(r.id, k, 9), b = k * 1.1 + q; ctx.fillStyle = k % 2 ? '#575c63' : '#8c8a84'; ctx.fillRect(Math.cos(b) * d * 0.35 * q - 3, Math.sin(b) * d * 0.3 * q - 2, 6 + q * 6, 3 + q * 3); }

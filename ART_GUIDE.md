@@ -2106,27 +2106,31 @@ white (`#b9b6ad`) for the Arbiter and the salvage, Trade Post amber (`#ffc860`) 
 team colour once held. The backdrop is The Ring's ("Shadow pass", Batch 40), the wreck field adrift in it.
 
 - **Hulk deck plating** (`b/grave.js c=plate`): a 4 by 4 sheet of deck plates straight down, one plate a tile (40 units,
-  rivets round each plate, the heavy seams on the 2-tile grid), with hatches, vent grilles, scorch and gouges from the old
-  fight, hazard stripes, conduit runs and dead deck lights (dark lenses). `v=0` the dead hulls' weathered gunmetal
+  rivets round each plate, the heavy seams on the 2-tile grid), with hatches, vent grilles, faint scorch and a thin gouge
+  from the old fight (a shade darker than the plate, never black), hazard stripes, conduit runs and dead deck lights (dark lenses). `v=0` the dead hulls' weathered gunmetal
   (`#4b4f54`, `#41454a`, `#373a3e`); `v=1` torn up (plates gone, the ribs and the dark hold under them showing, a curled
   edge); `v=2` the Arbiter's Accord white, its deck lights still glowing faintly. Day only: the map's ground is baked and the
   game's light grades it, eclipse included.
 - **Towable debris** (`c=salvage`): `v=0` a torn-off engine bell on a bent hull plate, ribs torn off with it, two amber tow
   eyes; `v=1` hull plates round a ribbed cargo pod, ribs sticking out of the torn edge. Straight down, 12 units.
+  `tow=1`: in its tow harness (a clamp band, three claws with amber lamps, the cable led off west), a 14-unit frame.
 - **Debris lane** (`c=junk`): a cloud of twisted Accord-white and gunmetal plates and beams, loose, 24 units.
 - **The Arbiter's relay** (`c=arb`): the old arbitration relay ship's superstructure over its 4 by 4 relay tiles: the beacon
   drum (an octagonal tube banded three times), a great shallow relay dish on a yoke forward with its feed horn, a mast array
-  aft (five masts with crossbars and lamps), conduits and clamps down onto the deck, the beacon lamp on its spine. `cap=0`
+  aft (five masts on armoured feet tied by a lattice frame at deck level, each with a cross of yards narrowing upward and a
+  lamp ring on top, so from straight above it reads as a frame of crosses, not dots), conduits and clamps down onto the deck,
+  the beacon lamp on its spine. `cap=0`
   derelict: the bands dark, the dish rim plain, the lamps a dim amber, scorch on its back; `cap=1` held: the bands, the dish
   rim, the masts' lamps and the clamp lights in the holder's team colour. 46 units across.
 
 `renderer/tools/render_grave.sh` (four at a time; `post/space_post.py` blooms the glow pass, no plumes), then
-`install_grave.py`: 27 files, about 330 KB, the sprites re-lit in `tod/<morning, evening, night>/` (night is the eclipse):
+`install_grave.py`: 35 files, about 470 KB, the sprites re-lit in `tod/<morning, evening, night>/` (night is the eclipse):
 
 | Art | What | Sizes |
 |---|---|---|
 | `space/grave-plate-0`, `-1`, `-2` (keys `ground-grave-0..2`, baked with the ground) | a hulk's deck plating, 4 by 4 plates, one a tile: the dead hulls, torn up, the Arbiter's | 256 |
 | `space/grave-salvage-0`, `-1` | the towable wreckage straight down, 12 units | 256 |
+| `space/grave-salvage-0-tow`, `-1-tow` | the same in its tow harness, 14 units (turned to its Shuttle) | 256 |
 | `space/grave-junk` | a debris lane's shards, 24 units | 256 |
 | `space/grave-arb`, `grave-arb@T` | the Arbiter's relay straight down, 46 units: derelict (no team), and held | 448 |
 
@@ -2138,8 +2142,8 @@ and then still glowing, a hole torn in it, fading into the void and tapering, ra
 sheet (no repeat), and a faint wash and old scorch per tile. The **Arbiter**: its relay drawn 5.6 tiles across over the
 relay tiles, a soft shadow, its **beacon pulsing** (slowly, amber, while derelict; faster, in the holder's colour, once
 held), a dashed ring round the relay in its holder's colour (amber for no one, red and flashing while jammed), a light pool
-at night, and a ringed diamond on the minimap. Salvage and shards **tumble slowly**; a towed wreck turns to its Shuttle on
-the cable (as a towed rock's). With no art, plain shapes.
+at night, and a ringed diamond on the minimap. Salvage and shards **tumble slowly**; a towed wreck shows its harness and turns to its
+Shuttle on the cable (as a towed rock's). With no art, plain shapes.
 
 ### Batch 43: Space expansion, phase 1: spacecraft, the Launch Pad, Point-Defence, drifting asteroids, derelict modules (installed; lasers, tracers, thruster glow, cables drawn in code)
 

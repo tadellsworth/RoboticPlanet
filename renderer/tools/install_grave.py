@@ -5,6 +5,7 @@ tools/render_grave.sh makes. Run from renderer/:
   space/grave-plate-0, -1, -2 a hulk's deck plating (b/grave.js c=plate v=0, 1, 2), 4 by 4 tiles straight down, 256 px:
                               js/grave.js tiles it over the hulks' ground when the map is baked (v=2 on the Arbiter's hulk)
   space/grave-salvage-0, -1   the towable wreckage (c=salvage), straight down, 12 world units across, 256 px
+  space/grave-salvage-K-tow    the same in its tow harness, a 14-unit frame (drawn turned to its Shuttle)
   space/grave-junk            a debris lane's shard cloud (c=junk), 24 units, 256 px
   space/grave-arb, -arb@T     the Arbiter's relay (c=arb), 46 units: derelict (no team), and captured in each team's colour
   tod/<time>/space/...        the sprites again, re-lit for morning, evening and night (the eclipse)
@@ -34,6 +35,7 @@ for v in (0, 1, 2):
     save(f'plate-{v}', f'space/grave-plate-{v}.webp', 256, ('day',), q=80)
 for v in (0, 1):
     save(f'salvage-{v}', f'space/grave-salvage-{v}.webp', 256)
+    save(f'salvage-{v}-tow', f'space/grave-salvage-{v}-tow.webp', 256)
 save('junk', 'space/grave-junk.webp', 256)
 save('arb', 'space/grave-arb.webp', 448)
 for t in (0, 1):

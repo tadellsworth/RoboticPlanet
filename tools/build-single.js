@@ -26,7 +26,7 @@ const murmurArtKey = (key) => /^(scuttler|brute|leech|spitter|sapper|harrow)-|^f
 const lmArtKey = (key) => /^lm-/.test(key); // (as js/landmarks.js: LANDMARK_ART)
 // The space art likewise (dist/space-art.js: the craft, the Launch Pad, Point-Defence, the drifting rocks and the derelict
 // modules, and each time of day's re-lit set: loaded on a space map, ensureSpaceArt in js/space.js).
-const spaceArtKey = (key) => /^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d|junk|arb)(@\d)?$/.test(key); // (as js/space.js: SPACE_ART)
+const spaceArtKey = (key) => /^(shuttle|dropship|gunship)(-park|-ramp[12])?@\d$|^launchpad@\d$|^pdturret(-\d)?@\d$|^rock-(plain|ore|crystal)(-tow)?$|^mod-(solar|dock|hulk)(@\d)?$|^grave-(salvage-\d(-tow)?|junk|arb)(@\d)?$/.test(key); // (as js/space.js: SPACE_ART)
 // Every other image goes in one of four bundles beside the page too (dist/art-<group>.js: buildings, bots, effects, and
 // the rest: tiles, resources, roads, rail, bridges, the canyon, pipes, markers and the Desert's biome art), all loaded as
 // the page starts (see loadArt), so the page holds the code alone and can't fill up again as art is added.

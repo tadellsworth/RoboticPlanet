@@ -18826,7 +18826,8 @@ function viaductBlocked(owner, ai, aj, bi, bj) {
 /** What a Viaduct from (ai, aj) to (bi, bj) costs: VIA_COST for every tile it spans. */
 function viaductCost(ai, aj, bi, bj) {
   const n = Math.abs(bi - ai) + Math.abs(bj - aj) - 1, out = {};
-  for (const g in VIA_COST) out[g] = Math.ceil(VIA_COST[g] * n);
+  const per = S.grave ? GRAVE.via : VIA_COST; // (The Graveyard: dearer out in the wreck field, paid in salvage too)
+  for (const g in per) out[g] = Math.ceil(per[g] * n);
   return out;
 }
 

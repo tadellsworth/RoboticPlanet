@@ -42,5 +42,5 @@ const SPACE_TOD_KEYS = [];
 for (const t of [0, 1]) SPACE_TOD_KEYS.push(...['shuttle', 'shuttle-park', 'dropship', 'dropship-park', 'dropship-ramp1', 'dropship-ramp2', 'gunship', 'gunship-park', 'launchpad', 'pdturret', 'mod-solar', 'mod-dock', 'mod-hulk'].map((k) => `${k}@${t}`), ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `pdturret-${k}@${t}`));
 SPACE_TOD_KEYS.push('rock-plain', 'rock-ore', 'rock-crystal', 'rock-ore-tow', 'rock-crystal-tow', 'mod-solar', 'mod-dock', 'mod-hulk');
 // The Graveyard (renderer/tools/install_grave.py): the salvage, a debris lane's shards and the Arbiter's relay (its eclipse at night).
-SPACE_TOD_KEYS.push('grave-salvage-0', 'grave-salvage-1', 'grave-junk', 'grave-arb', 'grave-arb@0', 'grave-arb@1');
+SPACE_TOD_KEYS.push('grave-salvage-0', 'grave-salvage-1', 'grave-salvage-0-tow', 'grave-salvage-1-tow', 'grave-junk', 'grave-arb', 'grave-arb@0', 'grave-arb@1');
 const LANDMARK_TOD_KEYS = ["lm-hull", "lm-spire", "lm-pillar-1", "lm-pillar-2", "lm-pillar-3", "lm-falls", "lm-geyser", "lm-house-1", "lm-house-2", "lm-house-3", "lm-sign", "lm-shaft", "lm-wreck-kestrel", "lm-wreck-survey", "lm-wreck-halvard"]; // (the atlas landmarks: js/landmarks.js, loaded with them: ensureLandmarkArt)

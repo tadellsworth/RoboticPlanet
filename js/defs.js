@@ -859,7 +859,7 @@ const DRIFT = { speed: 0.22, clear: 2, edge: 1.5, thin: 0.75, len: [8, 26], loop
   // The Graveyard (GRAVE): `salvage`, wreckage a Shuttle tows to its Launch Pad, where it is broken down for these goods (into
   // the pad), drifting back in `salvageBack` s after; `junk`, debris lanes: `junkN` loose shards on each lane, spread along
   // it, never towed or mined: a craft that flies through one is clipped (SPACE.bump), the light hazard of the wreck field.
-  salvage: { alloy: 10, chip: 6 }, salvageBack: 150, junkN: 3 };
+  salvage: { alloy: 8, chip: 5 }, salvageBack: 150, junkN: 3 };
 /**
  * Derelict modules (space maps: S.space.mods): old Accord station modules adrift on the decks and rocks, neutral until a
  * colony holds them. One is held, as an Uplink is, by the colony whose land its middle stands in, unless an armed robot
@@ -1035,7 +1035,7 @@ const SHAPE_PRESETS = [
   // The Graveyard (space expansion, phase 2: the owner's design, Nov 2026): a wreck field of dead Accord ships adrift in space
   // (graveMap in world.js, GRAVE in defs.js, the rules in sim.js, the look in js/grave.js; the backdrop is The Ring's). Two
   // colonies, each on a home hulk; salvage towed in by Shuttle is the economy, and the Arbiter in the middle is the prize.
-  { name: 'The Graveyard', group: 'heights', noMurmur: true, blurb: 'A wreck field of dead Accord ships adrift in space: a home hulk each, more hulks to land on, and the Arbiter, an old arbitration relay ship, in the middle. Shuttles tow salvage in for Alloy and Chips.', w: 1.45, h: 1.3, graveyard: true, flat: true,
+  { name: 'The Graveyard', group: 'heights', noMurmur: true, blurb: 'A wreck field of dead Accord ships adrift in space: a home hulk each, more hulks to land on, and the Arbiter, an old arbitration relay ship, in the middle. Shuttles tow salvage in for Alloy and Chips.', w: 1.45, h: 1.45, graveyard: true, flat: true,
     tip: 'The Graveyard: your colony stands on the hulk of a dead Accord ship. Past your starter fields there is little Ore or Crystal: build a Launch Pad and a Shuttle, and tow the drifting salvage in (tap a wreck, Tow it home), where the pad breaks it down for Alloy and Chips. The Arbiter, the relay ship in the middle, is the prize: hold it (your land over its relay) and it sends you salvage. Land a Drop Outpost by Shuttle, or span the gaps with Viaducts. Debris lanes clip craft that fly through them.' },
 ];
 /** Does map type `shape` (or, with none given, the current game's) lie in open space (The Ring: asteroids with void between)? */
@@ -1321,16 +1321,19 @@ const RING = { gap: [3.5, 6], mul: 1.25, oil: { home: 3, rock: 1, mid: 2 }, ston
  *           keeps the holder it had), unless another colony's armed robots stand within `jam` tiles of its middle. Held, it
  *           sends its holder `haul` (Alloy and Chips, into its Command Base) every `every` s. With Victory: Uplinks it is the
  *           one Uplink (UPLINK's rules: online at 8 minutes, held 5 minutes in all wins): Hold the Arbiter.
- *   bridge  a wreck between the home hulk and the Arbiter, `gap` tiles of space from each (a Viaduct spans it), where the map
- *           is tall enough; else the home hulk is that close to the Arbiter itself
+ *   bridge  a wreck between the home hulk and the Arbiter, up to `gap` tiles of space from each (3 at least: a Viaduct spans
+ *           it), where the map is tall enough; else the home hulk is 3 to `gap` tiles from the Arbiter itself. Every Viaduct
+ *           here costs `via` a tile spanned, three times the Alloy, not VIA_COST (the long way across the wreck field: salvage pays
+ *           for it, and has time to matter)
  *   far     a wreck out beyond the bridge wreck, `farGap` tiles of space from the home hulk (a long Viaduct, or fly)
  *   mul, oil, stone  as RING's: Ore and Crystal hold a little more, oil seeps on the home hulk (Fuel), Stone topped up to `stone`
- *   field   the fewest tiles each of the home hulk's two Ore and two Crystal fields holds (the starter fields: as Orbital's)
+ *   field   the fewest tiles each of the home hulk's two Ore and two Crystal fields holds (the starter fields: as Orbital's);
+ *           `stalk` the fewest its first stalk grove holds (Fiber to start on)
  *   spill   Ore and Crystal fields (`n` of each, `r` tiles across) on the bridge and far wrecks: spilled cargo, the only Ore
  *           and Crystal past home; Stone `stone` fields on each
  */
-const GRAVE = { home: { hh: [0.22, 15, 26], hw: [0.5, 27, 50] }, arb: { ah: [0.14, 8, 13], aw: [0.4, 16, 34], core: { w: 4, h: 4 }, jam: 4, haul: { alloy: 4, chip: 3 }, every: 30 },
-  gap: 3, farGap: 8, mul: 1.25, oil: { home: 3, far: 1 }, stone: HOME_STONE, field: 5, spill: { n: 1, r: 1.3, stone: 1 } };
+const GRAVE = { home: { hh: [0.22, 15, 26], hw: [0.5, 27, 50] }, arb: { ah: [0.14, 8, 13], aw: [0.4, 16, 34], core: { w: 4, h: 4 }, jam: 4, haul: { alloy: 3, chip: 2 }, every: 30 },
+  gap: 5, farGap: 8, via: { cement: 4, alloy: 1.5 }, mul: 1.25, oil: { home: 3, far: 1 }, stone: HOME_STONE, field: 5, stalk: 10, spill: { n: 1, r: 1.3, stone: 1 } };
 const ORBITAL = { warn: 4, lift: 3, cool: 20, fail: 8, reach: 4, pad: 0.35, width: 3, mul: 1.25, oil: { home: 3, deck: 1, mid: 2 }, stone: HOME_STONE, field: { home: 5, soil: 8, deck: 4 }, ringfall: 4 };
 /** Does map type `shape` (or, with none given, the current game's) have the drawbridges (Orbital platforms)? */
 function orbitalShape(shape) { const P = SHAPE_PRESETS[shape === undefined ? (typeof S !== 'undefined' && S && S.settings && S.settings.shape) || 0 : shape || 0]; return !!(P && P.orbital); }

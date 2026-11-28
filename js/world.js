@@ -3463,7 +3463,7 @@ function graveMap(seed, W, H, cfg) {
   const ah = pick(G.arb.ah, H), aw = pick(G.arb.aw, W), ax0 = Math.floor((W - aw) / 2), ay0 = Math.floor((H - ah) / 2);
   const arb = { x0: ax0, x1: W - 1 - ax0, y0: ay0, y1: H - 1 - ay0 };
   add(arb, 'arb', 2);
-  const g = G.gap, room = home.y0 - arb.y1 - 1;
+  const room = home.y0 - arb.y1 - 1, g = clamp(Math.floor((room - 5) / 2), 3, G.gap);
   if (room >= 2 * g + 5) { // (a bridge wreck between: over the home hulk's left end, under the Arbiter's left half)
     const b = { x0: Math.max(M + 1, Math.round(W * 0.08)), x1: Math.min(arb.x1 - 4, home.x0 + 5), y0: arb.y1 + g + 1, y1: home.y0 - g - 1 };
     const k = add(b, 'bridge', 0), k2 = add(twinR(b), 'bridge', 0); hulks[k].tw = k2; hulks[k2].tw = k;
@@ -3574,7 +3574,7 @@ function graveMap(seed, W, H, cfg) {
   field(bx + 4, by - 5, 1.5, R_CRYSTAL, 0.9 * stampDens, G.field);
   field(bx + 9, by - 3.5, 1.7, R_ORE, 0.85 * stampDens, G.field);
   field(bx - 10, by + 2.5, 1.6, R_CRYSTAL, 0.85 * stampDens, G.field);
-  stamp(bx - 6, by - 2, 2.5, R_STALK, 0.85 * stampDens);
+  field(bx - 6, by - 2, 2.5, R_STALK, 0.85 * stampDens, G.stalk); // (Fiber is sure too: a thin stalk stamp left a colony with no way to start)
   stamp(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens);
   stamp(bx + 6, by, 1.8, R_BOULDER, 0.8 * stampDens);
   stamp(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens);
