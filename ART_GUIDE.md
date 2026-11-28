@@ -2130,7 +2130,12 @@ the deck lamps, the rails and the strips glow), all in the lazy space-art bundle
 | `bots/flagship@T`, `flagship-launch@T` | the Flagship straight down, nose east, 68 units; its rails lit, a Gunship going up | 768 |
 | `bots/line@T`, `line-fireL@T`, `line-fireR@T` | the Line Ship, 50 units; its turrets trained to port or starboard, firing | 576 |
 
-Drawn by js/fleet.js. **In code**: the **engines' glow** (a hot disc and a short flame at each nozzle, pulsing, longer and
+Drawn by js/fleet.js. **In code**: the Flagship's **main battery** (the owner's call, Nov 2026: two heavy turrets; no art
+frame yet, so drawn over the hull, `drawCapBattery`): a squat armoured dome on the centreline fore and aft (about 2 tiles
+from the middle, `CAPITAL.flagship.battery.at`), shaded steel grey (`#8d949c` to `#3b4148`) with a ring in the team colour,
+twin dark barrels trained on what it fires at (forward when quiet) that kick back as it fires; the muzzle flash and smoke as
+a Line Ship's broadside's (white core, `#ffae4a` orange, grey puffs), and heavier shells (`capshell` `big`: half again as
+thick, the burst 1.4 times as wide). A later art batch could render the turrets into `flagship@T`; the **engines' glow** (a hot disc and a short flame at each nozzle, pulsing, longer and
 brighter under way); a **shadow** far below; the **shield**, the Shield Dome's look (Batch 24, `drawDomes`) drawn round the
 hull as an ellipse fitted to it (`FLEET_LOOK.hull`, 0.75 tiles out): a faint pale-blue fill (rgb 120, 200, 255) brighter at
 the rim, a crisp rim line, a **hexagon lattice** with a shimmer drifting along it, **a panel flashing and a ring spreading**

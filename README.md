@@ -823,18 +823,31 @@ stations' boxes and the rocks. No Uplinks here (`noUplinkShape`; `newGame` drops
   at most; enemy craft or armed robots within `guard` of the hull send its idle wing up after them). Its **aura** (`flagAura`, every 10 ticks):
   its colony's craft within `aura` (5.5) of its hull mend `mend` a second, refuel `fuel` of the tank a second and a Line Ship rearms `rearm`
   shells a second. Its **point-defence** (`capPD`, `CAPITAL.flagship.pd`): a burst every `reload` s at the nearest enemy craft within `range`
-  of its hull, Gunships first, else a robot on the ground within `ground`. Its crews mend its hull `self` a second while nothing hits it.
+  of its hull, Gunships first, else a robot on the ground within `ground`. Its **main battery** (`flagBattery`, `CAPITAL.flagship.battery`,
+  the owner's call, Nov 2026): two heavy turrets on its centreline (`at`: fractions of its reach fore and aft), a shell each every `reload` (4)
+  s, `cap` (8) a shell, at the nearest enemy capital ship within `range` (5.5) of its hull, hull to hull (a little short of a Line Ship's 7):
+  it beats a lone Line Ship, never an escorted fleet (three Line Ships destroy it alone; `tools/void-fleet-test.js`). Capital ships only; the
+  rival's fires by itself. Its crews mend its hull `self` a second while nothing hits it. **Wings**: Gunships from Launch Pads join it too
+  (`wingJoin`, order `wing` [ids, fid]: as many as it has room for, out of any Army Group; `fid` 0 leaves the wing for a pad): the Gunship
+  panel's Join the Flagship's wing / Leave the wing, a right-click on your own Flagship (`spaceCommand` `s.flag`: Line Ships escort it). A new
+  Gunship from a pad (`gunshipNew`, from `launchFromYard`) joins the first Army Group set to Reinforce (`agReinforcing`), else the wing while
+  it has room. **Formation**: its escorts (Line Ships with no order or rearming, `inForm` in `updateLine`; its wing, `wingHold` setting
+  `sf.face`) keep its heading: `capFly` and `craftFly` turn them to `sf.face` close to their slot and slide them onto it with small
+  corrections; a Line Ship turns its broadside to a target only while firing and never while the Flagship is under way.
 - **The Line Ship** (`BOTS.line`: `craft`, `capital`, `war`; 240 hull, 140 shield; 5 rounds of 2 Alloy, 1 Chip and 1 Fuel: `updateYard` takes
   any goods a round names, and a yard with one on order asks for Fuel too, `yardGoods`). Built at a Launch Pad (`yard`: it lists `line`; it takes
   no room, `yardOpen`, and lifts off the pad and stays up, `padLaunchCapital`) or on the Flagship's deck (`flagLaunch`: it casts off beside it);
   `CAPITAL.line.most` (4) to a colony (`lineCount`). Orders as a Gunship's (`orderCapital`: 'attack', 'hunt', 'hold', 'home' to escort its
   Flagship; `spaceCommand` hands it a right-click). With no order it escorts its Flagship on a slot of its own (`escortSpot`). It stands off
   `keep` (5.5) from its goal's hull and turns broadside on (`sf.face`). **Broadsides** (`lineFire`): `salvo` (2) shells every `reload` (3) s at
-  what `lineTarget` picks within `range` (7) of its middle, measured to the target's hull: enemy capital ships first, its goal, defences, armed
-  robots, other buildings and robots, small craft last; `cap` (9) off a capital ship, `bld` (6) off a building (`lineBld`, as a Gunship's laser:
+  what `lineTarget` picks within `range` (7) of its hull, measured to the target's hull (`bldRange` 8 to a building's footprint): enemy capital
+  ships first, its goal, the defences that can hit it back (`capGuard`: Point-Defence, Disruptors), other defences, armed robots, other
+  buildings and robots, small craft last; `cap` (9) off a capital ship, `bld` (6) off a building (`lineBld`, as a Gunship's laser:
   a Command Base or Keep held at its floor), `bot` (4) off a robot, `craft` (3) off a small craft. Its magazine (`u.mag`, `mag` 30); empty, it
   goes to rearm (`u.rearm`): by its Flagship (the aura), or with none over a Launch Pad (`padRearm` a second). Its light point-defence
-  (`CAPITAL.line.pd`) barely troubles Gunships.
+  (`CAPITAL.line.pd`) barely troubles Gunships. **The siege** (`lineSiege`): on an attack or hunt order, a Point-Defence Turret or Disruptor
+  whose reach (to its hull), `siege` (3) tiles more, covers it becomes its goal first, and it stands off from a building just inside its own
+  `bldRange`: beyond both (7 and 4.5 to the hull), so a siege of Line Ships peels a station's guns before closing.
 - **Shields** (`u.cs`, `u.csT`; `CAPITAL.wait`): every hit on a capital ship goes through `capHit` (from `craftHit`: Gunships' lasers,
   Point-Defence, a Flagship's point-defence, broadsides). The shield takes it first, the hull (`u.hp`) the rest; 0 hull and it breaks up
   (`capDown`). Once nothing has hit it for `CAPITAL.wait` (6) s it recharges, `regen` a second (`capShield`). A Disruptor Tower's pulse
@@ -858,13 +871,18 @@ stations' boxes and the rocks. No Uplinks here (`noUplinkShape`; `newGame` drops
   Flagship follows `behind` tiles back (unless under `follow` of its hull), its wing goes for your Line Ships. Every order is given again each
   `every` s, a strike that has not dented your Flagship in `strikeMax` s is called off and the next waits `strikeGap` s, so it never waits on
   a state that never comes (the lessons of `tools/ai-persistence-test.js`).
-- **State, saves and lockstep.** Orders: `capital`, `fyard`. `S.vf` is saved and checked (`vfCheckSave`); `hashState` takes in every capital
+- **State, saves and lockstep.** Orders: `capital`, `fyard`, `wing`, `agReinf` (an Army Group's Reinforce, `g.reinf`: checked by `checkSave`,
+  in `hashState`; `agPickFor` fills groups set to it first). `S.vf` is saved and checked (`vfCheckSave`); `hashState` takes in every capital
   ship's shield, magazine, deck and orders, every wing Gunship's Flagship and each colony's Flagship, only where they exist. Tests:
   `tools/void-fleet-test.js` (the map at every size and its twins, shields, recharge, the Disruptor's drain, the Flagship victory, the deck,
   the wing and aura, a pad's Line Ship and the cap, a broadside and rearming, Gunships in an Army Group, Line Ships on The Ring, the mission's
-  setup, a save mid-fight and two runs alike, rivals left to it); `map-audit` and `map-symmetry` take it in with every map.
+  setup, a save mid-fight and two runs alike, rivals left to it; the Flagship's battery in and out of reach and its duels, the siege's reach,
+  the wing joined and left by order and right-click and by itself, Reinforce, escorts within 10 degrees of the Flagship's heading on a straight
+  run); `map-audit` and `map-symmetry` take it in with every map.
 - **The look and panels** (js/fleet.js, display only): the ships from the top, nose east (`drawCapital`: `flagship@T`, `flagship-launch@T` while
-  a Gunship goes up off its rails, `line@T`, `line-fireL@T` / `line-fireR@T` for a broadside), their engines' glow in code (longer and brighter
+  a Gunship goes up off its rails, `line@T`, `line-fireL@T` / `line-fireR@T` for a broadside), the Flagship's battery turrets in code
+  (`drawCapBattery`: housings with a team band, twin barrels trained on the target and kicking back, muzzle flash and smoke; the heavier
+  shells `capshell` `big`), their engines' glow in code (longer and brighter
   under way), a shadow far below, the broadside's flashes and smoke and its shells (`drawCapShell`), the launch rail's streak, the ship breaking
   up (`drawCapDie`); the **shield** (`drawCapShield`): the Shield Dome's pale blue (`120,200,255`) drawn round the hull, a faint fill brighter at
   the rim, a crisp rim, a hexagon lattice with a shimmer over it, a flash and a spreading ring where a shot lands (the Disruptor's drain a blue
@@ -907,7 +925,7 @@ building meant for the sky goes up there (no Airfield, Mooring Mast, Mass Driver
 Atmosphere Engine or Great Uplink); `canPlace` says why. Nothing that comes down from above lands: `missileBlocked`, `nukeBlocked`, `strikeBlocked` (bombs), `napalmBlocked`,
 `airdropBlocked` (Cargo Plane drops and Drop Outposts), `mdAimWhy` (Mass Driver canisters), `lanceAimBlocked` and `sunderAimBlocked` refuse a target there, and a Missile, bomb,
 napalm canister or nuclear missile that is already in the air and comes down on the caves bursts on the roof (`updateMissiles`); a Lance's beam passes over them (`lanceTiles`); a plane's
-supply run won't go there (`airSuppliable`). Ringfall falls on the surface only (`cavesRingfall`: the usual number of strikes, each with its mirror), and a dust storm and a solar flare reach
+supply run won't go there (`airSuppliable`). Ringfall falls on the surface only (`cavesRingfall`: the usual number of strikes for each colony, each with its mirror; with four colonies, two to a side, twice as many a side), and a dust storm and a solar flare reach
 no one inside (`evSpeed`, `evDrain`). Ground armies, Mortars and Howitzers go in as anywhere. There is no wildlife in the caves (`faunaTrySpawn`). **No Trade Posts or Uplinks** (`placePosts`; Uplinks
 fall back to Capture, as in the Hollow, and there is no Great Uplink win: `noSkyShape` in js/ui.js). **The Murmur** live inside **and** outside, and only with the Murmur setting on (the map is
 `murmur: 'off'` by default; with it off neither half has any): `placeCaveNests` puts an ordinary nest (level 1) on each of the sites `cavesMap` laid out in twin pairs, west and east, inside
@@ -2932,7 +2950,8 @@ Freight Train's guns pick their own targets (a train isn't a building and passes
   `stationWarbots`); Ferries don't board them unless selected. **Reinforcements** (`agPickFor` in `spawnFromFoundry`):
   the Reserve (the old way: the rally point, else the Command Base) while the garrisons' keeps aren't covered by the
   Command Base's free warbots (with no rally point set); else the first group by priority under its size that the
-  Foundry's zone reaches, as a recruit (`u.grpNew`) that waits at the Reserve until `AGROUP.batch` (3) are ready or as many
+  Foundry's zone reaches, groups set to **Reinforce** (`g.reinf`, order `agReinf`, off by default; on a space map they take new
+  Gunships from the pads too: `gunshipNew`) before the rest, as a recruit (`u.grpNew`) that waits at the Reserve until `AGROUP.batch` (3) are ready or as many
   as the group lacks, or `AGROUP.batchWait` (30) s (`agBatch`), then marches out (`u.grpGo` until within 4 tiles:
   `P.stats.agJoined`). In `hashState` (only when there are groups, or a unit has `u.grp`), saves and `checkSave`.
   Keys: Alt/⌥ + 1-6 selects a group (twice: the camera to it), with Shift its panel; Ctrl/⌘/Shift + 1-9 (and Alt + 7-9)

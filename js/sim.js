@@ -29298,9 +29298,11 @@ function lineGoal(u) {
   if (e.ent === 'u' && (e.inside || e.dropping || e.under)) return null;
   return e;
 }
-/** What Line Ship u fires its broadsides at, within CAPITAL.line.range of its hull (bldRange of a building): enemy capital ships, its goal, defences, armed robots, other buildings, other robots, small craft last. */
+/** What Line Ship u fires its broadsides at, within CAPITAL.line.range of its hull (bldRange of a building): a building it was sent at (or its siege's defence), enemy capital ships, its goal, defences, armed robots, other buildings, other robots, small craft last. */
 function lineTarget(u, goal) {
   const R = CAPITAL.line.range, RB = CAPITAL.line.bldRange, cr = capR(u);
+  // (a building it was sent at, or a defence its siege peels first, in reach: that, before anything else, capital ships too)
+  if (goal && goal.ent === 'b' && !goal.dead && footDist(goal, u.x, u.y) - cr <= RB && !calmB(goal)) return goal;
   let best = null, bs = Infinity;
   for (const v of S.bots) {
     if (v.dead || v.owner < 0 || !foes(v.owner, u.owner) || v.inside || v.dropping || v.under || BOTS[v.type].air || calmAt(v.x, v.y)) continue;

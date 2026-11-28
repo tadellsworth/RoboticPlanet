@@ -33,7 +33,7 @@ const FLEET_LOOK = {
   guns: { line: [[0.12, 0.06], [-0.05, 0.06], [0.3, 0.02]] },
   // the Flagship's main battery: its two turrets along its centreline (fractions of the frame: CAPITAL.flagship.battery.at
   // times its reach over the frame), their housing's radius and barrels' length (tiles)
-  battery: { r: 0.32, len: 0.62 },
+  battery: { r: 0.42, len: 0.85 },
   // the Flagship's launch rails along its deck: [from, to] along it, their side offsets
   rails: { from: -0.22, to: 0.24, off: [-0.045, 0.045] },
   shell: { core: '#fff6e0', glow: '#ffae4a' },
@@ -156,7 +156,7 @@ function drawCapBattery(ctx, u, sx, sy, z, F) {
     // the barrels (under the housing's front), recoiling as they fire
     ctx.rotate(aim);
     ctx.fillStyle = '#2a2f35'; ctx.strokeStyle = '#121518'; ctx.lineWidth = Math.max(0.8, z * 0.025);
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.rect(r * 0.2 - kick * z, s * r * 0.32 - z * 0.05, B.len * z, z * 0.1); ctx.fill(); ctx.stroke(); }
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.rect(r * 0.2 - kick * z, s * r * 0.34 - z * 0.065, B.len * z, z * 0.13); ctx.fill(); ctx.stroke(); }
     // the housing: a squat armoured dome, a team-coloured band
     const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
     g.addColorStop(0, '#8d949c'); g.addColorStop(1, '#3b4148');

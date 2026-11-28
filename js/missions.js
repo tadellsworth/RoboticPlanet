@@ -9,9 +9,10 @@
  * The campaign is in eight chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (ports, bridges over canyons, airships and earthworks; all in Colony games, so the economy is learned in peace), Into the Void
- * (spacecraft out on the Orbital platforms: the Launch Pad, a Shuttle run, a Dropship landing past a raised drawbridge, a derelict module), then
- * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War,
- * including the Uplinks race in King of the Hill before Final Descent. From the second mission on, setup puts down the colony the earlier
+ * (spacecraft out on the Orbital platforms: the Launch Pad, a Shuttle run, a Dropship landing past a raised drawbridge, a derelict module; salvage in
+ * the Graveyard), then First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border
+ * war, a chokepoint to hold) and War (with The Void Fleet's fleet action and siege in space after Siege Breakers), including the Uplinks race in
+ * King of the Hill before Final Descent. From the second mission on, setup puts down the colony the earlier
  * missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
@@ -1729,45 +1730,6 @@ const MISSIONS = [
     ],
   },
 
-  // The Void Fleet (space expansion, phase 3: SHAPE_PRESETS vfleet): a Flagship (a Carrier's tender) and its deck, Line Ships,
-  // Gunships in its wing, shields, and the Flagship victory, against a rival that only defends itself.
-  {
-    id: 'voidfleet', name: 'The Void Fleet', chapter: 'Into the Void',
-    brief: 'Out past the Ring your Carrier has sent down its tender, your Flagship. Build a fleet from its deck, and bring the rival Flagship down.',
-    intro: [
-      '<b>Versus</b>: a rival colony holds the station at the far end. It only defends itself. Red is theirs, blue is yours.',
-      'Your <b>Flagship</b> waits off your station. Tap it: its <b>Deck</b> builds Line Ships and Gunships from your stores.',
-      'A <b>Line Ship</b> fires broadsides out to 7 tiles. Gunships built on the deck fly as the Flagship\'s <b>wing</b>.',
-      'Capital ships carry a blue <b>shield</b>: it takes every hit first, and recharges once nothing has hit it for 6 seconds.',
-      'Destroy the rival Flagship and you win. Lose yours and you lose: keep it out of their reach.',
-    ],
-    mode: 'versus', seed: 5521, size: 0, rough: 1, rich: 3, biome: 'lunar', players: 2, style: 'balanced', shape: SHAPE_PRESETS.findIndex((s) => s.vfleet),
-    rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 30],
-    setup(S, diff) {
-      const out = kit(S, [...KIT6, 'launchpad'], 4);
-      const L = getE(S.players[0].lander);
-      L.stock.alloy += mPick([40, 32, 26], diff); L.stock.chip += mPick([24, 18, 14], diff); L.stock.fuel += 20; L.stock.cement += 10;
-      if (out.launchpad) out.launchpad.stock.fuel = 8;
-      spaceSetup(S.seed); vfSetup(); // (the drifting rocks, the derelicts and both Flagships: a Versus game's, laid out here)
-    },
-    goals: [
-      { kind: 'lineship', text: 'Build a Line Ship on your Flagship\'s deck', count: (P, S) => S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'line').length,
-        focus: (S) => { const u = flagshipOf(0); return u ? { e: u, ui: "[data-fy='line'][data-d='1']" } : null; },
-        hint: 'Tap your Flagship → <b>Deck</b>: Line Ships <b>+1</b>. Each round of parts comes up from your stores.',
-        ui: "[data-fy='line'][data-d='1']" },
-      { kind: 'wing', text: 'Add a Gunship to its wing', count: (P, S) => { const F = flagshipOf(0); return F ? wingCraft(F).length : 0; },
-        focus: (S) => { const u = flagshipOf(0); return u ? { e: u, ui: "[data-fy='gunship'][data-d='1']" } : null; },
-        hint: 'Flagship → <b>Deck</b>: Gunships <b>+1</b>. It flies as the Flagship\'s wing and guards it.',
-        ui: "[data-fy='gunship'][data-d='1']" },
-      { kind: 'capshield', text: 'Bring down the rival Flagship\'s shield', count: (P) => P.stats.capShields || 0,
-        hint: 'Select your Line Ship and right-click the red Flagship, or its panel → <b>Attack: tap a target</b>.',
-        ui: '#cap-atk' },
-      { kind: 'flagkill', text: 'Destroy the rival Flagship', count: (P, S) => (S.winner === 0 && S.endHow === 'flagship' ? 1 : 0),
-        hint: 'Keep firing: its shield recharges after 6 s quiet. Out of shells, a Line Ship rearms by your Flagship.',
-        ui: '#cap-atk' },
-    ],
-  },
-
   // Chapter 7, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
@@ -2568,6 +2530,57 @@ const MISSIONS = [
         count: (P) => P.stats.forts || 0,
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Lead with Bulwark and Torches. Missiles and bombs count.',
         ui: '#btn-attack, #ar-attack' },
+    ],
+  },
+  // The Void Fleet (space expansion, phase 3: SHAPE_PRESETS vfleet), in War after Siege Breakers: a fleet action and a siege
+  // in space. A Flagship (a Carrier's tender) and its deck, Line Ships, Gunships in its wing, shields, the Flagship's main
+  // battery, a siege of the rival's Point-Defence from beyond its reach, and the Flagship victory, against a rival that only
+  // defends itself.
+  {
+    id: 'voidfleet', name: 'The Void Fleet', chapter: 'War',
+    brief: 'Out past the Ring your Carrier has sent down its tender, your Flagship. Build a fleet, break the rival station\'s guns, and bring its Flagship down.',
+    intro: [
+      '<b>Versus</b>: a rival colony holds the station at the far end. It only defends itself. Red is theirs, blue is yours.',
+      'Your <b>Flagship</b> waits off your station. Tap it: its <b>Deck</b> builds Line Ships and Gunships from your stores. Its main battery fires back at enemy ships.',
+      'A <b>Line Ship</b> fires broadsides out to 7 tiles, 8 at a building: further than Point-Defence reaches. Gunships fly as the Flagship\'s <b>wing</b>.',
+      'Capital ships carry a blue <b>shield</b>: it takes every hit first, and recharges once nothing has hit it for 6 seconds.',
+      'Destroy the rival Flagship and you win. Lose yours and you lose: alone it can\'t outfight a fleet, so keep escorts by it.',
+    ],
+    mode: 'versus', seed: 5521, size: 0, rough: 1, rich: 3, biome: 'lunar', players: 2, style: 'balanced', shape: SHAPE_PRESETS.findIndex((s) => s.vfleet),
+    rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 30],
+    setup(S, diff) {
+      const out = kit(S, [...KIT6, 'launchpad'], 4);
+      const L = getE(S.players[0].lander);
+      L.stock.alloy += mPick([40, 32, 26], diff); L.stock.chip += mPick([24, 18, 14], diff); L.stock.fuel += 20; L.stock.cement += 10;
+      if (out.launchpad) out.launchpad.stock.fuel = 8;
+      spaceSetup(S.seed); vfSetup(); // (the drifting rocks, the derelicts and both Flagships: a Versus game's, laid out here)
+      // A Point-Defence Turret on the rival's station, on the side toward you (the siege goal), stocked.
+      const st = S.vf.st[1], F1 = flagshipOf(1);
+      let best = null, bd = Infinity;
+      for (let j = st.y0; j <= st.y1; j++) for (let i = st.x0; i <= st.x1; i++) {
+        const t = tIdx(i, j);
+        if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.owner[t] !== 1) continue;
+        const d = Math.abs(i + 0.5 - (F1 ? F1.x : S.W / 2)) + Math.abs(j - (st.y1 - 2));
+        if (d < bd) { bd = d; best = [i, j]; }
+      }
+      if (best) { const pd = addBuilding(1, 'pdturret', best[0], best[1], true); pd.stock.ammo = 4; S.mission.vfPd = pd.id; }
+    },
+    goals: [
+      { kind: 'lineship', text: 'Build a Line Ship on your Flagship\'s deck', count: (P, S) => S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'line').length,
+        focus: (S) => { const u = flagshipOf(0); return u ? { e: u, ui: "[data-fy='line'][data-d='1']" } : null; },
+        hint: 'Tap your Flagship → <b>Deck</b>: Line Ships <b>+1</b>. Each round of parts comes up from your stores.',
+        ui: "[data-fy='line'][data-d='1']" },
+      { kind: 'wing', n: 2, text: 'Fly {n} Gunships in its wing', count: (P, S) => { const F = flagshipOf(0); return F ? wingCraft(F).length : 0; },
+        focus: (S) => { const u = flagshipOf(0); return u ? { e: u, ui: "[data-fy='gunship'][data-d='1']" } : null; },
+        hint: '<b>Deck</b>: Gunships <b>+1</b>, or a Launch Pad\'s. One not in it: <b>Join the Flagship\'s wing</b>.',
+        ui: "[data-fy='gunship'][data-d='1'], #sh-sp-wing" },
+      { kind: 'siege', text: 'Wreck the rival station\'s Point-Defence Turret', count: (P, S) => { const b = S.mission.vfPd ? getE(S.mission.vfPd) : null; return S.mission.vfPd && (!b || b.dead) ? 1 : 0; },
+        focus: (S) => { const b = S.mission.vfPd ? getE(S.mission.vfPd) : null; return b && !b.dead ? { e: b, ui: '#cap-atk' } : null; },
+        hint: 'Line Ship → <b>Attack: tap a target</b>, the turret: it shells it from beyond its reach.',
+        ui: '#cap-atk' },
+      { kind: 'flagkill', text: 'Destroy the rival Flagship', count: (P, S) => (S.winner === 0 && S.endHow === 'flagship' ? 1 : 0),
+        hint: 'Its shield recharges after 6 s quiet and its battery fires back: send every Line Ship at once.',
+        ui: '#cap-atk' },
     ],
   },
   {
